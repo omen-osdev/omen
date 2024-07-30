@@ -1,14 +1,12 @@
-#include <stdint.h>
-#include <stddef.h>
-#include <stdatomic.h>
-#include <stdio.h>
 #include "bitfield_allocator.h"
+#include <stdatomic.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
 
-#define BYTES_TO_PAGES(bytes, page_size)((bytes) / (page_size) + ((bytes) % (page_size) ? 1 : 0))
+#define BYTES_TO_PAGES(bytes, page_size) ((bytes) / (page_size) + ((bytes) % (page_size) ? 1 : 0))
 
-uint8_t _is_free(struct bitfield *bf, uint64_t index) {
-    return !(bf->bitmap[index / 8] & (1 << (index % 8)));
-}
+uint8_t _is_free(struct bitfield *bf, uint64_t index) { return !(bf->bitmap[index / 8] & (1 << (index % 8))); }
 
 uint8_t _fits(struct bitfield *bf, uint64_t index, uint64_t pages) {
     for (uint64_t i = index; i < (index + pages); i++) {
@@ -33,7 +31,7 @@ uint64_t _get_free_index(struct bitfield *bf, uint64_t pages) {
         }
     }
 
-    return 0; //A zero here is considered an error
+    return 0; // A zero here is considered an error
 }
 
 void _lock_index(struct bitfield *bf, uint64_t index, uint64_t pages) {
@@ -48,21 +46,21 @@ void _un_lock_index(struct bitfield *bf, uint64_t index, uint64_t pages) {
     }
 }
 
-void * allocate(struct bitfield *bf, uint64_t size) {
+void *allocate(struct bitfield *bf, uint64_t size) {
 
     mutex_lock(&bf->lock);
-    //Check if the size is bigger than the available size
+    // Check if the size is bigger than the available size
     if (size > bf->available_size) {
         printf("Size is bigger than the available size\n");
         return NULL;
     }
 
-    //Check if the size is bigger than the page size
+    // Check if the size is bigger than the page size
     if (size < bf->page_size) {
         size = bf->page_size;
     }
 
-    //Lock the bitfield
+    // Lock the bitfield
 
     uint64_t pages = BYTES_TO_PAGES(size, bf->page_size);
     uint64_t index = _get_free_index(bf, pages);
@@ -105,7 +103,7 @@ void deallocate(struct bitfield *bf, void *address, uint64_t size) {
     mutex_unlock(&bf->lock);
 }
 
-struct bitfield * init(void * data_address, uint64_t data_size, uint16_t page_size) {
+struct bitfield *init(void *data_address, uint64_t data_size, uint16_t page_size) {
 
     if (data_size < sizeof(struct bitfield) || page_size == 0 || data_size < page_size) {
         return NULL;
@@ -125,12 +123,12 @@ struct bitfield * init(void * data_address, uint64_t data_size, uint16_t page_si
 
     mutex_init(&bf->lock);
 
-    //Lock the pages used by the bitfield
+    // Lock the pages used by the bitfield
     for (uint64_t i = 0; i < locked_pages; i++) {
         bf->bitmap[i] = 1;
     }
 
-    //Set the rest of the bitmap to 0
+    // Set the rest of the bitmap to 0
     for (uint64_t i = locked_pages; i < bitmap_size; i++) {
         bf->bitmap[i] = 0;
     }
