@@ -1,5 +1,5 @@
-#ifndef LINKED_LIST_H
-#define LINKED_LIST_H
+#ifndef LIST_H
+#define LIST_H
 
 struct list_head {
   struct list_head *prev, *next;
@@ -25,10 +25,10 @@ struct list_head {
  * LIST_HEAD - Declare a list head and initialize it
  * @name: name
  */
-#define LIST_HEAD(name) struct list_head name = {&(name), &(name)}
+#define LIST_HEAD(name) struct list_head name = LIST_HEAD_INIT(name)
 
 /**
- * LIST_HEAD - Initialize an empty list head
+ * INIT_LIST_HEAD - Initialize an empty list head
  * @head: pointer to the list head
  */
 static inline void INIT_LIST_HEAD(struct list_head *head) {
@@ -118,7 +118,7 @@ static inline void list_move(struct list_head *node, struct list_head *head) {
 }
 
 /**
- * list_move() - Move a list node to the end of the list
+ * list_move_tail() - Move a list node to the end of the list
  * @node: pointer to the node
  * @head: pointer to the head of the list
  *
@@ -130,6 +130,10 @@ static inline void list_move_tail(struct list_head *node,
   list_add_tail(node, head);
 }
 
+/**
+ * list_empty() - Checks if a list is empty
+ * @head: pointer to the head of the list
+ */
 static inline bool list_empty(const struct list_head *head) {
   return head->next == head;
 }
@@ -161,8 +165,7 @@ static inline void __list_splice_tail(struct list_head *list,
 }
 
 /**
- * list_splice_tail() - Add list nodes from a list to the beginning of another
- * list
+ * list_splice() - Add list nodes from a list to the beginning of another list
  * @list: pointer to the head of the list to add
  * @head: pointer to the head of the other list
  */
@@ -216,7 +219,7 @@ static inline void list_splice_tail_init(struct list_head *list,
   INIT_LIST_HEAD(list);
 }
 
-/* List Iteration */
+/* List iteration */
 
 /**
  * list_entry() - Calculate address of entry that contains list node
@@ -263,7 +266,7 @@ static inline void list_splice_tail_init(struct list_head *list,
   for (node = (head)->next; node != (head); node = node->next)
 
 /**
- * list_for_each_entry() - iterate over list entries
+ * list_for_each_entry() - Iterate over list entries
  * @entry: pointer used as iterator
  * @head: pointer to the head of the list
  * @member: name of the list_head member variable in struct type of @entry
