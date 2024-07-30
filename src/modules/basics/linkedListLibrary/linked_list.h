@@ -39,12 +39,12 @@ static inline void INIT_LIST_HEAD(struct list_head *head) {
 /* List manipulation */
 
 /**
- * __list_add() - Insert a new entry between two known consecutive entries
+ * _list_add() - Insert a new entry between two known consecutive entries
  * @_new: pointer to the new node
  * @prev: pointer to the previous node
  * @next: pointer to the next node
  */
-static inline void __list_add(struct list_head *_new, struct list_head *prev,
+static inline void _list_add(struct list_head *_new, struct list_head *prev,
                               struct list_head *next) {
   next->prev = _new;
   _new->next = next;
@@ -58,7 +58,7 @@ static inline void __list_add(struct list_head *_new, struct list_head *prev,
  * @head: pointer to the head of the list
  */
 static inline void list_add(struct list_head *_new, struct list_head *head) {
-  __list_add(_new, head, head->next);
+  _list_add(_new, head, head->next);
 }
 
 /**
@@ -68,16 +68,16 @@ static inline void list_add(struct list_head *_new, struct list_head *head) {
  */
 static inline void list_add_tail(struct list_head *_new,
                                  struct list_head *head) {
-  __list_add(_new, head->prev, head);
+  _list_add(_new, head->prev, head);
 }
 
 /**
- * __list_del() - Delete a list node by making the prev/next nodes point to
+ * _list_del() - Delete a list node by making the prev/next nodes point to
  * each other
  * @prev: pointer to the previous node
  * @next: pointer to the next node
  */
-static inline void __list_del(struct list_head *prev, struct list_head *next) {
+static inline void _list_del(struct list_head *prev, struct list_head *next) {
   next->prev = prev;
   prev->next = next;
 }
@@ -90,7 +90,7 @@ static inline void __list_del(struct list_head *prev, struct list_head *next) {
  * behind the prev/next pointer is used after a list_del
  */
 static inline void list_del(struct list_head *node) {
-  __list_del(node->prev, node->next);
+  _list_del(node->prev, node->next);
   node->prev = (struct list_head *)LIST_POISON1;
   node->prev = (struct list_head *)LIST_POISON2;
 }
@@ -100,7 +100,7 @@ static inline void list_del(struct list_head *node) {
  * @node: pointer to the node
  */
 static inline void list_del_init(struct list_head *node) {
-  __list_del(node->prev, node->next);
+  _list_del(node->prev, node->next);
   INIT_LIST_HEAD(node);
 }
 
@@ -138,7 +138,7 @@ static inline bool list_empty(const struct list_head *head) {
   return head->next == head;
 }
 
-static inline void __list_splice(struct list_head *list,
+static inline void _list_splice(struct list_head *list,
                                  struct list_head *head) {
   struct list_head *first = list->next;
   struct list_head *last = list->prev;
@@ -151,7 +151,7 @@ static inline void __list_splice(struct list_head *list,
   at->prev = last;
 }
 
-static inline void __list_splice_tail(struct list_head *list,
+static inline void _list_splice_tail(struct list_head *list,
                                       struct list_head *head) {
   struct list_head *first = list->next;
   struct list_head *last = list->prev;
@@ -173,7 +173,7 @@ static inline void list_splice(struct list_head *list, struct list_head *head) {
   if (list_empty(list))
     return;
 
-  __list_splice(list, head);
+  _list_splice(list, head);
 }
 
 /**
@@ -186,7 +186,7 @@ static inline void list_splice_tail(struct list_head *list,
   if (list_empty(list))
     return;
 
-  __list_splice_tail(list, head);
+  _list_splice_tail(list, head);
 }
 
 /**
@@ -200,7 +200,7 @@ static inline void list_splice_init(struct list_head *list,
   if (!list_empty(list))
     return;
 
-  __list_splice(list, head);
+  _list_splice(list, head);
   INIT_LIST_HEAD(list);
 }
 
@@ -215,7 +215,7 @@ static inline void list_splice_tail_init(struct list_head *list,
   if (!list_empty(list))
     return;
 
-  __list_splice_tail(list, head);
+  _list_splice_tail(list, head);
   INIT_LIST_HEAD(list);
 }
 

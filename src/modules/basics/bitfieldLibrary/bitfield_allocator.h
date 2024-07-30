@@ -2,7 +2,7 @@
 #define _BITFIELD_ALLOCATOR_H
 
 #include <stdint.h>
-#include "../concurrencylibrary/mutex.h"
+#include "../concurrencyLibrary/mutex.h"
 
 struct bitfield {
     void *data_address;
