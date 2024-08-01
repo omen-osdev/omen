@@ -1,6 +1,8 @@
 #ifndef LIST_H
 #define LIST_H
 
+#include <stdbool.h>
+
 struct list_head {
     struct list_head *prev, *next;
 };
@@ -18,7 +20,8 @@ struct list_head {
         (type *)((char *)__mptr - offsetof(type, member));                                                             \
     })
 
-#define LIST_HEAD_INIT(name) {&(name), &(name)}
+#define LIST_HEAD_INIT(name)                                                                                           \
+    { &(name), &(name) }
 
 /**
  * LIST_HEAD - Declare a list head and initialize it
@@ -65,8 +68,7 @@ static inline void list_add(struct list_head *_new, struct list_head *head) { _l
 static inline void list_add_tail(struct list_head *_new, struct list_head *head) { _list_add(_new, head->prev, head); }
 
 /**
- * _list_del() - Delete a list node by making the prev/next nodes point to
- * each other
+ * _list_del() - Delete a list node by making the prev/next nodes point to each other
  * @prev: pointer to the previous node
  * @next: pointer to the next node
  */
@@ -79,13 +81,13 @@ static inline void _list_del(struct list_head *prev, struct list_head *next) {
  * list_del() - Delete a list node from the list
  * @node: pointer to the node
  *
- * List poisoning is used to prevent an invalid memory access when the memory
- * behind the prev/next pointer is used after a list_del
+ * List poisoning is used to prevent an invalid memory access when the memory behind the prev/next pointer is used after
+ * a call to list_del
  */
 static inline void list_del(struct list_head *node) {
     _list_del(node->prev, node->next);
     node->prev = (struct list_head *)LIST_POISON1;
-    node->prev = (struct list_head *)LIST_POISON2;
+    node->next = (struct list_head *)LIST_POISON2;
 }
 
 /**
@@ -102,8 +104,7 @@ static inline void list_del_init(struct list_head *node) {
  * @node: pointer to the node
  * @head: pointer to the head of the list
  *
- * The @node is removed from its old position/node and add to the beginning of
- * @head
+ * The @node is removed from its old position/node and add to the beginning of @head
  */
 static inline void list_move(struct list_head *node, struct list_head *head) {
     list_del(node);
@@ -183,7 +184,7 @@ static inline void list_splice_tail(struct list_head *list, struct list_head *he
  * @head: pointer to the head of the other list
  */
 static inline void list_splice_init(struct list_head *list, struct list_head *head) {
-    if (!list_empty(list))
+    if (list_empty(list))
         return;
 
     _list_splice(list, head);
@@ -197,7 +198,7 @@ static inline void list_splice_init(struct list_head *list, struct list_head *he
  * @head: pointer to the head of the other list
  */
 static inline void list_splice_tail_init(struct list_head *list, struct list_head *head) {
-    if (!list_empty(list))
+    if (list_empty(list))
         return;
 
     _list_splice_tail(list, head);
@@ -241,9 +242,8 @@ static inline void list_splice_tail_init(struct list_head *list, struct list_hea
  * @node: list_head pointer used as iterator
  * @head: pointer to the head of the list
  *
- * The nodes and the head of the list must must be kept unmodified while
- * iterating through it. Any modifications to the the list will cause undefined
- * behavior.
+ * The nodes and the head of the list must must be kept unmodified while iterating through it. Any modifications to the
+ * the list will cause undefined behavior.
  */
 #define list_for_each(node, head) for (node = (head)->next; node != (head); node = node->next)
 
@@ -253,12 +253,25 @@ static inline void list_splice_tail_init(struct list_head *list, struct list_hea
  * @head: pointer to the head of the list
  * @member: name of the list_head member variable in struct type of @entry
  *
- * The nodes and the head of the list must must be kept unmodified while
- * iterating through it. Any modifications to the the list will cause undefined
- * behavior.
+ * The nodes and the head of the list must must be kept unmodified while iterating through it. Any modifications to the
+ * the list will cause undefined behavior.
  */
 #define list_for_each_entry(entry, head, member)                                                                       \
     for (entry = list_entry((head)->next, typeof(*entry), member); &entry->member != (head);                           \
          entry = list_entry(entry->member.next, typeof(*entry), member))
+
+/**
+ * list_for_each_entry_safe() - Iterate over list entries
+ * @entry: pointer used as iterator
+ * @head: pointer to the head of the list
+ * @member: name of the list_head member variable in struct type of @entry
+ *
+ * The current node (iterator) is allowed to be removed from the list. Any other modifications to the the list will
+ * cause undefined behavior.
+ */
+#define list_for_each_entry_safe(entry, safe, head, member)                                                            \
+    for (entry = list_entry((head)->next, typeof(*entry), member),                                                     \
+        safe = list_entry(entry->member.next, typeof(*entry), member);                                                 \
+         &entry->member != (head); entry = safe, safe = list_entry(safe->member.next, typeof(*entry), member))
 
 #endif

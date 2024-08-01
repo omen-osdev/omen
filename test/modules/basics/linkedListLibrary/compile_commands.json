@@ -1,0 +1,46 @@
+[
+  {
+    "arguments": [
+      "/nix/store/9bv7dcvmfcjnmg5mnqwqlq2wxfn8d7yi-gcc-wrapper-13.2.0/bin/gcc",
+      "-c",
+      "-std=gnu99",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-Wmissing-declarations",
+      "-I../../../../src",
+      "-I../../..",
+      "-DUNITY_SUPPORT_64",
+      "-DUNITY_OUTPUT_COLOR",
+      "-o",
+      "tests.out",
+      "../../../unity.c"
+    ],
+    "directory": "/home/jonathan/oss/omen/test/modules/basics/linkedListLibrary",
+    "file": "/home/jonathan/oss/omen/test/unity.c",
+    "output": "/home/jonathan/oss/omen/test/modules/basics/linkedListLibrary/tests.out"
+  },
+  {
+    "arguments": [
+      "/nix/store/9bv7dcvmfcjnmg5mnqwqlq2wxfn8d7yi-gcc-wrapper-13.2.0/bin/gcc",
+      "-c",
+      "-std=gnu99",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-Wmissing-declarations",
+      "-I../../../../src",
+      "-I../../..",
+      "-DUNITY_SUPPORT_64",
+      "-DUNITY_OUTPUT_COLOR",
+      "-o",
+      "tests.out",
+      "./test_linked_list.c"
+    ],
+    "directory": "/home/jonathan/oss/omen/test/modules/basics/linkedListLibrary",
+    "file": "/home/jonathan/oss/omen/test/modules/basics/linkedListLibrary/test_linked_list.c",
+    "output": "/home/jonathan/oss/omen/test/modules/basics/linkedListLibrary/tests.out"
+  }
+]
