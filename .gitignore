@@ -1,3 +1,7 @@
-a.out
+**/*.out
+**/*.test-out
 build/
-
+dependencies/
+**/.cache/
+**/compile_commands.json
+.vscode/
