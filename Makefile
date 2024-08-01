@@ -35,7 +35,7 @@ setup-test: setup
 	fi
 
 .PHONY: test
-test: $(TEST_SRCS:.c=.test-out) setup-test
+test: setup-test $(TEST_SRCS:.c=.test-out)
 	@for testfile in $(TEST_BINS); do                \
 		echo -e "\033[35mRunning $$testfile\n\033[0m"; \
 		"./$$testfile";                                \
