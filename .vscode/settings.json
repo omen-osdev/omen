@@ -1,9 +1,0 @@
-{
-    "files.associations": {
-        "bootservices.h": "c",
-        "abstract.h": "c",
-        "cstdint": "c",
-        "compare": "c",
-        "cstdlib": "c"
-    }
-}
