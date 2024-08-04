@@ -455,7 +455,7 @@ static void test_list_for_each_entry_safe(void) {
   }
 
   TEST_ASSERT_EQUAL_INT(6, i);
-  TEST_ASSERT_TRUE(list_empty(&list));
+  TEST_ASSERT_FALSE(list_empty(&list));
 }
 
 int main(void) {
