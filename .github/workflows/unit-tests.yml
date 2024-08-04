@@ -1,0 +1,19 @@
+name: Run unit tests
+
+on:
+    push:
+        branches: [ main, develop ]
+    pull_request:
+        types: [ opened, synchronize, ready_for_review, labeled ]
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                fetch-depth: 0
+            - name: Test
+              run: |
+                make test
