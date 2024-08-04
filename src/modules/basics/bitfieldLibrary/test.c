@@ -119,6 +119,9 @@ void *_worker_thread(void *arg) {
             uint64_t chunk_no = rand() % data->allocated;
             struct _allocation_tracker *current = data->tracker;
             for (uint64_t j = 0; j < chunk_no; j++) {
+                if (current == 0) {
+                    break;
+                }
                 current = current->next;
             }
             if (current != NULL && !current->freed) {
@@ -139,7 +142,7 @@ int main(int argc, char *argv[]) {
     void *data = malloc(data_size);
     struct bitfield *bf = init(data, data_size, page_size);
 
-    uint64_t thread_count = 4;
+    uint64_t thread_count = 5;
     uint64_t iterations = 0x1000;
 
     struct _allocation_metadata *metadata = (struct _allocation_metadata *)malloc(sizeof(struct _allocation_metadata));
