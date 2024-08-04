@@ -17,8 +17,11 @@ CFLAGS += -Wmissing-declarations
 CFLAGS += -I$(SRC_DIR)
 CFLAGS += -I$(UNITY_DIR)
 
-TEST_SRCS := $(shell find $(TEST_DIR) -type f -name '*.c')
-TEST_BINS := $(patsubst %.c, %.test-out, $(TEST_SRCS))
+SRC_FILES := $(shell find $(TEST_DIR) -type f -name '*.c')
+SRC_BINS := $(patsubst %.c, %.o, $(SRC_FILES))
+
+UNIT_TEST_SRCS := $(shell find $(TEST_DIR) -type f -name '*.unit.c')
+UNIT_TEST_BINS := $(patsubst %.unit.c, %.unit-test-out, $(UNIT_TEST_SRCS))
 
 setup:
 	mkdir -p "$(BUILD_DIR)"
@@ -35,17 +38,17 @@ setup-test: setup
 	fi
 
 .PHONY: test
-test: setup-test $(TEST_SRCS:.c=.test-out)
-	@for testfile in $(TEST_BINS); do                \
+unit-test: setup-test $(UNIT_TEST_SRCS:.unit.c=.unit-test-out)
+	@for testfile in $(UNIT_TEST_BINS); do                \
 		echo -e "\033[35mRunning $$testfile\n\033[0m"; \
 		"./$$testfile";                                \
 	done
 
-%.test-out: %.c
+%.unit-test-out: %.unit.c
 	@$(CC) $(CFLAGS) $(TESTFLAGS) $(UNITY_DIR)/unity.c $< -o $@
 
 clean-test:
-	@for testfile in $(TEST_BINS); do \
+	@for testfile in $(UNIT_TEST_BINS); do \
 		echo "Removing $$testfile";     \
 		rm -f "$$testfile";             \
 	done

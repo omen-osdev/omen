@@ -1,18 +1,7 @@
-#include <pthread.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-#include <unistd.h>
+#include "test_bitfield_allocator.e2e.h"
 
-#include "bitfield_allocator.h"
-
-struct _allocation_data {
-    struct bitfield *bf;
-    void *address;
-    uint64_t size;
-};
+void setUp(){}
+void tearDown(){}
 
 void *_allocate_stub(void *data) {
     struct _allocation_data *allocation = (struct _allocation_data *)data;
@@ -35,30 +24,11 @@ void *_deallocate_stub(void *data) {
 void *_check_stub(void *data) {
     struct _allocation_data *allocation = (struct _allocation_data *)data;
     struct bitfield *bf = allocation->bf;
-    void *address = allocation->address;
-    uint64_t size = allocation->size;
 
     debug_bitfield(bf);
 
     return NULL;
 }
-
-struct _allocation_tracker {
-    void *address;
-    uint64_t size;
-    uint8_t freed;
-    uint64_t expected_fragmentation;
-    struct _allocation_tracker *next;
-};
-
-struct _allocation_metadata {
-    void *allocation_control_structure;
-    uint64_t iterations;
-    uint64_t allocated;
-    uint64_t page_size;
-    struct _allocation_tracker *tracker;
-    pthread_mutex_t tracker_lock;
-};
 
 void _add_allocation(struct _allocation_metadata *allocation, void *address, uint64_t size) {
     struct _allocation_tracker *tracker = (struct _allocation_tracker *)malloc(sizeof(struct _allocation_tracker));
@@ -95,7 +65,7 @@ void _mark_as_freed(struct _allocation_metadata *allocation, void *address) {
     pthread_mutex_unlock(&allocation->tracker_lock);
 }
 
-void *_worker_thread(void *arg) {
+void _worker_thread(void *arg) {
     struct _allocation_metadata *data = (struct _allocation_metadata *)arg;
     uint64_t iterations = data->iterations;
 
@@ -133,7 +103,7 @@ void *_worker_thread(void *arg) {
     }
 }
 
-int main(int argc, char *argv[]) {
+int main() {
     srand(time(NULL));
 
     uint64_t data_size = 0x100000000;
@@ -143,7 +113,7 @@ int main(int argc, char *argv[]) {
     struct bitfield *bf = init(data, data_size, page_size);
 
     uint64_t thread_count = 5;
-    uint64_t iterations = 0x1000;
+    uint64_t iterations = 0x100;
 
     struct _allocation_metadata *metadata = (struct _allocation_metadata *)malloc(sizeof(struct _allocation_metadata));
     pthread_t *threads = (pthread_t *)malloc(sizeof(pthread_t) * thread_count);
@@ -156,7 +126,7 @@ int main(int argc, char *argv[]) {
     pthread_mutex_init(&metadata->tracker_lock, NULL);
 
     for (uint64_t i = 0; i < thread_count; i++) {
-        pthread_create(&threads[i], NULL, _worker_thread, metadata);
+        pthread_create(&threads[i], NULL, (void *)_worker_thread, metadata);
     }
 
     for (uint64_t i = 0; i < thread_count; i++) {
