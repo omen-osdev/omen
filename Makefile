@@ -1,5 +1,6 @@
 CC := gcc
 
+INCLUDE_DIR := ./include
 SRC_DIR := ./src
 BUILD_DIR := ./build
 TEST_DIR := ./test
@@ -15,6 +16,7 @@ CFLAGS += -Wextra
 CFLAGS += -Werror
 CFLAGS += -Wmissing-declarations
 CFLAGS += -I$(SRC_DIR)
+CFLAGS += -I$(INCLUDE_DIR)
 CFLAGS += -I$(UNITY_DIR)
 
 SRC_FILES := $(shell find $(TEST_DIR) -type f -name '*.c')

@@ -1,7 +1,7 @@
 #ifndef LIST_H
 #define LIST_H
 
-#include <stdbool.h>
+#include "modules/basics/standardLibrary/stdbool.h"
 
 struct list_head {
     struct list_head *prev, *next;
@@ -20,8 +20,7 @@ struct list_head {
         (type *)((char *)__mptr - offsetof(type, member));                                                             \
     })
 
-#define LIST_HEAD_INIT(name)                                                                                           \
-    { &(name), &(name) }
+#define LIST_HEAD_INIT(name) {&(name), &(name)}
 
 /**
  * LIST_HEAD - Declare a list head and initialize it
