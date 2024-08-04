@@ -31,7 +31,7 @@ clean:
 setup-test: setup
 	@if [ ! -d $(DEPENDENCIES_DIR)/Unity ]; then \
 		echo "Cloning Unity test framework"; \
-		git clone git@github.com:ThrowTheSwitch/Unity.git "$(DEPENDENCIES_DIR)/Unity" --branch v2.6.0; \
+		git clone https://github.com/ThrowTheSwitch/Unity.git "$(DEPENDENCIES_DIR)/Unity" --branch v2.6.0; \
 	fi
 
 .PHONY: test
