@@ -1,7 +1,7 @@
 #ifndef TEST_BITMAP_H
 #define TEST_BITMAP_H
 
-#include "omen/libraries/datastructs/bitmap.h"
+#include "omen/libraries/basic/bitmap.h"
 
 #include "unity.h"
 

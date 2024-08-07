@@ -1,7 +1,7 @@
 #ifndef TEST_LINKED_LIST_H
 #define TEST_LINKED_LIST_H
 
-#include "omen/libraries/datastructs/linked_list.h"
+#include "omen/libraries/basic/linked_list.h"
 
 #include "unity.h"
 

@@ -1,5 +1,7 @@
 CC := gcc
 
+ABS_DIR := $(shell pwd)
+BUILDENV_DIR := $(ABS_DIR)/buildenv
 INCLUDE_DIR := ./include
 SRC_DIR := ./src
 BUILD_DIR := ./build
@@ -30,10 +32,27 @@ E2E_TEST_BINS := $(patsubst $(TEST_DIR)/%.e2e.c, $(BUILD_DIR)/%.e2e-test-out, $(
 setup:
 	mkdir -p "$(BUILD_DIR)"
 	mkdir -p "$(DEPENDENCIES_DIR)"
+	@make -C $(BUILDENV_DIR) setup
 
-clean:
+cleansetup:
 	rm -rf "$(BUILD_DIR)"
 	rm -rf "$(DEPENDENCIES_DIR)"
+	@make -C $(BUILDENV_DIR) cleansetup
+
+clean:
+	@make -C $(BUILDENV_DIR) clean
+
+gpt:
+	@make -C $(BUILDENV_DIR) gpt
+
+debugpt:
+	@make -C $(BUILDENV_DIR) debugpt
+
+run:
+	@make -C $(BUILDENV_DIR) run
+
+debugsetup:
+	@make -C $(BUILDENV_DIR) debugsetup
 
 setup-test: setup
 	@if [ ! -d $(DEPENDENCIES_DIR)/Unity ]; then \
