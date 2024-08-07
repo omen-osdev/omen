@@ -9,7 +9,7 @@ DEPENDENCIES_DIR := ./dependencies
 UNITY_DIR := $(DEPENDENCIES_DIR)/Unity/src
 TESTFLAGS := -DUINITY_SUPPORT_64 -DUNITY_OUTPUT_COLOR
 
-CFLAGS := -std=gnu99
+CFLAGS := -std=gnu11
 CFLAGS += -g
 CFLAGS += -Wall
 CFLAGS += -Wextra
@@ -19,11 +19,11 @@ CFLAGS += -I$(SRC_DIR)
 CFLAGS += -I$(INCLUDE_DIR)
 CFLAGS += -I$(UNITY_DIR)
 
-SRC_FILES := $(shell find $(TEST_DIR) -type f -name '*.c')
-SRC_BINS := $(patsubst %.c, %.o, $(SRC_FILES))
+SRCS := $(shell find $(SRC_DIR) -type f -name '*.c')
+OBJS := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(SRCS))
 
 UNIT_TEST_SRCS := $(shell find $(TEST_DIR) -type f -name '*.unit.c')
-UNIT_TEST_BINS := $(patsubst %.unit.c, %.unit-test-out, $(UNIT_TEST_SRCS))
+UNIT_TEST_BINS := $(patsubst $(TEST_DIR)/%.unit.c, $(BUILD_DIR)/%.unit-test-out, $(UNIT_TEST_SRCS))
 
 setup:
 	mkdir -p "$(BUILD_DIR)"
@@ -39,15 +39,23 @@ setup-test: setup
 		git clone https://github.com/ThrowTheSwitch/Unity.git "$(DEPENDENCIES_DIR)/Unity" --branch v2.6.0; \
 	fi
 
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
+	echo "hello"
+	@mkdir -p $$(dirname $@)  # Create the directory structure in BUILD_DIR
+	$(CC) $(CFLAGS) -c $< -o $@
+
 .PHONY: test
-unit-test: setup-test $(UNIT_TEST_SRCS:.unit.c=.unit-test-out)
+test: setup-test $(UNIT_TEST_BINS)
 	@for testfile in $(UNIT_TEST_BINS); do                \
 		echo -e "\033[35mRunning $$testfile\n\033[0m"; \
 		"./$$testfile";                                \
 	done
 
-%.unit-test-out: %.unit.c
-	@$(CC) $(CFLAGS) $(TESTFLAGS) $(UNITY_DIR)/unity.c $< -o $@
+$(BUILD_DIR)/%.unit-test-out: $(UNIT_TEST_DIR)/%.unit.c $(OBJS)
+	@echo "In: $<"
+	@echo "Out: $@"
+	@mkdir -p $$(dirname $@)  # Create the directory structure in BUILD_DIR
+	@$(CC) $(CFLAGS) $(TESTFLAGS) $(UNITY_DIR)/unity.c $< $(OBJS) -o $@
 
 clean-test:
 	@for testfile in $(UNIT_TEST_BINS); do \

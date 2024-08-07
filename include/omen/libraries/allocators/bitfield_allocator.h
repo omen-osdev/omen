@@ -1,7 +1,7 @@
 #ifndef _BITFIELD_ALLOCATOR_H
 #define _BITFIELD_ALLOCATOR_H
 
-#include "../concurrencyLibrary/mutex.h"
+#include "../concurrency/mutex.h"
 #include <stdint.h>
 
 struct bitfield {
