@@ -1,8 +1,5 @@
 #include "test_bitfield_allocator.e2e.h"
 
-void setUp(){}
-void tearDown(){}
-
 void *_allocate_stub(void *data) {
     struct _allocation_data *allocation = (struct _allocation_data *)data;
     struct bitfield *bf = allocation->bf;

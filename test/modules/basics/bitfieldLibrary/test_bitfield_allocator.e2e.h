@@ -3,8 +3,6 @@
 
 #include "modules/basics/bitfieldLibrary/bitfield_allocator.h"
 
-#include "unity.h"
-
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
