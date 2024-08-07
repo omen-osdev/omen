@@ -46,19 +46,19 @@ static void test_buddy_level_alloc_and_free() {
     buddy_init(allocator, address, size, page_size);
 
     ptr = buddy_level_alloc(allocator, 8);
-    TEST_ASSERT_EQUAL_size_t(FOUR_KB, buddy_used(allocator));
+    TEST_ASSERT_EQUAL_size_t(page_size, buddy_used(allocator));
 
     buddy_level_free(allocator, ptr, 8);
     TEST_ASSERT_EQUAL_size_t(0, buddy_used(allocator));
 
     ptr = buddy_level_alloc(allocator, 6);
-    TEST_ASSERT_EQUAL_size_t(4 * FOUR_KB, buddy_used(allocator));
+    TEST_ASSERT_EQUAL_size_t(4 * page_size, buddy_used(allocator));
 
     ptr2 = buddy_level_alloc(allocator, 6);
-    TEST_ASSERT_EQUAL_size_t(8 * FOUR_KB, buddy_used(allocator));
+    TEST_ASSERT_EQUAL_size_t(8 * page_size, buddy_used(allocator));
 
     buddy_level_free(allocator, ptr, 6);
-    TEST_ASSERT_EQUAL_size_t(4 * FOUR_KB, buddy_used(allocator));
+    TEST_ASSERT_EQUAL_size_t(4 * page_size, buddy_used(allocator));
 
     buddy_level_free(allocator, ptr2, 6);
     TEST_ASSERT_EQUAL_size_t(0, buddy_used(allocator));

@@ -1,4 +1,4 @@
-#include "mutex.h"
+#include "omen/libraries/concurrency/mutex.h"
 #include <stdatomic.h>
 
 void mutex_init(mutex_t *mutex) { atomic_flag_clear(&mutex->lock); }

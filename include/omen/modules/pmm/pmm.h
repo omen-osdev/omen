@@ -3,7 +3,6 @@
 
 #include "omen/libraries/datastructs/bitmap.h"
 #include "omen/libraries/datastructs/list.h"
-#include "stdlib.h"
 
 typedef struct {
     void *address;

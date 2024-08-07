@@ -2,6 +2,8 @@
 #include "omen/libraries/datastructs/bitmap.h"
 #include "omen/libraries/datastructs/list.h"
 
+// Implementation based on http://bitsquid.blogspot.com/2015/08/allocation-adventures-3-buddy-allocator.html
+
 static inline unsigned long int buddy_page_index(const buddy_allocator_t *allocator, const void *ptr) {
     return (ptr - allocator->address) / allocator->page_size;
 }
