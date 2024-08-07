@@ -2,6 +2,7 @@
 #define LIST_H
 
 #include <stdbool.h>
+#include <stdio.h>
 
 struct list_head {
     struct list_head *prev, *next;
@@ -20,8 +21,7 @@ struct list_head {
         (type *)((char *)__mptr - offsetof(type, member));                                                             \
     })
 
-#define LIST_HEAD_INIT(name)                                                                                           \
-    { &(name), &(name) }
+#define LIST_HEAD_INIT(name) {&(name), &(name)}
 
 /**
  * LIST_HEAD - Declare a list head and initialize it
@@ -274,4 +274,6 @@ static inline void list_splice_tail_init(struct list_head *list, struct list_hea
         safe = list_entry(entry->member.next, typeof(*entry), member);                                                 \
          &entry->member != (head); entry = safe, safe = list_entry(safe->member.next, typeof(*entry), member))
 
+/* Debug */
+void debug_list(struct list_head *head);
 #endif
