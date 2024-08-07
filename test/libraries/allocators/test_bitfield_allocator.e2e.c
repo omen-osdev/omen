@@ -1,4 +1,4 @@
-#include "libraries/allocators/bitfield_allocator.h"
+#include "omen/libraries/allocators/bitfield_allocator.h"
 
 #include <pthread.h>
 #include <stdint.h>

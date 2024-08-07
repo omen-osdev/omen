@@ -1,4 +1,4 @@
-#include "bitfield_allocator.h"
+#include "omen/libraries/allocators/bitfield_allocator.h"
 #include <stdatomic.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -6,9 +6,9 @@
 
 #define BYTES_TO_PAGES(bytes, page_size) ((bytes) / (page_size) + ((bytes) % (page_size) ? 1 : 0))
 
-uint8_t _is_free(struct bitfield *bf, uint64_t index) { return !(bf->bitmap[index / 8] & (1 << (index % 8))); }
+static uint8_t _is_free(struct bitfield *bf, uint64_t index) { return !(bf->bitmap[index / 8] & (1 << (index % 8))); }
 
-uint8_t _fits(struct bitfield *bf, uint64_t index, uint64_t pages) {
+static uint8_t _fits(struct bitfield *bf, uint64_t index, uint64_t pages) {
     for (uint64_t i = index; i < (index + pages); i++) {
         if (!_is_free(bf, i)) {
             return 0;
@@ -18,7 +18,7 @@ uint8_t _fits(struct bitfield *bf, uint64_t index, uint64_t pages) {
     return 1;
 }
 
-uint64_t _get_free_index(struct bitfield *bf, uint64_t pages) {
+static uint64_t _get_free_index(struct bitfield *bf, uint64_t pages) {
     for (uint64_t i = bf->next_index; i < bf->bitmap_size; i++) {
         if (_fits(bf, i, pages)) {
             return i;
@@ -34,13 +34,13 @@ uint64_t _get_free_index(struct bitfield *bf, uint64_t pages) {
     return 0; // A zero here is considered an error
 }
 
-void _lock_index(struct bitfield *bf, uint64_t index, uint64_t pages) {
+static void _lock_index(struct bitfield *bf, uint64_t index, uint64_t pages) {
     for (uint64_t i = index; i < (index + pages); i++) {
         bf->bitmap[i / 8] |= (1 << (i % 8));
     }
 }
 
-void _un_lock_index(struct bitfield *bf, uint64_t index, uint64_t pages) {
+static void _un_lock_index(struct bitfield *bf, uint64_t index, uint64_t pages) {
     for (uint64_t i = index; i < (index + pages); i++) {
         bf->bitmap[i / 8] &= ~(1 << (i % 8));
     }
