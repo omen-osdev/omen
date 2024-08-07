@@ -1,12 +1,10 @@
-#include "omen/libraries/datastructs/bitmap.h"
-
-#include "unity.h"
+#include "test_bitmap.unit.h"
 
 void setUp(void) {}
 
 void tearDown(void) {}
 
-static void test_bitmap_get() {
+void test_bitmap_get() {
     unsigned long data[] = {0x4142434445464748, 0x6968676665646362};
     char *bits[] = {"0100000101000010010000110100010001000101010001100100011101001000",
                     "0110100101101000011001110110011001100101011001000110001101100010"};
@@ -22,7 +20,7 @@ static void test_bitmap_get() {
     }
 }
 
-static void test_bitmap_set() {
+void test_bitmap_set() {
     unsigned long data[] = {0x4142434445464748, 0x6968676665646362};
     unsigned long expected[] = {0xffffffffffffffff, 0xffffffffffffffff};
     bitmap_t bitmap = data;
@@ -34,7 +32,7 @@ static void test_bitmap_set() {
     TEST_ASSERT_EQUAL_UINT64_ARRAY(expected, data, 2);
 }
 
-static void test_bitmap_clear() {
+void test_bitmap_clear() {
     unsigned long data[] = {0x4142434445464748, 0x6968676665646362};
     unsigned long expected[] = {0x0, 0x0};
     bitmap_t bitmap = data;
@@ -46,7 +44,7 @@ static void test_bitmap_clear() {
     TEST_ASSERT_EQUAL_UINT64_ARRAY(expected, data, 2);
 }
 
-static void test_bitmap_toggle() {
+void test_bitmap_toggle() {
     unsigned long data[] = {0x4142434445464748, 0x6968676665646362};
     unsigned long expected[] = {0xbebdbcbbbab9b8b7, 0x969798999a9b9c9d};
     bitmap_t bitmap = data;

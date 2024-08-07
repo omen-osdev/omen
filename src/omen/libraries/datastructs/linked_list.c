@@ -1,4 +1,4 @@
-#include "omen/libraries/datastructs/list.h"
+#include "omen/libraries/datastructs/linked_list.h"
 
 void debug_list(struct list_head *head) {
     struct list_head *node;

@@ -1,6 +1,6 @@
-#include "omen/modules/pmm/pmm.h"
+#include "omen/libraries/allocators/buddy_allocator.h"
 #include "omen/libraries/datastructs/bitmap.h"
-#include "omen/libraries/datastructs/list.h"
+#include "omen/libraries/datastructs/linked_list.h"
 
 // Implementation based on http://bitsquid.blogspot.com/2015/08/allocation-adventures-3-buddy-allocator.html
 

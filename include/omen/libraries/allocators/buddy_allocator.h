@@ -2,7 +2,7 @@
 #define PMM_H
 
 #include "omen/libraries/datastructs/bitmap.h"
-#include "omen/libraries/datastructs/list.h"
+#include "omen/libraries/datastructs/linked_list.h"
 
 typedef struct {
     void *address;

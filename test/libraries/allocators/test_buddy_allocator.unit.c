@@ -1,4 +1,4 @@
-#include "omen/modules/pmm/pmm.h"
+#include "omen/libraries/allocators/buddy_allocator.h"
 
 #include "unity.h"
 #include <stdio.h>
