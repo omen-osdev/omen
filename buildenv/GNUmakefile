@@ -12,8 +12,8 @@ override WDIR := omendata
 # We are only using "cc" as a placeholder here. It may work by using
 # the host system's toolchain, but this is not guaranteed.
 
-CC := /usr/bin/cc
-LD := /usr/bin/ld
+CC := cc
+LD := ld
 ASMC := nasm
 
 # This are specific to my setup, please modify them!!!!
@@ -32,7 +32,8 @@ VBOXCOM1PORT := 4441
 VBOXCOM2PORT := 4442
 VBOXCOM3PORT := 4443
 VBOXCOM4PORT := 4444
-CMDNEWSCREEN := cmd.exe /c start cmd /c wsl -e
+#CMDNEWSCREEN := cmd.exe /c start cmd /c wsl -e
+CMDNEWSCREEN := tmux split-window -h 
 MNTDIR := /mnt/omen
 
 KERNEL_ENTRY := _start
@@ -61,7 +62,7 @@ QFLAGS ?= -cpu qemu64 -d cpu_reset -no-reboot -no-shutdown -machine q35 $(NUMAFL
 QFLAGSEXP ?= -cpu qemu64 -d cpu_reset -no-reboot -no-shutdown -machine q35 $(NUMAFLAGS) -m $(MEMSIZE) -boot d -serial stdio -drive if=pflash,format=raw,unit=0,file=$(OVMFDIR)/OVMF_CODE-pure-efi.fd,readonly=on -drive if=pflash,format=raw,unit=1,file=$(OVMFDIR)/OVMF_VARS-pure-efi.fd -drive file=
 #QWFLAGSEXP ?= -cpu qemu64 -d cpu_reset -machine q35 $(NUMAFLAGS) -m $(MEMSIZE) -boot d -netdev tap,id=mynet0,ifname=tap,script=no,downscript=no -serial stdio -device e1000,netdev=mynet0,mac=51:52:53:54:55:56 -drive if=pflash,format=raw,unit=0,file=$(WINDIRECTORY)/OVMF_CODE-pure-efi.fd,readonly=on -drive if=pflash,format=raw,unit=1,file=$(WINDIRECTORY)/OVMF_VARS-pure-efi.fd -drive file=
 
-CFLAGS ?= -O0 -g -Wall -Wextra -pipe -Wno-packed-bitfield-compat -std=c11
+CFLAGS ?= -O0 -g -Wall -Wextra -pipe -Wno-packed-bitfield-compat -std=c11 -fno-stack-protector
 NASMFLAGS ?= -F dwarf -g
 LDFLAGS ?=
 CPPFLAGS ?=
@@ -235,17 +236,13 @@ clean:
 	@rm -f $(ISODIR)/$(VDI)
 
 setup:
-	$(eval WINUSER := $(shell cmd.exe /c 'for %a in (%userprofile%) do (echo %~nxa)' | tail -1 | tr -d ' '))
 	@mkdir -p $(BUILDDIR)
 	@mkdir -p $(OBJDIR)
 	@mkdir -p $(ISOBUILDDIR)
 	@mkdir -p $(ISODIR)
-	@mkdir -p /mnt/c/Users/$(WINUSER)/$(WDIR)
 	@dd if=/dev/zero of=$(ISODIR)/$(IMG_RAW) bs=4096 count=102400
 	@git clone $(LMNREPO) --branch=$(LMNBRCH) --depth=1
 	@cp -v $(LMNDIR)/limine.sys $(LMNDIR)/limine-cd.bin $(LMNDIR)/limine-cd-efi.bin $(ISOBUILDDIR)
-	@cp $(OVMFDIR)/OVMF_CODE-pure-efi.fd /mnt/c/Users/$(WINUSER)/$(WDIR)/OVMF_CODE-pure-efi.fd
-	@cp $(OVMFDIR)/OVMF_VARS-pure-efi.fd /mnt/c/Users/$(WINUSER)/$(WDIR)/OVMF_VARS-pure-efi.fd
 	@echo file $(BUILDDIR)/$(KERNEL) > $(ABSDIR)/$(GDBCFG)
 	@echo target remote $(WSLHOSTIP):$(GDBPORT) >> $(ABSDIR)/$(GDBCFG)
 	@echo set disassembly-flavor intel >> $(ABSDIR)/$(GDBCFG)
@@ -253,11 +250,9 @@ setup:
 	@echo c >> $(ABSDIR)/$(GDBCFG)
 
 cleansetup:
-	$(eval WINUSER := $(shell cmd.exe /c 'for %a in (%userprofile%) do (echo %~nxa)' | tail -1 | tr -d ' '))
 	@rm -rf $(BUILDHOME)
 	@rm -f $(ABSDIR)/$(GDBCFG)
 	@rm -rf $(LMNDIR)
-	@rm -rf /mnt/c/Users/$(WINUSER)/$(WDIR)
 buildimg:
 	@cp -v limine.cfg $(BUILDDIR)/$(KERNEL) $(ISOBUILDDIR)
 	@xorriso -as mkisofs -b limine-cd.bin \
@@ -283,18 +278,11 @@ buildimggpt:
 	@echo Loop device path: $(LOOP_DEV_PATH)
 	
 	@sudo sgdisk --new 1:0:+50M --typecode 1:ef00 $(LOOP_DEV_PATH)
-	@sudo sgdisk --new 2:0:+100M -t 2:8300 $(LOOP_DEV_PATH)
-	@sudo sgdisk --new 3:0:0  -t 3:8300 $(LOOP_DEV_PATH)
 	@sudo sgdisk -p $(LOOP_DEV_PATH)
 	@sudo fdisk -l $(LOOP_DEV_PATH)
 	@-sudo partprobe
 	@sudo mkfs.fat -n PATATA -F32 $(LOOP_DEV_PATH)p1
-	@sudo mkfs.fat -n FDATA -F32 $(LOOP_DEV_PATH)p2
-	@sudo mkfs.ext2 -L FDATA2 $(LOOP_DEV_PATH)p3 -b $(BLOCKSIZE)
-	@sudo dumpe2fs $(LOOP_DEV_PATH)p3 | grep -i superblock
-	@sudo mkdir $(MNTDIR)
-	@sudo mkdir $(SYSDIR)
-	@sudo mkdir $(DATDIR)
+	@sudo mkdir -p $(SYSDIR)
 
 	@sudo mount $(LOOP_DEV_PATH)p1 $(SYSDIR)
 
@@ -306,17 +294,6 @@ buildimggpt:
 	@sudo cp ./limine.cfg $(SYSDIR)
 	@sudo umount $(SYSDIR)
 
-	@echo System files created, creating f32 data files
-	@sudo mount $(LOOP_DEV_PATH)p2 $(DATDIR)
-	@sudo tree $(DATDIR)
-	@sudo umount $(DATDIR)
-
-	@echo F32 data files created, creating ext2 data files
-	@sudo mount $(LOOP_DEV_PATH)p3 $(DATDIR)
-	@sudo tree $(DATDIR)
-	@sudo umount $(DATDIR)
-
-	@sudo rm -rf $(MNTDIR)
 	@sudo losetup -d $(LOOP_DEV_PATH)
 
 run:
@@ -382,7 +359,7 @@ debugpt:
 # Due to eval weird behaviour
 	@make buildimggpt
 	@echo "Running GPT QEMU..."
-	$(CMDNEWSCREEN) $(GDB) $(GDBFLAGS) & $(QEMU) -S -s $(QFLAGSEXP)$(ISODIR)/$(IMG)
+	$(CMDNEWSCREEN) '$(GDB) $(GDBFLAGS)' & $(QEMU) -S -s $(QFLAGSEXP)$(ISODIR)/$(IMG)
 
 debuge:
 	@make kernel

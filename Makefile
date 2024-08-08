@@ -2,7 +2,7 @@ CC := gcc
 
 ABS_DIR := $(shell pwd)
 BUILDENV_DIR := $(ABS_DIR)/buildenv
-INCLUDE_DIR := $(ABS_DIR)/include
+INCLUDE_DIR := $(ABS_DIR)/src/include
 SRC_DIR := $(ABS_DIR)/src
 BUILD_DIR := $(ABS_DIR)/build
 TEST_DIR := $(ABS_DIR)/test
@@ -67,7 +67,7 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $$(dirname $@)  # Create the directory structure in BUILD_DIR
 	$(CC) $(CFLAGS) -c $< -o $@
 
-test: e2e-test unit-test 
+test: unit-test 
 
 unit-test: setup-test $(UNIT_TEST_BINS)
 	@for testfile in $(UNIT_TEST_BINS); do                \

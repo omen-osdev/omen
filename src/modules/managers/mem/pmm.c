@@ -50,6 +50,8 @@ void pmm_init() {
         size >>= 1;
         power++;
     }
+    power--;
+    kprintf("Real: %lu Used: %lu Lost: %lu\n", main_memory.size, 1 << power, main_memory.size - (1 << power));
     main_memory.size = 1 << power;
 
     buddy = buddy_create((void*)main_memory.base, main_memory.size, PAGE_SIZE);
