@@ -2,11 +2,11 @@ CC := gcc
 
 ABS_DIR := $(shell pwd)
 BUILDENV_DIR := $(ABS_DIR)/buildenv
-INCLUDE_DIR := ./include
-SRC_DIR := ./src
-BUILD_DIR := ./build
-TEST_DIR := ./test
-DEPENDENCIES_DIR := ./dependencies
+INCLUDE_DIR := $(ABS_DIR)/include
+SRC_DIR := $(ABS_DIR)/src
+BUILD_DIR := $(ABS_DIR)/build
+TEST_DIR := $(ABS_DIR)/test
+DEPENDENCIES_DIR := $(ABS_DIR)/dependencies
 
 UNITY_DIR := $(DEPENDENCIES_DIR)/Unity/src
 TESTFLAGS := -DUINITY_SUPPORT_64 -DUNITY_OUTPUT_COLOR
@@ -32,7 +32,9 @@ E2E_TEST_BINS := $(patsubst $(TEST_DIR)/%.e2e.c, $(BUILD_DIR)/%.e2e-test-out, $(
 setup:
 	mkdir -p "$(BUILD_DIR)"
 	mkdir -p "$(DEPENDENCIES_DIR)"
-	@make -C $(BUILDENV_DIR) setup
+
+setup-gpt:
+	@make -C "$(BUILDENV_DIR)" setup
 
 cleansetup:
 	rm -rf "$(BUILD_DIR)"
