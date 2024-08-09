@@ -50,8 +50,15 @@ gpt:
 debugpt:
 	@make -C $(BUILDENV_DIR) debugpt
 
+debugpt-wsl:
+	@make -C $(BUILDENV_DIR) debugpt-wsl
+
 run:
 	@make -C $(BUILDENV_DIR) run
+
+prep2push:
+	@make -C $(BUILDENV_DIR) clean
+	@make -C $(BUILDENV_DIR) cleansetup
 
 debugsetup:
 	@make -C $(BUILDENV_DIR) debugsetup

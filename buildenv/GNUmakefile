@@ -7,6 +7,7 @@ override LIMINECFG := limine.cfg
 override GDBCFG := debug.gdb
 override VMNAME := omen
 override WDIR := omendata
+override LOCKFILE := lockfile
 
 # It is highly recommended to use a custom built cross toolchain to build a kernel.
 # We are only using "cc" as a placeholder here. It may work by using
@@ -32,8 +33,6 @@ VBOXCOM1PORT := 4441
 VBOXCOM2PORT := 4442
 VBOXCOM3PORT := 4443
 VBOXCOM4PORT := 4444
-#CMDNEWSCREEN := cmd.exe /c start cmd /c wsl -e
-CMDNEWSCREEN := tmux split-window -h 
 MNTDIR := /mnt/omen
 
 KERNEL_ENTRY := _start
@@ -253,26 +252,28 @@ cleansetup:
 	@rm -rf $(BUILDHOME)
 	@rm -f $(ABSDIR)/$(GDBCFG)
 	@rm -rf $(LMNDIR)
-buildimg:
-	@cp -v limine.cfg $(BUILDDIR)/$(KERNEL) $(ISOBUILDDIR)
-	@xorriso -as mkisofs -b limine-cd.bin \
-        -no-emul-boot -boot-load-size 4 -boot-info-table \
-        --efi-boot limine-cd-efi.bin \
-        -efi-boot-part --efi-boot-image --protective-msdos-label \
-        $(ISOBUILDDIR) -o $(ISODIR)/$(ISO)
-	$(LMN) $(ISODIR)/$(ISO)
 
-buildimgexp:
-	@cp $(ISODIR)/$(IMG_RAW) $(ISODIR)/$(IMG)
-	@mkfs.fat -F32 $(ISODIR)/$(IMG)
-	@mmd -i $(ISODIR)/$(IMG) ::/EFI
-	@mmd -i $(ISODIR)/$(IMG) ::/EFI/BOOT
-	@mcopy -i $(ISODIR)/$(IMG) $(BOOTEFI) ::/EFI/BOOT
-	@mcopy -i $(ISODIR)/$(IMG) ./startup.nsh ::
-	@mcopy -i $(ISODIR)/$(IMG) $(BUILDDIR)/$(KERNEL) ::
-	@mcopy -i $(ISODIR)/$(IMG) ./limine.cfg ::
+cleanup_loop:
+	@if [ -n "$(shell losetup -a | grep $(IMG))" ]; then \
+		echo "There are more loop devices, cleaning up..."; \
+		$(eval LOOP_DEV_PATH := $(shell losetup -a | grep $(IMG) | cut -d: -f1)) \
+		sudo losetup -d $(LOOP_DEV_PATH); \
+		make cleanup_loop; \
+	fi
 
-buildimggpt:
+cleanup:
+	@echo "Cleaning up..."
+	@sudo umount $(SYSDIR) || true
+	@sudo rm -rf $(SYSDIR)
+	@make cleanup_loop
+	@make clean
+	@make cleansetup
+	@rm -f $(BUILDDIR)/$(LOCKFILE)
+	@make setup
+
+buildimggpt_second_phase:
+	@echo "1" > $(BUILDDIR)/$(LOCKFILE)
+	@echo "Building GPT..."
 	@gcc -v
 	$(eval LOOP_DEV_PATH := $(shell losetup -a | grep $(IMG) | cut -d: -f1))
 	@echo Loop device path: $(LOOP_DEV_PATH)
@@ -280,7 +281,7 @@ buildimggpt:
 	@sudo sgdisk --new 1:0:+50M --typecode 1:ef00 $(LOOP_DEV_PATH)
 	@sudo sgdisk -p $(LOOP_DEV_PATH)
 	@sudo fdisk -l $(LOOP_DEV_PATH)
-	@-sudo partprobe
+	@sudo partprobe
 	@sudo mkfs.fat -n PATATA -F32 $(LOOP_DEV_PATH)p1
 	@sudo mkdir -p $(SYSDIR)
 
@@ -295,20 +296,20 @@ buildimggpt:
 	@sudo umount $(SYSDIR)
 
 	@sudo losetup -d $(LOOP_DEV_PATH)
+	@rm -f $(BUILDDIR)/$(LOCKFILE)
+
+buildimggpt:
+#if process.txt exists, call cleanup, else call buildimggpt_second_phase
+	@if [ -f $(BUILDDIR)/$(LOCKFILE) ]; then \
+		echo "Lockfile exists, cleaning up..."; \
+		make cleanup; \
+	fi
+	@cp $(ISODIR)/$(IMG_RAW) $(ISODIR)/$(IMG)
+	@sudo losetup -Pf $(ISODIR)/$(IMG)
+	@make buildimggpt_second_phase;
+
 
 run:
-	$(QEMU) $(QFLAGS) $(ISODIR)/$(ISO)
-
-#run_exp:
-#	$(eval WINUSER := $(shell cmd.exe /c 'for %a in (%userprofile%) do (echo %~nxa)' | tail -1 | tr -d ' '))
-#	$(eval WINDIRECTORY := C:/Users/$(WINUSER)/$(WDIR))
-#	@echo "WINDIRECTORY: $(WINDIRECTORY)"
-#	@echo "Copying files to Windows directory..."
-#	@cp $(ISODIR)/$(IMG) /mnt/c/Users/$(WINUSER)/$(WDIR)/$(IMG)
-#	@ls -l /mnt/c/Users/$(WINUSER)/$(WDIR)
-#	$(QEMU) $(QWFLAGSEXP)$(WINDIRECTORY)/$(IMG)
-
-run_exp:
 	$(QEMU) $(QFLAGSEXP)$(ISODIR)/$(IMG)
 
 gpt:
@@ -321,58 +322,28 @@ gpt:
 # Due to eval weird behaviour
 	@make buildimggpt
 	@echo "Running GPT QEMU..."
-	@make run_exp
+	@make run
 	@echo "Done!"
-
-exp:
-	@make kernel
-	@echo "Building experimental ISO..."
-	@make buildimgexp
-	@echo "Running experimental QEMU..."
-	@make run_exp
-	@echo "Done!"
-
-#debugpt:
-#	$(eval WINUSER := $(shell cmd.exe /c 'for %a in (%userprofile%) do (echo %~nxa)' | tail -1 | tr -d ' '))
-#	$(eval WINDIRECTORY := C:/Users/$(WINUSER)/$(WDIR))
-#	@make kernel
-#	@echo "Building GPT..."
-##This is required to be before buildimggpt!
-#	@cp $(ISODIR)/$(IMG_RAW) $(ISODIR)/$(IMG)
-#	@sudo losetup -Pf $(ISODIR)/$(IMG)
-## Due to eval weird behaviour
-#	@make buildimggpt
-#	@echo "Running GPT QEMU..."
-#	@echo "WINDIRECTORY: $(WINDIRECTORY)"
-#	@echo "Copying files to Windows directory..."
-#	@cp $(ISODIR)/$(IMG) /mnt/c/Users/$(WINUSER)/$(WDIR)/$(IMG)
-#	@ls -l /mnt/c/Users/$(WINUSER)/$(WDIR)
-#	$(CMDNEWSCREEN) $(GDB) $(GDBFLAGS) & $(QEMU) -S -s $(QWFLAGSEXP)$(WINDIRECTORY)/$(IMG)
 
 debugpt:
 	@make clean
 	@make kernel
 	@echo "Building GPT..."
 #This is required to be before buildimggpt!
-	@cp $(ISODIR)/$(IMG_RAW) $(ISODIR)/$(IMG)
-	@sudo losetup -Pf $(ISODIR)/$(IMG)
 # Due to eval weird behaviour
 	@make buildimggpt
 	@echo "Running GPT QEMU..."
-	$(CMDNEWSCREEN) '$(GDB) $(GDBFLAGS)' & $(QEMU) -S -s $(QFLAGSEXP)$(ISODIR)/$(IMG)
+	tmux split-window -h '$(GDB) $(GDBFLAGS)' & $(QEMU) -S -s $(QFLAGSEXP)$(ISODIR)/$(IMG)
 
-debuge:
+debugpt-wsl:
+	@make clean
 	@make kernel
-	@echo "Building experimental ISO..."
-	@make buildimgexp
-	@echo "Running experimental QEMU..."
-	$(QEMU) -S -s $(QFLAGSEXP)$(ISODIR)/$(IMG)
-
-debug:
-	@make kernel
-	@make buildimg
-	$(CMDNEWSCREEN) $(GDB) $(GDBFLAGS) &
-	$(QEMU) -S -s $(QFLAGS) $(ISODIR)/$(ISO)
+	@echo "Building GPT..."
+#This is required to be before buildimggpt!
+# Due to eval weird behaviour
+	@make buildimggpt
+	@echo "Running GPT QEMU..."
+	cmd.exe /c start cmd /c wsl -e $(GDB) $(GDBFLAGS) & $(QEMU) -S -s $(QFLAGSEXP)$(ISODIR)/$(IMG)
 
 debugsetup:
 	@sudo losetup -l
