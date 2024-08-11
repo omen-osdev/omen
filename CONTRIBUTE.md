@@ -6,7 +6,7 @@ An open approach to resilience
 
 ## First steps
 
-1. Read the [Docs](./docs/README.md) to understand the project.
+1. Read the [Docs](./README.md) to understand the project.
 2. Read the [Code of Conduct](./CODE_OF_CONDUCT.md) to understand the rules.
 3. Choose the module you want to contribute to from the [Modules](./docs/modules.md) list.
 4. Create your patch or feature and mail it to the module maintainer.
