@@ -25,7 +25,7 @@ git branch -a
 git checkout develop
 ```
 
-3. Create a new branch for your feature from the develop branch:
+3. (Optional if you are just looking around) Create a new branch for your feature from the develop branch:
 
 ```bash
 # Create a new branch
@@ -36,28 +36,28 @@ git checkout -b feature/your-feature-name
 
 ```bash
 # Install the following dependencies (only tested for Ubuntu/Debian, adapt to your OS)
-sudo apt install build-essential qemu qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
+sudo apt install build-essential qemu-system qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
 
 #Untested command for MacOS
 xcode-select --install
-brew install nasm qemu make parted gdisk gdb tmux dosfstools tree coreutils binutils
+brew install nasm qemu-system make parted gdisk gdb tmux dosfstools tree coreutils binutils
 
 #Untested command for Fedora
-sudo dnf install @development-tools qemu qemu-system-x86 nasm make parted gptfdisk gdb tmux dosfstools tree
+sudo dnf install @development-tools qemu-system qemu-system-x86 nasm make parted gptfdisk gdb tmux dosfstools tree
 
 #Untested command for CentOS/RHEL
 sudo yum groupinstall "Development Tools"
-sudo yum install qemu qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
+sudo yum install qemu-system qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
 
 #Untested command for Arch
-sudo pacman -S base-devel qemu qemu-arch-extra nasm make parted gptfdisk gdb tmux dosfstools tree
+sudo pacman -S base-devel qemu-system qemu-arch-extra nasm make parted gptfdisk gdb tmux dosfstools tree
 
 #Untested command for OpenSUSE
 sudo zypper install -t pattern devel_basis
-sudo zypper install qemu qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
+sudo zypper install qemu-system qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
 
 #Untested command for Alpine
-sudo apk add build-base qemu qemu-system-x86 nasm make parted gptfdisk gdb tmux dosfstools tree
+sudo apk add build-base qemu-system qemu-system-x86 nasm make parted gptfdisk gdb tmux dosfstools tree
 
 ```
 
