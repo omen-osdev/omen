@@ -12,9 +12,12 @@ this guide please contact us on discord!
 
 In order to contribute:
 
-1. Fork the repository to your own account.
+0. If you want, you can try to simply run ramen.sh on the root of this repo
+   it will guide you through the entire process, or do the steps below!
 
-2. Clone the repository at the develop branch:
+2. Fork the repository to your own account.
+
+3. Clone the repository at the develop branch:
 
 ```bash
 # Clone the repository, you need to have git installed
