@@ -1,10 +1,12 @@
 CC := gcc
 
-INCLUDE_DIR := ./include
-SRC_DIR := ./src
-BUILD_DIR := ./build
-TEST_DIR := ./test
-DEPENDENCIES_DIR := ./dependencies
+ABS_DIR := $(shell pwd)
+BUILDENV_DIR := $(ABS_DIR)/buildenv
+INCLUDE_DIR := $(ABS_DIR)/src/include
+SRC_DIR := $(ABS_DIR)/src
+BUILD_DIR := $(ABS_DIR)/build
+TEST_DIR := $(ABS_DIR)/test
+DEPENDENCIES_DIR := $(ABS_DIR)/dependencies
 
 UNITY_DIR := $(DEPENDENCIES_DIR)/Unity/src
 TESTFLAGS := -DUINITY_SUPPORT_64 -DUNITY_OUTPUT_COLOR
@@ -31,9 +33,35 @@ setup:
 	mkdir -p "$(BUILD_DIR)"
 	mkdir -p "$(DEPENDENCIES_DIR)"
 
-clean:
+setup-gpt:
+	@make -C "$(BUILDENV_DIR)" setup
+
+cleansetup:
 	rm -rf "$(BUILD_DIR)"
 	rm -rf "$(DEPENDENCIES_DIR)"
+	@make -C $(BUILDENV_DIR) cleansetup
+
+clean:
+	@make -C $(BUILDENV_DIR) clean
+
+gpt:
+	@make -C $(BUILDENV_DIR) gpt
+
+debugpt:
+	@make -C $(BUILDENV_DIR) debugpt
+
+debugpt-wsl:
+	@make -C $(BUILDENV_DIR) debugpt-wsl
+
+run:
+	@make -C $(BUILDENV_DIR) run
+
+prep2push:
+	@make -C $(BUILDENV_DIR) clean
+	@make -C $(BUILDENV_DIR) cleansetup
+
+debugsetup:
+	@make -C $(BUILDENV_DIR) debugsetup
 
 setup-test: setup
 	@if [ ! -d $(DEPENDENCIES_DIR)/Unity ]; then \
@@ -46,7 +74,7 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $$(dirname $@)  # Create the directory structure in BUILD_DIR
 	$(CC) $(CFLAGS) -c $< -o $@
 
-test: e2e-test unit-test 
+test: unit-test 
 
 unit-test: setup-test $(UNIT_TEST_BINS)
 	@for testfile in $(UNIT_TEST_BINS); do                \

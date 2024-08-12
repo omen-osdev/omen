@@ -4,12 +4,133 @@ An open approach to resilience
 
 # How to contribute to OMEN
 
-## First steps
+## Quick guide
 
-1. Read the [Docs](./docs/README.md) to understand the project.
-2. Read the [Code of Conduct](./CODE_OF_CONDUCT.md) to understand the rules.
-3. Choose the module you want to contribute to from the [Modules](./docs/modules.md) list.
-4. Create your patch or feature and mail it to the module maintainer.
+This is the **only** reference you will ever need to contribute to this project,
+everything else is outdated or irrelevant. If you think there is a problem with
+this guide please contact us on discord!
+
+In order to contribute:
+
+1. Fork the repository to your own account.
+
+2. Clone the repository at the develop branch:
+
+```bash
+# Clone the repository, you need to have git installed
+git clone git@github.com:YOUR_GITHUB_USERNAME/omen.git
+# List the branches and make sure you are in the develop branch
+git branch -a
+# If you are not in the develop branch, switch to it
+git checkout develop
+```
+
+3. Create a new branch for your feature from the develop branch:
+
+```bash
+# Create a new branch
+git checkout -b feature/your-feature-name
+```
+
+4. Make sure you have all the dependencies installed (the sudo command is also a dependency, feel free to edit it):
+
+```bash
+# Install the following dependencies (only tested for Ubuntu/Debian, adapt to your OS)
+sudo apt install build-essential qemu qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
+
+#Untested command for MacOS
+xcode-select --install
+brew install nasm qemu make parted gdisk gdb tmux dosfstools tree coreutils binutils
+
+#Untested command for Fedora
+sudo dnf install @development-tools qemu qemu-system-x86 nasm make parted gptfdisk gdb tmux dosfstools tree
+
+#Untested command for CentOS/RHEL
+sudo yum groupinstall "Development Tools"
+sudo yum install qemu qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
+
+#Untested command for Arch
+sudo pacman -S base-devel qemu qemu-arch-extra nasm make parted gptfdisk gdb tmux dosfstools tree
+
+#Untested command for OpenSUSE
+sudo zypper install -t pattern devel_basis
+sudo zypper install qemu qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
+
+#Untested command for Alpine
+sudo apk add build-base qemu qemu-system-x86 nasm make parted gptfdisk gdb tmux dosfstools tree
+
+```
+
+5. Go to the omen folder and open your favorite IDE:
+
+```bash
+# Go to the omen folder
+cd omen
+# Open your favorite IDE
+code .
+```
+
+6. Setup the environment:
+
+```bash
+# Setup the environment
+make setup-gpt
+```
+
+You should see something like this:
+
+```bash
+tretorn@pc:~/omen$ make setup-gpt
+make[1]: Entering directory '/home/tretorn/omen/buildenv'
+102400+0 records in
+102400+0 records out
+419430400 bytes (419 MB, 400 MiB) copied, 0.19487 s, 2.2 GB/s
+Cloning into 'limine'...
+remote: Enumerating objects: 17, done.
+remote: Counting objects: 100% (17/17), done.
+remote: Compressing objects: 100% (16/16), done.
+remote: Total 17 (delta 1), reused 10 (delta 1), pack-reused 0
+Receiving objects: 100% (17/17), 603.88 KiB | 4.54 MiB/s, done.
+Resolving deltas: 100% (1/1), done.
+'/home/tretorn/omen/buildenv/limine/limine.sys' -> '/home/tretorn/omen/buildenv/../build/iso_root/limine.sys'
+'/home/tretorn/omen/buildenv/limine/limine-cd.bin' -> '/home/tretorn/omen/buildenv/../build/iso_root/limine-cd.bin'
+'/home/tretorn/omen/buildenv/limine/limine-cd-efi.bin' -> '/home/tretorn/omen/buildenv/../build/iso_root/limine-cd-efi.bin'
+make[1]: Leaving directory '/home/tretorn/omen/buildenv'
+```
+
+7. Try to compile and run the project (you will be prompted for sudo):
+
+```bash
+# Compile and run the project
+make gpt
+```
+If everything went well, you should see QEMU booting up.
+
+8. Now for the fun part, debugging. There are three posibilities:
+
+- **Native linux or mac with tmux**: Just run `make debugpt` and you will be set. A tmux session will open with gdb and qemu. Wait for the gdb prompt and type `c` to continue.
+
+- **Native linux or mac without tmux** : Go to the file `buildenv/GNUmakefile` and search for this line:
+
+```makefile
+	tmux split-window -h '$(GDB) $(GDBFLAGS)' & $(QEMU) -S -s $(QFLAGSEXP)$(ISODIR)/$(IMG)
+```
+
+Edit the line to remove the `tmux split-window -h` part and substitute with the
+command of your preference.
+
+- **Windows + WSL** : As this is my current env, I have created a target called
+`debugpt-wsl` that will do everything for you.
+
+9. Now you are all set, go ahead and select the module that you want to work on,
+find the maintainer in the [maintainers list](./docs/MODULES.md) and send him a
+message on the discord, if no maintainer exists, please contact Tretorn or ReanuKeeves.
+
+10. Other importante make targets are:
+
+- `make clean` : Cleans the project.
+- `make cleansetup` : Uninstalls the dev environment.
+- `make debugsetup` : Checks for leftovers from a previous debug session.
 
 ## What is a module
 
