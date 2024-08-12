@@ -8,5 +8,5 @@ Fast and reliable multiplatform kernel
 
 ## Contributing
 
-See CONTRIBUTING.md
+See CONTRIBUTE.md
 
