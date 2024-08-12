@@ -34,6 +34,8 @@ git checkout -b feature/your-feature-name
 
 4. Make sure you have all the dependencies installed (the sudo command is also a dependency, feel free to edit it):
 
+Choose the appropiate command for your specific distro from the list down here:
+
 ```bash
 # Install the following dependencies (only tested for Ubuntu/Debian, adapt to your OS)
 sudo apt install build-essential qemu-system qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
@@ -66,7 +68,7 @@ sudo apk add build-base qemu-system qemu-system-x86 nasm make parted gptfdisk gd
 ```bash
 # Go to the omen folder
 cd omen
-# Open your favorite IDE
+# Open your favorite IDE, a.e: if you use vscode:
 code .
 ```
 
