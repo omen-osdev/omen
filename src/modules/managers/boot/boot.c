@@ -6,6 +6,7 @@
 #include <omen/libraries/std/string.h>
 #include <omen/apps/debug/debug.h>
 #include <omen/managers/mem/pmm.h>
+#include <omen/managers/cpu/cpu.h>
 #include <emulated/dcon.h>
 
 void boot_startup() {
@@ -18,6 +19,7 @@ void boot_startup() {
 
     init_debugger(dcon);
     set_current_tty(dcon);
+    init_cpus();
     device_list();
 
     kprintf("Booting from %s %s\n", get_bootloader_name(), get_bootloader_version());

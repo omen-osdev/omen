@@ -10,6 +10,7 @@
 
 #define BOOTLOADER_USE_LIMINE
 
+#define MAX_CPUS 256
 #define MAX_NUMA_NODES 16
 
 //Per type of device/driver
