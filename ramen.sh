@@ -63,7 +63,7 @@ git clone $cloneuri
 cd $reponame
 
 git checkout develop
-say Now name your new feature branch, please include feature/ at the beggining \(ex: feature/your-feature-name\)
+say Now name your new feature branch, please include feature/ at the beginning \(ex: feature/your-feature-name\)
 say If you are just seeing the code atm, leave this empty
 read featurename
 if [ -z "$featurename" ]
