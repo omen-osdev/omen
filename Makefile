@@ -63,6 +63,9 @@ prep2push:
 debugsetup:
 	@make -C $(BUILDENV_DIR) debugsetup
 
+buildimggpt:
+	@make -C $(BUILDENV_DIR) buildimggpt
+
 setup-test: setup
 	@if [ ! -d $(DEPENDENCIES_DIR)/Unity ]; then \
 		echo "Cloning Unity test framework"; \
