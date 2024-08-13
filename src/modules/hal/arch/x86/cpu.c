@@ -32,9 +32,8 @@ void arch_set_alive(uint8_t cpuid, uint8_t alive) {
 }
 
 void startup_cpu(uint8_t cpuid) {
-    //TODO: Check if the CPU is already running
     cpu_t * lcpu = &cpu[cpuid];
-    lcpu->ready = 1;
+    if(!lcpu->ready) lcpu->ready = 1;
 }
 
 void arch_init_cpu() {
