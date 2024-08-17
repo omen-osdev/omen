@@ -5,9 +5,15 @@
 #include <omen/src/include/omen/managers/mem/pmm.h>
 
 /**
- * Chronological order of table access to convert virtual address to physical address
+ * Chronological order of table access to convert virtual address to physical address for 4kB page size
  * PML4 -> PDPT -> PD -> PT -> Physical base address
  */
+
+// defines number of entry in a particular table
+#define PML4_LEN 512
+#define PDPT_LEN 512
+#define PD_LEN   512
+#define PT_LEN   512
 
 #define SET_ATTRIBUTE(entry, attr) (entry |= attr)
 #define CLEAR_ATTRIBUTE(entry, attr) (entry &= ~attr)
@@ -56,3 +62,15 @@ typedef struct {
     PTE_ACCESSED           = 0x20,                         // 5  bit position
     PTE_XD                 = 0x8000000000000000,           // 63 bit position
 } PageTableEntry_Flag;
+
+// A PML4 table comprises 512 64-bit entries (PML4Es)
+pml4_entry PageMapLevel4[PML4_LEN];
+
+// A page-directory-pointer table comprises 512 64-bit entries (PDPTEs)
+pdpt_entry PageDirectoryPointerTable[PDPT_LEN];
+
+// A page directory comprises 512 64-bit entries (PDEs)
+pd_entry   PageDirectory[PD_LEN];
+
+// A page table comprises 512 64-bit entries (PTEs).
+pt_entry   PageTable[PT_LEN];
