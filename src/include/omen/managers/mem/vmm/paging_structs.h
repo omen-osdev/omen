@@ -1,12 +1,17 @@
 /** 
- * This header contains declarations for virtual memory manager
+ * This header contains the structures for all the page table entries
+ * required to convert virtual address to physical address
+ * for 4 kB page size
  **/
 #include <omen/src/include/omen/libraries/std/stdint.h>
 #include <omen/src/include/omen/managers/mem/pmm.h>
 
 /**
- * Chronological order of table access to convert virtual address to physical address for 4kB page size
+ * Chronological order of table access to convert virtual address to 
+ * physical address for 4kB page size
  * PML4 -> PDPT -> PD -> PT -> Physical base address
+ * refer to Intel® 64 and IA-32 Architectures Software Developer’s Manual
+ * volume 3, chapter 4
  */
 
 // defines number of entry in a particular table
