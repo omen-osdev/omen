@@ -1,7 +1,7 @@
 **/*.out
 **/*.o
 **/*.unit-test-out
-build/
+bin/
 dependencies/
 **/.cache/
 **/compile_commands.json

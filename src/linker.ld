@@ -24,9 +24,12 @@ SECTIONS
 
     .data : ALIGN(CONSTANT(MAXPAGESIZE)){
         *(.data .data.*)
+        KEEP(*(.requests_start_marker))
+	KEEP(*(.requests))
+	KEEP(*(.requests_end_marker))
     } :data
 
-    .bss : ALIGN(CONSTANT(MAXPAGESIZE)){
+    .bss : {
         *(COMMON)
         *(.bss .bss.*)
     } :data

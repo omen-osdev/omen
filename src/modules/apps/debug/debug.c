@@ -7,6 +7,7 @@
 #include <omen/libraries/std/stddef.h>
 #include <omen/libraries/std/stdbool.h>
 #include <omen/managers/dev/devices.h>
+#include <omen/managers/fb/gop.h>
 
 struct device * writer = NULL;
 char debug_buffer[DEBUG_MESSAGE_BUFFER];
@@ -28,16 +29,30 @@ void init_debugger(const char * device_name) {
     debug_enabled = true;
 }
 
+void printstr(char* str) {
+
+	while(*str) {
+		gop_putchar(*str);
+		str++;
+	}
+}
+
 void kprintf(const char * str, ...) {
+
+	/*
     if (writer == NULL || !debug_enabled) {
         return;
     }
+    */
 
     va_list args;
     va_start(args, str);
     memset(debug_buffer, 0, DEBUG_MESSAGE_BUFFER);
     vsnprintf(debug_buffer, DEBUG_MESSAGE_BUFFER, str, args);
-    device_write(writer->name, strlen(debug_buffer), 0, (uint8_t*)debug_buffer);
+    printstr(debug_buffer);
+    //device_write(writer->name, strlen(debug_buffer), 0, (uint8_t*)debug_buffer);
+    //TODO I just pass the buffer to the printstr function which uses the gop fb. Someone may want to make the
+    //device_write function work with the gop_putchar when applicable
     va_end(args);
 }
 
