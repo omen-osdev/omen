@@ -1,4 +1,5 @@
 #include <omen/managers/boot/boot.h>
+#include "./drivers/emulated/serial.h"
 
 __attribute__((noreturn)) void _halt() {
     while (1) {
@@ -8,5 +9,9 @@ __attribute__((noreturn)) void _halt() {
 
 __attribute__((noreturn)) void _start() {
     boot_startup();
+
+    //testing serial driver
+    int retVal = serial_dd_write(COM2_BASEADDR, "Hello World\n", 13);
+
     _halt();
 }
