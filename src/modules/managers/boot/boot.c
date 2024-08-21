@@ -1,31 +1,40 @@
 #include <omen/managers/boot/boot.h>
-#include <omen/managers/boot/bootloaders/bootloader.h>
 #include <omen/managers/dev/devices.h>
 #include <omen/libraries/std/stddef.h>
 #include <omen/managers/cpu/process.h>
 #include <omen/libraries/std/string.h>
-#include <omen/apps/debug/debug.h>
 #include <omen/managers/mem/pmm.h>
 #include <omen/managers/cpu/cpu.h>
-#include <emulated/dcon.h>
+#include <omen/libraries/std/stdio.h>
+#include <omen/apps/debug/debug.h>
+
+__attribute__((used, section(".requests")))
+static volatile LIMINE_BASE_REVISION(2);
+
+__attribute__((used, section(".requests_start_marker")))
+static volatile LIMINE_REQUESTS_START_MARKER;
+
+__attribute__((used, section(".requests_end_marker")))
+static volatile LIMINE_REQUESTS_END_MARKER;
+
+static void hlt() {
+	for(;;) {
+		__asm__ __volatile__("hlt");
+	}
+}
 
 void boot_startup() {
-    init_bootloader();
-    init_devices();
-    char * dcon = init_dcon_dd();
-    if (dcon == NULL) {
-        DBG_ERROR("Failed to initialize DCON device\n");
-    }
 
-    init_debugger(dcon);
-    set_current_tty(dcon);
-    init_cpus();
-    device_list();
+	if(LIMINE_BASE_REVISION_SUPPORTED == false) {
+		hlt();
+	}
 
-    kprintf("Booting from %s %s\n", get_bootloader_name(), get_bootloader_version());
+	gop_initialize();
+	
+	gop_clear(0xffffffff);
 
-    pmm_init();
-    pmm_list_map();
+    //pmm_init();
+    //pmm_list_map();
 
     char * buffer = pmm_alloc(4024);
     if (buffer == NULL) {
@@ -40,4 +49,5 @@ void boot_startup() {
     pmm_free(buffer);
 
     kprintf("Booting kernel\n");
+
 }
