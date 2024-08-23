@@ -2,7 +2,7 @@
 
 
 struct file_operations serial_fops = {
-    //.read = serial_dd_read,
+    .read = serial_dd_read,
     .write = serial_dd_write,
     .ioctl = serial_dd_ioctl
 };
@@ -30,7 +30,7 @@ void serial_configure_modem(uint16_t com)
     outb(SERIAL_MODEM_COMMAND_PORT(com), 0x0B);
 }
 
-int serial_is_transmit_fifo_empty(unsigned short com) 
+uint64_t serial_is_transmit_fifo_empty(unsigned short com) 
 {
     return inb(SERIAL_LINE_STATUS_PORT(com)) & 0x20;
 }
@@ -40,7 +40,13 @@ void serial_write_byte(uint16_t com, char byte_data)
     outb(SERIAL_DATA_PORT(com), byte_data);
 }
 
-int init_serial_dd(uint16_t com_base_addr, uint16_t baud_rate)
+uint64_t serial_dd_data_rcvd(uint16_t com)
+{
+    return inb(SERIAL_LINE_STATUS_PORT(com)) & 1;
+}
+
+
+uint64_t init_serial_dd(uint16_t com_base_addr, uint16_t baud_rate)
 {
     register_char(DEVICE_SERIAL, SERIAL_DD_NAME, &serial_fops);
 
@@ -71,38 +77,49 @@ int init_serial_dd(uint16_t com_base_addr, uint16_t baud_rate)
     return 1;
 }
 
-
-int serial_dd_write(uint16_t com, char *buf, size_t len)
+uint64_t serial_dd_write(uint16_t com, char data)
 {
-    size_t idx = 0;
-    while(idx < len)
-    {
-        if(serial_is_transmit_fifo_empty(com))
-        {
-            serial_write_byte(com, buf[idx]);
-            idx++;
-        }
-    }
+    while(!serial_is_transmit_fifo_empty(com));
+    serial_write_byte(com, data);
     return 0;
 }
 
 
-
-
-/*
-int serial_received()
+uint64_t serial_dd_write_string(uint16_t com, char *buf, size_t len)
 {
-    return inb(COM2_BASEADDR + 5) & 1;
+    size_t idx = 0;
+    while(idx < len)
+    {
+        serial_dd_write(com, buf[idx]);
+        idx++;
+    }
+    return 0;
 }
 
-char serial_read()
+char serial_dd_read(uint16_t com)
 {
-    while(serial_received() == 0);
-
-    return inb(COM2_BASEADDR);
+    while(!serial_dd_data_rcvd(com));
+    return inb(com);
 }
-*/
-void serial_dd_ioctl()
-{
 
+uint64_t serial_dd_ioctl(uint16_t com, uint32_t request, void* data)
+{
+    switch(request)
+    {
+        case SERIAL_IOCTL_CHANGE_BAUDRATE:
+            serial_confiure_baud_rate(com, *((uint16_t*)data));
+            break;
+        case SERIAL_IOCTL_CHANGE_LINECONFIG:
+            //TODO: Implement this(for example 8N1, etc)
+            break;
+        case SERIAL_IOCTL_ENABLE_LOOPBACK:
+            outb(SERIAL_MODEM_COMMAND_PORT(com), 0x1E);
+            break;
+        case SERIAL_IOCTL_DISABLE_LOOPBACK:
+            outb(SERIAL_MODEM_COMMAND_PORT(com), 0x0F);
+            break;
+        default:
+            break;
+    }
+    return 0;
 }

@@ -25,6 +25,12 @@
 #define SERIAL_LINE_STATUS_PORT(base)   (base + 5)
 
 
+//IOCTL Commands
+#define SERIAL_IOCTL_CHANGE_BAUDRATE    0
+#define SERIAL_IOCTL_CHANGE_LINECONFIG  1
+#define SERIAL_IOCTL_ENABLE_LOOPBACK    2
+#define SERIAL_IOCTL_DISABLE_LOOPBACK   3
+
 //Divisors for the different baud rates
 enum baud_rate { baud_115200 = 1, baud_57600 = 2, baud_38400 = 3, baud_19200 = 6, baud_9600 = 12, baud_4800 = 24 };
 
@@ -35,10 +41,12 @@ enum baud_rate { baud_115200 = 1, baud_57600 = 2, baud_38400 = 3, baud_19200 = 6
 extern struct file_operations serial_fops;
 
 
-int init_serial_dd(uint16_t com_base_addr, uint16_t baud_rate);
-int serial_dd_write(uint16_t com, char *buf, size_t len);
-//char serial_dd_read();
-void serial_dd_ioctl();
+uint64_t init_serial_dd(uint16_t com_base_addr, uint16_t baud_rate);
+uint64_t serial_dd_write(uint16_t com, char data);
+uint64_t serial_dd_write_string(uint16_t com, char *buf, size_t len);
+uint64_t serial_dd_ioctl(uint16_t com, uint32_t request, void* data);
+uint64_t serial_dd_data_rcvd(uint16_t com);
+char serial_dd_read(uint16_t com);
 
 
 #endif
