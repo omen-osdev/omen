@@ -14,25 +14,12 @@ void init_bootloader() {
     bootloader_operations = get_boot_ops();
 }
 
-void (*get_terminal_writer())(const char*, uint64_t) {
-    void* writer = bootloader_operations->get_terminal_writer();
-    return (void (*)(const char*, uint64_t))writer;
-}
-
 char* get_bootloader_name() {
     return bootloader_operations->get_bootloader_name();
 }
 
 char* get_bootloader_version() {
     return bootloader_operations->get_bootloader_version();
-}
-
-uint64_t get_terminal_count() {
-    return bootloader_operations->get_terminal_count();
-}
-
-uint64_t get_current_terminal() {
-    return bootloader_operations->get_current_terminal();
 }
 
 int64_t get_boot_time() {
@@ -97,12 +84,4 @@ uint64_t get_framebuffer_count() {
 
 boot_framebuffer_t ** get_framebuffers() {
     return (boot_framebuffer_t **)bootloader_operations->get_framebuffers();
-}
-
-void set_terminal_extra_handler() {
-    bootloader_operations->set_terminal_extra_handler();
-}
-
-void set_terminal_writer(uint64_t terminal) {
-    bootloader_operations->set_terminal_writer(terminal);
 }

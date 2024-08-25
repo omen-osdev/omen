@@ -184,7 +184,6 @@
 
 #include <stddef.h>
 #include <limits.h>
-//#include <signal.h>
 
 /*
  *  For gcc with _STDINT_H, fill in the PRINTF_INT*_MODIFIER macros, and
@@ -192,7 +191,108 @@
  */
 
 #if ((defined(__STDC__) && __STDC__ && __STDC_VERSION__ >= 199901L) || (defined (__WATCOMC__) && (defined (_STDINT_H_INCLUDED) || __WATCOMC__ >= 1250)) || (defined(__GNUC__) && (defined(_STDINT_H) || defined(_STDINT_H_)) )) && !defined (_PSTDINT_H_INCLUDED)
-#include <stdint.h>
+#ifndef __UINT64_TYPE__
+  typedef long long int64_t;
+#else
+  typedef __UINT64_TYPE__ uint64_t;
+#endif
+#ifndef __INT64_TYPE__
+  typedef unsigned long long uint64_t;
+#else
+  typedef __INT64_TYPE__ int64_t;
+#endif
+#ifndef __INT32_TYPE__
+  typedef long int32_t;
+#else
+  typedef __INT32_TYPE__ int32_t;
+#endif
+#ifndef __UINT32_TYPE__
+  typedef unsigned long uint32_t;
+#else
+  typedef __UINT32_TYPE__ uint32_t;
+#endif
+#ifndef __INT16_TYPE__
+  typedef short int16_t;
+#else
+  typedef __INT16_TYPE__ int16_t;
+#endif
+#ifndef __UINT16_TYPE__
+  typedef unsigned short uint16_t;
+#else
+  typedef __UINT16_TYPE__ uint16_t;
+#endif
+#ifndef __INT8_TYPE__
+  typedef char int8_t;
+#else
+  typedef __INT8_TYPE__ int8_t;
+#endif
+#ifndef __UINT8_TYPE__
+  typedef unsigned char uint8_t;
+#else
+  typedef __UINT8_TYPE__ uint8_t;
+#endif
+#ifndef __INTPTR_TYPE__
+  typedef long intptr_t;
+#else
+  typedef __INTPTR_TYPE__ intptr_t;
+#endif
+#ifndef __UINTPTR_TYPE__
+  typedef unsigned long uintptr_t;
+#else
+  typedef __UINTPTR_TYPE__ uintptr_t;
+#endif
+#ifndef __INTMAX_TYPE__
+  typedef long intmax_t;
+#else
+  typedef __INTMAX_TYPE__ intmax_t;
+#endif
+#ifndef __UINTMAX_TYPE__
+  typedef unsigned long uintmax_t;
+#else
+  typedef __UINTMAX_TYPE__ uintmax_t;
+#endif
+#ifndef __PTRDIFF_TYPE__
+  typedef long ptrdiff_t;
+#else
+  typedef __PTRDIFF_TYPE__ ptrdiff_t;
+#endif
+#ifndef __SIZE_TYPE__
+  typedef long size_t;
+#else
+  typedef __SIZE_TYPE__ size_t;
+#endif
+#ifndef __SSIZE_TYPE__
+  typedef long ssize_t;
+#else
+  typedef __SSIZE_TYPE__ ssize_t;
+#endif
+#ifndef __OFF_TYPE__
+  typedef long off_t;
+#else 
+  typedef __OFF_TYPE__ off_t;
+#endif
+#ifndef __TIME_TYPE__
+  typedef long time_t;
+#else
+  typedef __TIME_TYPE__ time_t;
+#endif
+#ifndef __CLOCK_TYPE__
+  typedef long clock_t;
+#else
+  typedef __CLOCK_TYPE__ clock_t;
+#endif
+#ifndef __WCHAR_TYPE__
+  typedef long wchar_t;
+#else
+  typedef __WCHAR_TYPE__ wchar_t;
+#endif
+#ifndef __WINT_TYPE__
+  typedef long wint_t;
+#else
+  typedef __WINT_TYPE__ wint_t;
+#endif
+
+
 #define _PSTDINT_H_INCLUDED
 # ifndef PRINTF_INT64_MODIFIER
 #  define PRINTF_INT64_MODIFIER "ll"

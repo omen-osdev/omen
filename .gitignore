@@ -7,3 +7,4 @@ dependencies/
 **/compile_commands.json
 .vscode/
 **.fd
+*.gdb
