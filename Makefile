@@ -1,4 +1,5 @@
-CC := gcc
+TARGET = x86_64-elf-
+CC := $(TARGET)gcc
 
 ABS_DIR := $(shell pwd)
 BUILDENV_DIR := $(ABS_DIR)/buildenv

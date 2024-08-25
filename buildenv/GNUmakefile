@@ -13,8 +13,9 @@ override LOCKFILE := lockfile
 # We are only using "cc" as a placeholder here. It may work by using
 # the host system's toolchain, but this is not guaranteed.
 
-CC := cc
-LD := ld
+TARGET = x86_64-elf-
+CC := $(TARGET)gcc
+LD := $(TARGET)ld
 ASMC := nasm
 
 # This are specific to my setup, please modify them!!!!
@@ -263,8 +264,6 @@ cleanup_loop:
 
 cleanup:
 	@echo "Cleaning up..."
-	@sudo umount $(SYSDIR) || true
-	@sudo rm -rf $(SYSDIR)
 	@make cleanup_loop
 	@make clean
 	@make cleansetup
@@ -272,46 +271,41 @@ cleanup:
 	@make setup
 
 buildimggpt_second_phase:
-	@echo "1" > $(BUILDDIR)/$(LOCKFILE)
-	@echo "Building GPT..."
-	@gcc -v
-	$(eval LOOP_DEV_PATH := $(shell losetup -a | grep $(IMG) | cut -d: -f1))
-	@echo Loop device path: $(LOOP_DEV_PATH)
-	
-	@sudo sgdisk --new 1:0:+50M --typecode 1:ef00 $(LOOP_DEV_PATH)
-	@sudo sgdisk -p $(LOOP_DEV_PATH)
-	@sudo fdisk -l $(LOOP_DEV_PATH)
-	@sudo partprobe
-	@sudo mkfs.fat -n PATATA -F32 $(LOOP_DEV_PATH)p1
-	@sudo mkdir -p $(SYSDIR)
+	echo "1" > $(BUILDDIR)/$(LOCKFILE)
+	echo "Building GPT..."
+	echo $(shell gcc -v)
+#	$(eval LOOP_DEV_PATH := $(shell losetup -a | grep $(IMG) | cut -d: -f1))
 
-	@sudo mount $(LOOP_DEV_PATH)p1 $(SYSDIR)
+	truncate -s 100M $(ISODIR)/$(IMG)
+	rm -rf .mtoolsrc
+	echo "drive i: file=\"$(ISODIR)/$(IMG)\"" >> .mtoolsrc
+	mformat -F -i $(ISODIR)/$(IMG) ::
+	mdir -i $(ISODIR)/$(IMG)
 
-	@echo Disk mounted, creating system files
-	@sudo mkdir -p $(SYSDIR)/efi/boot
-	@sudo cp $(BOOTEFI) $(SYSDIR)/efi/boot
-	@sudo cp ./startup.nsh $(SYSDIR)
-	@sudo cp $(BUILDDIR)/$(KERNEL) $(SYSDIR)
-	@sudo cp ./limine.cfg $(SYSDIR)
-	@sudo umount $(SYSDIR)
+	mmd -i $(ISODIR)/$(IMG) ::/efi
+	mmd -i $(ISODIR)/$(IMG) ::/efi/boot
 
-	@sudo losetup -d $(LOOP_DEV_PATH)
-	@rm -f $(BUILDDIR)/$(LOCKFILE)
+	mcopy -i $(ISODIR)/$(IMG) $(BOOTEFI) ::/efi/boot
+	mcopy -i $(ISODIR)/$(IMG) ./startup.nsh ::
+	mcopy -i $(ISODIR)/$(IMG) $(BUILDDIR)/$(KERNEL) ::
+	mcopy -i $(ISODIR)/$(IMG) ./limine.cfg ::
+
+	echo Disk mounted, creating system files
+	rm -f $(BUILDDIR)/$(LOCKFILE)
 
 buildimggpt:
 #if process.txt exists, call cleanup, else call buildimggpt_second_phase
-	@if [ -f $(BUILDDIR)/$(LOCKFILE) ]; then \
+	if [ -f $(BUILDDIR)/$(LOCKFILE) ]; then \
 		echo "Lockfile exists, cleaning up..."; \
 		make cleanup; \
 	fi
 	
-	@make clean
-	@make kernel
-	@echo "Building GPT..."
+	make clean
+	make kernel
+	echo "Building GPT..."
 
-	@cp $(ISODIR)/$(IMG_RAW) $(ISODIR)/$(IMG)
-	@sudo losetup -Pf $(ISODIR)/$(IMG)
-	@make buildimggpt_second_phase;
+	cp $(ISODIR)/$(IMG_RAW) $(ISODIR)/$(IMG)
+	make buildimggpt_second_phase;
 
 run:
 	$(QEMU) $(QFLAGSEXP)$(ISODIR)/$(IMG)
