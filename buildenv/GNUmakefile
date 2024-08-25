@@ -274,8 +274,7 @@ buildimggpt_second_phase:
 	echo "1" > $(BUILDDIR)/$(LOCKFILE)
 	echo "Building GPT..."
 	echo $(shell gcc -v)
-#	$(eval LOOP_DEV_PATH := $(shell losetup -a | grep $(IMG) | cut -d: -f1))
-
+	
 	truncate -s 100M $(ISODIR)/$(IMG)
 	rm -rf .mtoolsrc
 	echo "drive i: file=\"$(ISODIR)/$(IMG)\"" >> .mtoolsrc

@@ -184,7 +184,7 @@
 
 #include <stddef.h>
 #include <limits.h>
-#include <signal.h>
+//#include <signal.h>
 
 /*
  *  For gcc with _STDINT_H, fill in the PRINTF_INT*_MODIFIER macros, and
