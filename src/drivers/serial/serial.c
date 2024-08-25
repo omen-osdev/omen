@@ -1,3 +1,4 @@
+#include <omen/libraries/std/stdint.h>
 #include "serial.h"
 
 

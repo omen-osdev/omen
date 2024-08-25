@@ -1,5 +1,5 @@
-#ifndef _SIGNAL_H
-#define _SIGNAL_H
+#ifndef _SIGNAL_STD_H
+#define _SIGNAL_STD_H
 
 struct siginfo;
 
@@ -57,7 +57,7 @@ struct sigaction {
 };
 
 typedef struct sigaltstack {
-	void __user *ss_sp;
+	void *ss_sp;
 	int ss_flags;
 	size_t ss_size;
 } stack_t;

@@ -1,7 +1,7 @@
 #ifndef _X86_IO_H
 #define _X86_IO_H
 
-#include "../../../libraries/std/stdint.h"
+#include <omen/libraries/std/stdint.h>
 
 static inline uint8_t inb(uint16_t port)
 {
