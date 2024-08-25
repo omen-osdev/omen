@@ -45,7 +45,7 @@ sudo apt install build-essential qemu-system qemu-system-x86 nasm make parted gd
 
 #Untested command for MacOS
 xcode-select --install
-brew install nasm qemu-system make parted gdisk gdb tmux dosfstools tree coreutils binutils
+brew install x86_64-elf-gcc x86_64-elf-gdb nasm dosfstools qemu
 
 #Untested command for Fedora
 sudo dnf install @development-tools qemu-system qemu-system-x86 nasm make parted gptfdisk gdb tmux dosfstools tree

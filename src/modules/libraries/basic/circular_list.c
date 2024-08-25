@@ -1,4 +1,5 @@
 
+#include <omen/libraries/std/stdint.h>
 #include <omen/libraries/basic/circular_list.h>
 
 status_t circlist_init(circlist_t * circ, void * addr, size_t size) {

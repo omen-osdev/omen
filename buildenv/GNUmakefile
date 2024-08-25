@@ -3,7 +3,7 @@ override ISO := limine-cd.iso
 override IMG := limine-cd.img
 override VDI := limine-cd.vdi
 override IMG_RAW := raw.img
-override LIMINECFG := limine.cfg
+override LIMINECFG := limine.conf
 override GDBCFG := debug.gdb
 override VMNAME := omen
 override WDIR := omendata
@@ -28,12 +28,6 @@ QEMU := qemu-system-x86_64
 GDB := gdb
 WSLHOSTIP := 127.0.0.1
 ###########################################################################
-VBOXMANAGE := "/mnt/c/Program Files/Oracle/VirtualBox/VBoxManage.exe"
-VBOXHEADLESS := "/mnt/c/Program Files/Oracle/VirtualBox/VBoxHeadless.exe"
-VBOXCOM1PORT := 4441
-VBOXCOM2PORT := 4442
-VBOXCOM3PORT := 4443
-VBOXCOM4PORT := 4444
 MNTDIR := /mnt/omen
 
 KERNEL_ENTRY := _start
@@ -58,8 +52,8 @@ NUMAFLAGS := \
 -numa dist,src=1,dst=2,val=20 \
 -numa dist,src=1,dst=3,val=20
 
-QFLAGS ?= -cpu qemu64 -d cpu_reset -no-reboot -no-shutdown -machine q35 $(NUMAFLAGS) -m $(MEMSIZE) -boot d -serial stdio -serial telnet::4444,server,nowait -cdrom 
-QFLAGSEXP ?= -cpu qemu64 -d cpu_reset -no-reboot -no-shutdown -machine q35 $(NUMAFLAGS) -m $(MEMSIZE) -boot d -serial stdio -drive if=pflash,format=raw,unit=0,file=$(OVMFDIR)/OVMF_CODE-pure-efi.fd,readonly=on -drive if=pflash,format=raw,unit=1,file=$(OVMFDIR)/OVMF_VARS-pure-efi.fd -drive file=
+QFLAGS ?= -cpu qemu64 -d cpu_reset -no-reboot -no-shutdown -machine q35 $(NUMAFLAGS) -m $(MEMSIZE) -boot d -debugcon stdio -serial telnet::4444,server,nowait -cdrom 
+QFLAGSEXP ?= -cpu qemu64 -d cpu_reset -no-reboot -no-shutdown -machine q35 $(NUMAFLAGS) -m $(MEMSIZE) -boot d -debugcon stdio -drive if=pflash,format=raw,unit=0,file=$(OVMFDIR)/OVMF_CODE-pure-efi.fd,readonly=on -drive if=pflash,format=raw,unit=1,file=$(OVMFDIR)/OVMF_VARS-pure-efi.fd -drive file=
 #QWFLAGSEXP ?= -cpu qemu64 -d cpu_reset -machine q35 $(NUMAFLAGS) -m $(MEMSIZE) -boot d -netdev tap,id=mynet0,ifname=tap,script=no,downscript=no -serial stdio -device e1000,netdev=mynet0,mac=51:52:53:54:55:56 -drive if=pflash,format=raw,unit=0,file=$(WINDIRECTORY)/OVMF_CODE-pure-efi.fd,readonly=on -drive if=pflash,format=raw,unit=1,file=$(WINDIRECTORY)/OVMF_VARS-pure-efi.fd -drive file=
 
 CFLAGS ?= -O0 -g -Wall -Wextra -pipe -Wno-packed-bitfield-compat -std=c11
@@ -89,7 +83,7 @@ LMN := $(LMNDIR)/limine-deploy.exe
 BOOTEFI := $(LMNDIR)/BOOTX64.EFI
 
 LMNREPO := https://github.com/limine-bootloader/limine.git
-LMNBRCH := v3.0-branch-binary
+LMNBRCH := v8.x-binary
 
 DIRS := $(wildcard $(SRCDIR)/*)
 rwildcard=$(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
@@ -110,6 +104,7 @@ override CFLAGS +=       \
     -fno-pie             \
     -fno-pic             \
     -m64                 \
+    -fno-stack-protector \
     -march=x86-64        \
     -mabi=sysv           \
     -mno-80387           \
@@ -136,7 +131,7 @@ override HEADER_DEPS := $(CFILES:.c=.d) $(ASFILES:.S=.d)
 
 deps:
 	@sudo apt update
-	@sudo apt install git make build-essential nasm parted dosfstools tree qemu-system gdb
+	@sudo apt install git make build-essential nasm parted dosfstools mtools tree qemu-system gdb
 
 # You may comment @make run in this target if you intend
 # to use virtualbox or real hardware.
@@ -148,41 +143,6 @@ all:
 	@echo "Running QEMU..."
 	@make run
 	@echo "Done!"
-
-vbon:
-	@make clean
-	@make kernel
-	@echo "Creating iso"
-	@cp $(ISODIR)/$(IMG_RAW) $(ISODIR)/$(IMG)
-	@sudo losetup -f $(ISODIR)/$(IMG)
-	@make buildimggpt
-	@echo "translating img to vdi"
-	@$(VBOXMANAGE) convertfromraw $(ISODIR)/$(IMG) $(ISODIR)/$(VDI) --format VDI
-	@echo "Creating virtual machine..."
-	@$(VBOXMANAGE) createvm --name $(VMNAME) --ostype "Other_64" --register
-	@echo "Setting up virtual machine..."
-	@$(VBOXMANAGE) modifyvm $(VMNAME) --memory $(MEMSIZE) --vram $(VMEMSIZE) --chipset ich9 --firmware efi
-	@$(VBOXMANAGE) modifyvm $(VMNAME) --uart1 0x3F8 1 --uartmode1 tcpserver $(VBOXCOM1PORT) --uarttype1 16450
-	@$(VBOXMANAGE) modifyvm $(VMNAME) --nic1 nat
-	@$(VBOXMANAGE) storagectl $(VMNAME) --name "SATA Controller" --add sata --controller IntelAhci
-	@$(VBOXMANAGE) storageattach $(VMNAME) --storagectl "SATA Controller" --port 0 --device 0 --type hdd --medium $(ISODIR)/$(VDI)
-	@$(VBOXMANAGE) modifyvm $(VMNAME) --boot1 disk --boot2 none --boot3 none --boot4 none
-	@echo "Starting virtual machine..."
-	@$(VBOXMANAGE) startvm $(VMNAME)
-	@echo "Done!"
-
-vboff:
-	@echo "Stopping virtual machine..."
-
-	@if [ -z "$(shell $(VBOXMANAGE) list runningvms | grep $(VMNAME))" ]; then \
-		echo "Virtual machine is not running!"; \
-	else \
-		$(VBOXMANAGE) controlvm $(VMNAME) poweroff; \
-	fi
-	@sleep 3
-	@echo "Deleting virtual machine..."
-	@$(VBOXMANAGE) unregistervm $(VMNAME) --delete
-	@rm -f $(ISODIR)/$(VDI)
 
 kernel: $(OBJS) link
 
@@ -236,13 +196,14 @@ clean:
 	@rm -f $(ISODIR)/$(VDI)
 
 setup:
+	@rm -rf $(LMNDIR)
 	@mkdir -p $(BUILDDIR)
 	@mkdir -p $(OBJDIR)
 	@mkdir -p $(ISOBUILDDIR)
 	@mkdir -p $(ISODIR)
 	@dd if=/dev/zero of=$(ISODIR)/$(IMG_RAW) bs=4096 count=102400
 	@git clone $(LMNREPO) --branch=$(LMNBRCH) --depth=1
-	@cp -v $(LMNDIR)/limine.sys $(LMNDIR)/limine-cd.bin $(LMNDIR)/limine-cd-efi.bin $(ISOBUILDDIR)
+	@cp -v $(LMNDIR)/limine-bios.sys $(LMNDIR)/limine-bios-cd.bin $(LMNDIR)/limine-uefi-cd.bin $(ISOBUILDDIR)
 	@echo file $(BUILDDIR)/$(KERNEL) > $(ABSDIR)/$(GDBCFG)
 	@echo target remote $(WSLHOSTIP):$(GDBPORT) >> $(ABSDIR)/$(GDBCFG)
 	@echo set disassembly-flavor intel >> $(ABSDIR)/$(GDBCFG)
@@ -254,20 +215,11 @@ cleansetup:
 	@rm -f $(ABSDIR)/$(GDBCFG)
 	@rm -rf $(LMNDIR)
 
-cleanup_loop:
-	@if [ -n "$(shell losetup -a | grep $(IMG))" ]; then \
-		echo "There are more loop devices, cleaning up..."; \
-		$(eval LOOP_DEV_PATH := $(shell losetup -a | grep $(IMG) | cut -d: -f1)) \
-		sudo losetup -d $(LOOP_DEV_PATH); \
-		make cleanup_loop; \
-	fi
-
 cleanup:
 	@echo "Cleaning up..."
 	@make cleanup_loop
 	@make clean
 	@make cleansetup
-	@rm -f $(BUILDDIR)/$(LOCKFILE)
 	@make setup
 
 buildimggpt_second_phase:
