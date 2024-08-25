@@ -8,6 +8,16 @@
 
 const char dcon_hook_str[] = "DCON device registered\n";
 
+static inline void outb(uint16_t port, uint8_t val)
+{
+    __asm__ volatile ( "outb %b0, %w1" : : "a"(val), "Nd"(port) : "memory");
+}
+
+void terminal_writer(const char* buffer, uint64_t size) {
+    for(uint64_t i = 0; i < size; i++) {
+   	outb(0xe9, buffer[i]);
+   }
+}
 
 //Reading from a debug terminal is not supported, we want to just write to it
 uint64_t dcon_dd_read(uint64_t id, uint64_t size, uint64_t offset, uint8_t* buffer) {
@@ -41,7 +51,6 @@ char * init_dcon_dd() {
    register_char(DEVICE_DCON, DCON_DD_NAME, &dcon_fops);
 
    //We register now a virtual device for the DCON over the bootloader's debug device
-   void (*terminal_writer)(const char*, uint64_t) = get_terminal_writer();
    char * name = device_create(NULL, DEVICE_DCON, (uint64_t)terminal_writer);
    if (name == NULL) {
       return NULL;
