@@ -8,7 +8,7 @@
 #include <omen/managers/mem/pmm.h>
 #include <omen/managers/cpu/cpu.h>
 #include <emulated/dcon.h>
-#include <emulated/serial.h>
+#include <serial/serial.h>
 
 void boot_startup() {
     init_bootloader();
@@ -25,11 +25,18 @@ void boot_startup() {
 
 
     //Initialize the serial port
-    if(!init_serial_dd(COM2_BASEADDR, baud_115200))
+    if(init_serial_dd() != SUCCESS)
     {
         DBG_ERROR("Failed to initialize Serial driver\n");
+    } else {
+        DBG_INFO("Serial driver was initialized successfully!\n");
+        char * main_serial = create_serial_dd(COM1_BASEADDR, baud_115200);
+        if (main_serial == NULL) {
+            DBG_ERROR("Failed to create serial device\n");
+        } else {
+            DBG_INFO("Serial device %s created successfully\n", main_serial);
+        }
     }
-    DBG_INFO("Serial driver was initialized successfully!\n");
 
     kprintf("Booting from %s %s\n", get_bootloader_name(), get_bootloader_version());
 

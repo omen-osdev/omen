@@ -1,5 +1,4 @@
 #include <omen/managers/boot/boot.h>
-#include "./drivers/emulated/serial.h"
 
 __attribute__((noreturn)) void _halt() {
     while (1) {

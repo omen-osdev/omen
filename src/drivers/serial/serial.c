@@ -45,12 +45,8 @@ uint64_t serial_dd_data_rcvd(uint16_t com)
     return inb(SERIAL_LINE_STATUS_PORT(com)) & 1;
 }
 
-
-uint64_t init_serial_dd(uint16_t com_base_addr, uint16_t baud_rate)
+char* create_serial_dd(uint16_t com_base_addr, uint16_t baud_rate)
 {
-    register_char(DEVICE_SERIAL, SERIAL_DD_NAME, &serial_fops);
-
-
     outb(com_base_addr + 1, 0x00);                          // disable all interrupts
 
     serial_confiure_baud_rate(com_base_addr, baud_rate);    // set the baud rate
@@ -67,20 +63,26 @@ uint64_t init_serial_dd(uint16_t com_base_addr, uint16_t baud_rate)
     //return 1 if serial is faulty
     if(inb(COM2_BASEADDR + 0) != 0xAE)
     {
-        return 0;
+        return NULL;
     }
 
     // If serial is not faulty set it in normal operation mode
     // (not-loopback with IRQs enabled and OUT#1 and OUT#2 bits enabled)
     outb(SERIAL_MODEM_COMMAND_PORT(com_base_addr), 0x0F);
-
-    return 1;
+    return device_create(NULL, DEVICE_SERIAL, com_base_addr);
 }
 
-uint64_t serial_dd_write(uint16_t com, char data)
+status_t init_serial_dd()
 {
-    while(!serial_is_transmit_fifo_empty(com));
-    serial_write_byte(com, data);
+    return register_char(DEVICE_SERIAL, SERIAL_DD_NAME, &serial_fops); 
+}
+
+uint64_t serial_dd_write(uint64_t id, uint64_t size, uint64_t offset, uint8_t* buffer)
+{
+    (void)offset;
+    (void)size;
+    while(!serial_is_transmit_fifo_empty((uint16_t)id));
+    serial_write_byte((uint16_t)id, (char)buffer[0]);
     return 0;
 }
 
@@ -90,33 +92,36 @@ uint64_t serial_dd_write_string(uint16_t com, char *buf, size_t len)
     size_t idx = 0;
     while(idx < len)
     {
-        serial_dd_write(com, buf[idx]);
+        serial_dd_write((uint64_t)com, 1, 0, (uint8_t*)&(buf[idx]));
         idx++;
     }
     return 0;
 }
 
-char serial_dd_read(uint16_t com)
+uint64_t serial_dd_read(uint64_t id, uint64_t size, uint64_t offset, uint8_t* buffer)
 {
-    while(!serial_dd_data_rcvd(com));
-    return inb(com);
+    (void)offset;
+    (void)size;
+    while(!serial_dd_data_rcvd((uint16_t)id));
+    buffer[0] = inb((uint16_t)id);
+    return 0;
 }
 
-uint64_t serial_dd_ioctl(uint16_t com, uint32_t request, void* data)
+uint64_t serial_dd_ioctl(uint64_t id, uint32_t request, void* data)
 {
     switch(request)
     {
         case SERIAL_IOCTL_CHANGE_BAUDRATE:
-            serial_confiure_baud_rate(com, *((uint16_t*)data));
+            serial_confiure_baud_rate((uint16_t)id, *((uint16_t*)data));
             break;
         case SERIAL_IOCTL_CHANGE_LINECONFIG:
             //TODO: Implement this(for example 8N1, etc)
             break;
         case SERIAL_IOCTL_ENABLE_LOOPBACK:
-            outb(SERIAL_MODEM_COMMAND_PORT(com), 0x1E);
+            outb(SERIAL_MODEM_COMMAND_PORT((uint16_t)id), 0x1E);
             break;
         case SERIAL_IOCTL_DISABLE_LOOPBACK:
-            outb(SERIAL_MODEM_COMMAND_PORT(com), 0x0F);
+            outb(SERIAL_MODEM_COMMAND_PORT((uint16_t)id), 0x0F);
             break;
         default:
             break;

@@ -41,12 +41,13 @@ enum baud_rate { baud_115200 = 1, baud_57600 = 2, baud_38400 = 3, baud_19200 = 6
 extern struct file_operations serial_fops;
 
 
-uint64_t init_serial_dd(uint16_t com_base_addr, uint16_t baud_rate);
-uint64_t serial_dd_write(uint16_t com, char data);
+char* create_serial_dd(uint16_t com_base_addr, uint16_t baud_rate);
+status_t init_serial_dd();
+uint64_t serial_dd_write(uint64_t id, uint64_t size, uint64_t offset, uint8_t* buffer);
 uint64_t serial_dd_write_string(uint16_t com, char *buf, size_t len);
-uint64_t serial_dd_ioctl(uint16_t com, uint32_t request, void* data);
+uint64_t serial_dd_ioctl(uint64_t id, uint32_t request, void* data);
 uint64_t serial_dd_data_rcvd(uint16_t com);
-char serial_dd_read(uint16_t com);
+uint64_t serial_dd_read(uint64_t id, uint64_t size, uint64_t offset, uint8_t* buffer);
 
 
 #endif
