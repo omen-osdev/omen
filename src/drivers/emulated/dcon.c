@@ -3,15 +3,11 @@
 #include <omen/libraries/std/stddef.h>
 #include <omen/libraries/std/string.h>
 #include <omen/libraries/std/stdint.h>
+#include <omen/hal/arch/x86/io.h>
 
 #include "dcon.h"
 
 const char dcon_hook_str[] = "DCON device registered\n";
-
-static inline void outb(uint16_t port, uint8_t val)
-{
-    __asm__ volatile ( "outb %b0, %w1" : : "a"(val), "Nd"(port) : "memory");
-}
 
 void terminal_writer(const char* buffer, uint64_t size) {
     for(uint64_t i = 0; i < size; i++) {
