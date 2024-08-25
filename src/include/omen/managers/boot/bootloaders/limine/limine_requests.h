@@ -15,10 +15,6 @@ static volatile struct limine_boot_time_request time_request = {
     .id = LIMINE_BOOT_TIME_REQUEST,
     .revision = 0
 };
-static volatile struct limine_terminal_request terminal_request = {
-    .id = LIMINE_TERMINAL_REQUEST,
-    .revision = 0
-};
 static volatile struct limine_bootloader_info_request bootloader_info_request = {
     .id = LIMINE_BOOTLOADER_INFO_REQUEST,
     .revision = 0
