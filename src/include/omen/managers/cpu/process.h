@@ -17,7 +17,7 @@ typedef int process_status_t;
 typedef struct process {
     cpu_context_t *context;
     cpu_t *cpu;
-    vm_t *vm;
+    pdTable *vm;
     process_status_t status;
 
     uint8_t privilege;
