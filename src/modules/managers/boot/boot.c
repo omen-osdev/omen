@@ -6,6 +6,7 @@
 #include <omen/libraries/std/string.h>
 #include <omen/apps/debug/debug.h>
 #include <omen/managers/mem/pmm.h>
+#include <omen/managers/mem/vmm.h>
 #include <omen/managers/cpu/cpu.h>
 #include <emulated/dcon.h>
 #include <serial/serial.h>
@@ -41,19 +42,33 @@ void boot_startup() {
     kprintf("Booting from %s %s\n", get_bootloader_name(), get_bootloader_version());
 
     pmm_init();
+    vmm_init();
     pmm_list_map();
 
-    char * buffer = pmm_alloc(4024);
-    if (buffer == NULL) {
-        kprintf("Failed to allocate buffer, jonbardo plz fix\n");
-        return;
-    }
-
-    kprintf("Allocated buffer at 0x%x\n", buffer);
-    strcpy(buffer, "Hello, world!\n");
-    strcat(buffer, "This is a test buffer\n");
-    kprintf("Buffer contents: %s\n", buffer);
-    pmm_free(buffer);
-
     kprintf("Booting kernel\n");
+
+    kprintf("VMM Testing\n");
+
+    char * test = (char*)pmm_alloc(0x1000);
+    char * dummy_addr = (char*)pmm_alloc(0x1000);
+
+    char * vmm_buffer_1 = 0x100000;
+    char * vmm_buffer_2 = dummy_addr;
+    pdTable* pml4 = vmm_get_pml4();
+    kprintf("vmm_buffer_1 physical address before: %p\n", vmm_virt_to_phys(vmm_buffer_1, pml4));
+    kprintf("vmm_buffer_2 physical address before: %p\n", vmm_virt_to_phys(vmm_buffer_2, pml4));
+    vmm_map_current(vmm_buffer_1, test, VMM_WRITE_BIT);
+    vmm_map_current(vmm_buffer_2, test, VMM_WRITE_BIT);
+    pageMapIndex map;
+    vmm_page_to_map(vmm_buffer_1, &map);
+    kprintf("PML4: %d, PDPT: %d, PD: %d, PT: %d\n", map.PDP_i, map.PD_i, map.PT_i, map.P_i);
+    vmm_page_to_map(vmm_buffer_2, &map);
+    kprintf("PML4: %d, PDPT: %d, PD: %d, PT: %d\n", map.PDP_i, map.PD_i, map.PT_i, map.P_i);
+    vmm_set_pml4(pml4); //Invalidate TLB
+    kprintf("vmm_buffer_1 physical address after: %p\n", vmm_virt_to_phys(vmm_buffer_1, pml4));
+    kprintf("vmm_buffer_2 physical address after: %p\n", vmm_virt_to_phys(vmm_buffer_2, pml4));
+
+    strcpy(vmm_buffer_1, "Hello, World!\n");
+    kprintf("Buffer 1: %s\n", vmm_buffer_1);
+    kprintf("Buffer 2: %s\n", vmm_buffer_2);
 }
