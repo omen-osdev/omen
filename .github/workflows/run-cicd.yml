@@ -45,8 +45,12 @@ jobs:
       run: |
         docker load -i /tmp/osdev-omen_latest.tar
 
-    - name: Clean all
-      run: docker run osdev-omen make clean-all
+  omen-build:
+    -name: Setup buildenv
+     run: |
+      docker osdev-omen:latest make setup-gpt
 
-    - name: Make the binaries and the ISO image
-      run: docker run osdev-omen make iso
+    -name: Setup buildenv
+     run: |
+      docker osdev-omen:latest make gpt
+    
