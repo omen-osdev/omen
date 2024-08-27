@@ -1,0 +1,52 @@
+name: OMEN CICD
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Cache Docker layers
+      uses: actions/cache@v3
+      with:
+        path: /tmp/docker
+        key: ${{ runner.os }}-docker-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-docker-
+
+    - name: Build the Docker image
+      run: |
+        docker build . --file Dockerfile --tag osdev-omen:latest
+
+    - name: Save Docker image as a tarball
+      run: |
+        docker save osdev-omen:latest -o osdev-omen_latest.tar
+
+    - name: Upload Docker image artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: docker-image
+        path: osdev-omen_latest.tar
+
+    - name: Restore Docker image from artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: docker-image
+        path: /tmp/
+
+    - name: Load Docker image from tarball
+      run: |
+        docker load -i /tmp/osdev-omen_latest.tar
+
+    - name: Clean all
+      run: docker run osdev-omen make clean-all
+
+    - name: Make the binaries and the ISO image
+      run: docker run osdev-omen make iso
