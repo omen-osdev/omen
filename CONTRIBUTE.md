@@ -41,28 +41,28 @@ Choose the appropiate command for your specific distro from the list down here:
 
 ```bash
 # Install the following dependencies (only tested for Ubuntu/Debian, adapt to your OS)
-sudo apt install build-essential qemu-system qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
+sudo apt install build-essential qemu-system qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree mtools
 
 #Untested command for MacOS
 xcode-select --install
-brew install x86_64-elf-gcc x86_64-elf-gdb nasm dosfstools qemu
+brew install x86_64-elf-gcc x86_64-elf-gdb nasm dosfstools qemu mtools
 
 #Untested command for Fedora
-sudo dnf install @development-tools qemu-system qemu-system-x86 nasm make parted gptfdisk gdb tmux dosfstools tree
+sudo dnf install @development-tools qemu-system qemu-system-x86 nasm make parted gptfdisk gdb tmux dosfstools tree mtools
 
 #Untested command for CentOS/RHEL
 sudo yum groupinstall "Development Tools"
-sudo yum install qemu-system qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
+sudo yum install qemu-system qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree mtools
 
 #Untested command for Arch
-sudo pacman -S base-devel qemu-system qemu-arch-extra nasm make parted gptfdisk gdb tmux dosfstools tree
+sudo pacman -S base-devel qemu-system qemu-arch-extra nasm make parted gptfdisk gdb tmux dosfstools tree mtools
 
 #Untested command for OpenSUSE
 sudo zypper install -t pattern devel_basis
-sudo zypper install qemu-system qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
+sudo zypper install qemu-system qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree mtools
 
 #Untested command for Alpine
-sudo apk add build-base qemu-system qemu-system-x86 nasm make parted gptfdisk gdb tmux dosfstools tree
+sudo apk add build-base qemu-system qemu-system-x86 nasm make parted gptfdisk gdb tmux dosfstools tree mtools
 
 ```
 
