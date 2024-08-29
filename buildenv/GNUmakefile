@@ -12,10 +12,9 @@ override LOCKFILE := lockfile
 # It is highly recommended to use a custom built cross toolchain to build a kernel.
 # We are only using "cc" as a placeholder here. It may work by using
 # the host system's toolchain, but this is not guaranteed.
-
-TARGET = x86_64-elf-
-CC := $(TARGET)gcc
-LD := $(TARGET)ld
+ 
+CC := gcc
+LD := ld
 ASMC := nasm
 
 # This are specific to my setup, please modify them!!!!
