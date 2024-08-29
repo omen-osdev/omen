@@ -216,7 +216,6 @@ cleansetup:
 
 cleanup:
 	@echo "Cleaning up..."
-	@make cleanup_loop
 	@make clean
 	@make cleansetup
 	@make setup
@@ -238,7 +237,7 @@ buildimggpt_second_phase:
 	mcopy -i $(ISODIR)/$(IMG) $(BOOTEFI) ::/efi/boot
 	mcopy -i $(ISODIR)/$(IMG) ./startup.nsh ::
 	mcopy -i $(ISODIR)/$(IMG) $(BUILDDIR)/$(KERNEL) ::
-	mcopy -i $(ISODIR)/$(IMG) ./limine.cfg ::
+	mcopy -i $(ISODIR)/$(IMG) ./limine.conf ::
 
 	echo Disk mounted, creating system files
 	rm -f $(BUILDDIR)/$(LOCKFILE)
