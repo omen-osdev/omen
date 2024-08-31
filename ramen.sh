@@ -12,40 +12,41 @@ err() {
 install_deps() {
     if [ -f /etc/os-release ]; then
         . /etc/os-release
-        if [ $ID = "ubuntu" ]; then
-            say "Installing dependencies for Ubuntu"
-            sudo apt install -y build-essential qemu-system qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
-        elif [ $ID = "debian" ]; then
-            say "Installing dependencies for Debian"
-            sudo apt install -y build-essential qemu-system qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
-        elif [ $ID = "arch" ]; then
-            say "Installing dependencies for Arch"
-            sudo pacman -S --noconfirm base-devel qemu nasm make parted gdisk gdb tmux dosfstools tree
-        elif [ $ID = "fedora" ]; then
-            say "Installing dependencies for Fedora"
-            sudo dnf install -y @development-tools qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
-        elif [ $ID = "centos" ]; then
-            say "Installing dependencies for CentOS"
-            sudo yum groupinstall -y "Development Tools"
-            sudo yum install -y qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
-        elif [ $ID = "rhel" ]; then
-            say "Installing dependencies for RHEL"
-            sudo yum groupinstall -y "Development Tools"
-            sudo yum install -y qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
-        elif [ $ID = "darwin" ]; then
-            say "Installing dependencies for MacOS"
-            xcode-select --install
-            brew install qemu nasm make gdisk gdb tmux dosfstools tree
-        elif [ $ID = "alpine" ]; then
-            say "Installing dependencies for Alpine"
-            apk add build-base qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
-        else
-            err "Unsupported OS detected, please install manually in other terminal before continuing"
-            err "Programs that you have to manually install: build-essential, qemu-system, qemu-system-x86, nasm, make, parted, gdisk, gdb, tmux, dosfstools, tree"
-        fi
+        case $ID in
+            ubuntu|debian)
+                say "Installing dependencies for $ID"
+                sudo apt install -y build-essential qemu-system qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
+                ;;
+            arch)
+                say "Installing dependencies for Arch Linux"
+                sudo pacman -S --noconfirm base-devel qemu nasm make parted gdisk gdb tmux dosfstools tree
+                ;;
+            fedora)
+                say "Installing dependencies for Fedora"
+                sudo dnf install -y @development-tools qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
+                ;;
+            centos|rhel)
+                say "Installing dependencies for $ID"
+                sudo yum groupinstall -y "Development Tools"
+                sudo yum install -y qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
+                ;;
+            darwin)
+                say "Installing dependencies for macOS"
+                xcode-select --install
+                brew install qemu nasm make gdisk gdb tmux dosfstools tree
+                ;;
+            alpine)
+                say "Installing dependencies for Alpine Linux"
+                apk add build-base qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
+                ;;
+            *)
+                err "Unsupported OS detected. Please install the required dependencies manually:"
+                err "build-essential, qemu-system, qemu-system-x86, nasm, make, parted, gdisk, gdb, tmux, dosfstools, tree"
+                ;;
+        esac
     else
-        err "Unsupported OS detected, please install manually in other terminal before continuing"
-        err "Programs that you have to manually install: build-essential, qemu-system, qemu-system-x86, nasm, make, parted, gdisk, gdb, tmux, dosfstools, tree"
+        err "Unable to detect the operating system. Please install the required dependencies manually:"
+        err "build-essential, qemu-system, qemu-system-x86, nasm, make, parted, gdisk, gdb, tmux, dosfstools, tree"
     fi
 }
 
