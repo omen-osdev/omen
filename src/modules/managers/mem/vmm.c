@@ -1,188 +1,356 @@
 #include <omen/libraries/std/stdint.h>
+#include <omen/apps/debug/debug.h>
 #include <omen/managers/mem/pmm.h>
 #include <omen/managers/mem/vmm.h>
 #include <omen/apps/panic/panic.h>
+#include <omen/managers/boot/bootloaders/bootloader.h>
 #include <omen/libraries/std/string.h>
 #include <generic/config.h>
 
-pdTable * current_pml4 = NULL;
+#define CACHE_BIT_SET(x)((x & PAGE_CACHE_DISABLE) >> 3)
+#define NX_BIT_SET(x)((x & PAGE_NX_BIT) >> 2)
+#define USER_BIT_SET(x)((x & PAGE_USER_BIT) >> 1)
+#define WRITE_BIT_SET(x)(x & PAGE_WRITE_BIT)
 
-
-void vmm_page_to_map(uint64_t virt_addr, pageMapIndex *map) {
-    virt_addr >>= 12;
-    map->P_i = virt_addr & 0x1ff;
-    virt_addr >>= 9;
-    map->PT_i = virt_addr & 0x1ff;
-    virt_addr >>= 9;
-    map->PD_i = virt_addr & 0x1ff;
-    virt_addr >>= 9;
-    map->PDP_i = virt_addr & 0x1ff;
+void address_to_map(uint64_t address, struct page_map_index* map) {
+    address >>= 12;
+    map->P_i = address & 0x1ff;
+    address >>= 9;
+    map->PT_i = address & 0x1ff;
+    address >>= 9;
+    map->PD_i = address & 0x1ff;
+    address >>= 9;    
+    map->PDP_i = address & 0x1ff;
 }
 
-void* vmm_virt_to_phys(uint64_t virt_addr, pdTable *pml4) {
+void * virtual_to_physical(struct page_directory * pml4, void* virtual) {
+    struct page_map_index map;
+    address_to_map((uint64_t)virtual, &map);
+    struct page_directory_entry pde;
 
-    if ((uint64_t)virt_addr & 0xfff) return NULL;
-    pageMapIndex idxMap;
-    vmm_page_to_map(virt_addr, &idxMap);
-
-    pd_entry pml4_e = pml4->entry[idxMap.PDP_i];
-    pdTable *pdpt = NULL;
-    if((pml4_e.present) == 0b01) {
-        pdpt = (pdTable*)(((uint64_t)pml4_e.page_ppn) << 12);
+    pde = pml4->entries[map.PDP_i];
+    struct page_directory* pdp;
+    if (!pde.present) {
+        return NULL;
+    } else {
+        pdp = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
     }
-    else {
+
+    pde = pdp->entries[map.PD_i];
+    struct page_directory* pd;
+    if (!pde.present) {
+        return NULL;
+    } else {
+        pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+    }
+
+    pde = pd->entries[map.PT_i];
+    struct page_table* pt;
+    if (!pde.present) {
+        return NULL;
+    } else {
+        pt = (struct page_table*)((uint64_t)pde.page_ppn << 12);
+    }
+
+    struct page_table_entry pte = pt->entries[map.P_i];
+    if (!pte.present) {
         return NULL;
     }
 
-    pd_entry pdpt_e = pdpt->entry[idxMap.PD_i];
-    pdTable *pd = NULL;
-    if((pdpt_e.present) == 0b01) {
-        pd = (pdTable*)(((uint64_t)pdpt_e.page_ppn) << 12);
-    }
-    else {
-        return NULL;
-    }
-
-    pd_entry pd_e = pd->entry[idxMap.PT_i];
-    ptTable *pt = NULL;
-    if( (pd_e.present) == 0b01) {
-        pt = (ptTable*)(((uint64_t)pd_e.page_ppn) << 12);
-    }
-    else {
-        return NULL;
-    }
-
-    pt_entry pt_e = pt->entry[idxMap.P_i];
-    if( (pt_e.present) == 0b01) {
-        return (void*)(((uint64_t)pt_e.page_ppn) << 12);
-    }
-    else {
-        return NULL;
-    }
+    return (void*)((uint64_t)pte.page_ppn << 12);
 }
 
-void vmm_init() {
-    current_pml4 = vmm_get_pml4();
-}
-
-pdTable* vmm_get_pml4() {
-    pdTable * pml4;
-    __asm__("movq %%cr3, %0" : "=r" (pml4));
+struct page_directory* get_pml4() {
+    struct page_directory* pml4;
+    __asm__("movq %%cr3, %0" : "=r"(pml4));
     return pml4;
 }
 
-void vmm_set_pml4(pdTable* pml4) {
+void set_pml4(struct page_directory* pml4) {
     __asm__("movq %0, %%cr3" : : "r" (pml4));
 }
 
-void* vmm_map_current(void* virt_addr, void* physical_addr, uint8_t flags) {
-    if (current_pml4 == NULL) return NULL;
-    if ((uint64_t)virt_addr & 0xfff) return NULL;
-    if ((uint64_t)physical_addr & 0xfff) return NULL;
-
-    pageMapIndex idxMap;
-    vmm_page_to_map((uint64_t)virt_addr, &idxMap);
-    
-    pd_entry pd_e = current_pml4->entry[idxMap.PDP_i];
-    pd_entry * pdp;
-    if (!pd_e.present) {
-        pdp = (pd_entry*) pmm_alloc(PAGE_SIZE);
-        if (pdp == NULL) {
-            panic("Can't allocate pdp");
-        }
-        memset(pdp, 0, PAGE_SIZE);
-        pd_e.page_ppn = (((uint64_t)pdp) >> 12);
-        pd_e.present = 1;
-        pd_e.writeable = 1;
-        pd_e.user_access = 1;
-        current_pml4->entry[idxMap.PDP_i] = pd_e;
-    } else {
-        pdp = (pd_entry *)(((uint64_t)pd_e.page_ppn) << 12);
-    }
-
-    pd_e = ((pdTable*)pdp)->entry[idxMap.PD_i];
-    pd_entry * pd;
-    if (!pd_e.present) {
-        pd = (pd_entry*) pmm_alloc(PAGE_SIZE);
-        if (pd == NULL) {
-            panic("Can't allocate pd");
-        }
-        memset(pd, 0, PAGE_SIZE);
-        pd_e.page_ppn = (((uint64_t)pd) >> 12);
-        pd_e.present = 1;
-        pd_e.writeable = 1;
-        pd_e.user_access = 1;
-        ((pdTable*)pdp)->entry[idxMap.PD_i] = pd_e;
-    } else {
-        pd = (pd_entry *)(((uint64_t)pd_e.page_ppn) << 12);
-    }
-
-    pd_e = ((pdTable*)pd)->entry[idxMap.PT_i];
-    pt_entry * pt;
-    if (!pd_e.present) {
-        pt = (pt_entry*) pmm_alloc(PAGE_SIZE);
-        if (pt == NULL) {
-            panic("Can't allocate pt");
-        }
-        memset(pt, 0, PAGE_SIZE);
-        pd_e.page_ppn = (((uint64_t)pt) >> 12);
-        pd_e.present = 1;
-        pd_e.writeable = 1;
-        pd_e.user_access = 1;
-        ((pdTable*)pd)->entry[idxMap.PT_i] = pd_e;
-    } else {
-        pt = (pt_entry *)(((uint64_t)pd_e.page_ppn) << 12);
-    }
-
-    pt_entry pt_e = ((ptTable*)pt)->entry[idxMap.P_i];
-    pt_e.page_ppn = (((uint64_t)physical_addr) >> 12);
-    pt_e.present = 1;
-    pt_e.writeable = VMM_WRITE_BIT_SET(flags);
-    pt_e.user_access = VMM_USER_BIT_SET(flags);
-    pt_e.execute_disable = VMM_NX_BIT_SET(flags);
-    pt_e.cache_disabled = VMM_CACHE_DISABLE_BIT_SET(flags);
-    ((ptTable*)pt)->entry[idxMap.P_i] = pt_e;
+void invalidate_current_pml4() {
+    struct page_directory* pml4 = get_pml4();
+    set_pml4(pml4);
 }
 
+void init_paging() {
+    struct page_directory * pml4 = (struct page_directory*)pmm_alloc(PAGE_SIZE);
+    if (pml4 == NULL) {
+        panic("ERROR: Could not allocate page for PML4\n");
+    }
+    struct page_directory * original;
+    __asm__("movq %%cr3, %0" : "=r"(original));
 
-//TODO: Unmap physical memory
-void vmm_unmap_current(void* virt_addr) {
-    if (current_pml4 == NULL) return;
-    if ((uint64_t)virt_addr & 0xfff) return;
 
-    pageMapIndex idxMap;
-    vmm_page_to_map((uint64_t)virt_addr, &idxMap);
+    memset(pml4, 0, PAGE_SIZE);
 
-    pd_entry pd_e = current_pml4->entry[idxMap.PDP_i];
-    pd_entry * pdp;
-    if (!pd_e.present) {
-        return;
-    } else {
-        pdp = (pd_entry *)(((uint64_t)pd_e.page_ppn) << 12);
+    //Copy all the page tables in 4 levels
+    for (uint64_t i = 0; i < 512; i++) {
+        struct page_directory_entry pde = original->entries[i];
+        if (pde.present) {
+            struct page_directory* pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+            struct page_directory* new_pd = (struct page_directory*)pmm_alloc(PAGE_SIZE);
+            if (new_pd == NULL) {
+                panic("ERROR: Could not allocate page for new PD\n");
+            }
+            memcpy(new_pd, pd, PAGE_SIZE);
+            pde.page_ppn = (uint64_t)new_pd >> 12;
+            pml4->entries[i] = pde;
+
+            for (uint64_t j = 0; j < 512; j++) {
+                struct page_directory_entry pde = pd->entries[j];
+                if (pde.present) {
+                    struct page_table* pt = (struct page_table*)((uint64_t)pde.page_ppn << 12);
+                    struct page_table* new_pt = (struct page_table*)pmm_alloc(PAGE_SIZE);
+                    if (new_pt == NULL) {
+                        panic("ERROR: Could not allocate page for new PT\n");
+                    }
+                    memcpy(new_pt, pt, PAGE_SIZE);
+                    pde.page_ppn = (uint64_t)new_pt >> 12;
+                    new_pd->entries[j] = pde;
+
+                    for (uint64_t k = 0; k < 512; k++) {
+                        struct page_table_entry pte = pt->entries[k];
+                        if (pte.present) {
+                            struct page_table_entry new_pte = pte;
+                            new_pt->entries[k] = new_pte;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    struct pmm_block * memory = get_main_memory();
+    uint64_t first_page = memory->base;
+    uint64_t last_page = memory->base + memory->size;
+
+    for (uint64_t i = first_page; i < last_page; i += 0x1000) {
+        map_memory(pml4, (void*)i, (void*)i, PAGE_WRITE_BIT);
+    }
+    
+    kprintf("Identity mapped from: %llx to %llx\n", first_page, last_page);
+    
+    __asm__("movq %0, %%cr3" : : "r" (pml4));
+
+    uint64_t virtual_start = get_kernel_address_virtual();
+    uint64_t linker_kstart = (uint64_t)&KERNEL_START;
+
+    if (linker_kstart != virtual_start) {
+        kprintf("Crashing: KERNEL_START: %llx VIRT_ADDR: %p\n", linker_kstart, virtual_start);
+        panic("init_paging: kernel virtual address does not match KERNEL_START");
+    }
+}
+
+struct page_directory* get_entry(struct page_directory* pd, uint64_t index) {
+    struct page_directory_entry * pde = &(pd->entries[index]);
+    if (pde && !(pde->present)) {
+
+        struct page_directory* new_pd = (struct page_directory*)pmm_alloc(PAGE_SIZE);
+        if (new_pd == NULL) {
+            panic("ERROR: Could not allocate page for new PD\n");
+        }
+
+        memset(new_pd, 0, PAGE_SIZE);
+        pde->page_ppn = (uint64_t)new_pd >> 12;
+        pde->present = 1;
+        pde->writeable = 1;
+        pde->user_access = 1;
     }
 
-    pd_e = ((pdTable*)pdp)->entry[idxMap.PD_i];
-    pd_entry * pd;
-    if (!pd_e.present) {
-        return;
-    } else {
-        pd = (pd_entry *)(((uint64_t)pd_e.page_ppn) << 12);
+    return (struct page_directory*)((uint64_t)pde->page_ppn << 12);
+}
+
+void map_memory(struct page_directory* pml4, void* virtual_memory, void* physical_memory, uint8_t flags) {
+
+    if ((uint64_t)virtual_memory & 0xfff) {
+        kprintf("Crashing: virtual_memory: %p\n", virtual_memory);
+        panic("map_memory: virtual_memory must be aligned to 0x1000");
     }
 
-    pd_e = ((pdTable*)pd)->entry[idxMap.PT_i];
-    pt_entry * pt;
-    if (!pd_e.present) {
-        return;
-    } else {
-        pt = (pt_entry *)(((uint64_t)pd_e.page_ppn) << 12);
+    if ((uint64_t)physical_memory & 0xfff) {
+        kprintf("Crashing: physical_memory: %p\n", physical_memory);
+        panic("map_memory: physical_memory must be aligned to 0x1000");
     }
 
-    pt_entry pt_e = ((ptTable*)pt)->entry[idxMap.P_i];
-    pt_e.page_ppn = 0;
-    pt_e.present = 0;
-    pt_e.writeable = 0;
-    pt_e.user_access = 0;
-    pt_e.execute_disable = 0;
-    pt_e.cache_disabled = 0;
-    ((ptTable*)pt)->entry[idxMap.P_i] = pt_e;
+    struct page_map_index map;
+    address_to_map((uint64_t)virtual_memory, &map);
+
+    struct page_directory * pdp = get_entry(pml4, map.PDP_i);
+    struct page_directory * pd = get_entry(pdp, map.PD_i);
+    struct page_directory * pt = get_entry(pd, map.PT_i);
+
+    struct page_table_entry * pte = (struct page_table_entry *)&(pt->entries[map.P_i]);
+    pte->present = 1;
+    pte->writeable = WRITE_BIT_SET(flags);
+    pte->user_access = USER_BIT_SET(flags);
+    pte->execution_disabled = NX_BIT_SET(flags);
+    pte->cache_disabled = CACHE_BIT_SET(flags);
+    pte->page_ppn = (uint64_t)physical_memory >> 12;
+
+    __asm__("invlpg %0" : : "m" (*(char*)virtual_memory));
+}
+
+void unmap_memory(struct page_directory* pml4, void* virtual_address) {
+    struct page_map_index map;
+    address_to_map((uint64_t)virtual_address, &map);
+
+    struct page_directory_entry pde;
+    struct page_directory *pd;
+
+    pde = pml4->entries[map.PDP_i];
+    pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+    pde = pd->entries[map.PD_i];
+    pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+    pde = pd->entries[map.PT_i];
+    
+    struct page_table *pt = (struct page_table*)((uint64_t)pde.page_ppn << 12);
+    struct page_table_entry *pte = &pt->entries[map.P_i];
+
+    pte->present = 0;
+    __asm__("invlpg %0" : : "m" (*(char*)virtual_address));
+}
+
+void map_current_memory(void* virtual_memory, void* physical_memory, uint8_t flags) {
+    struct page_directory* pml4 = get_pml4();
+    map_memory(pml4, virtual_memory, physical_memory, flags);
+}
+
+void unmap_current_memory(void* virtual_address) {
+    struct page_directory* pml4 = get_pml4();
+    unmap_memory(pml4, virtual_address);
+}
+
+void set_page_perms(struct page_directory *pml4, void* address, uint8_t permissions) {
+    struct page_map_index map;
+    address_to_map((uint64_t)address, &map);
+
+    struct page_directory_entry pde;
+    struct page_directory *pd;
+
+    pde = pml4->entries[map.PDP_i];
+    pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+    pde = pd->entries[map.PD_i];
+    pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+    pde = pd->entries[map.PT_i];
+    
+    struct page_table *pt = (struct page_table*)((uint64_t)pde.page_ppn << 12);
+    struct page_table_entry *pte = &pt->entries[map.P_i];
+
+    pte->writeable = (permissions & 1);
+    pte->user_access = ((permissions & 2) >> 1);
+    pte->execution_disabled = ((permissions & 4) >> 2);
+    pte->cache_disabled = ((permissions & 8) >> 3);
+}
+
+uint8_t get_page_perms(struct page_directory *pml4, void* address) {
+    struct page_map_index map;
+    address_to_map((uint64_t)address, &map);
+
+    struct page_directory_entry pde;
+    struct page_directory *pd;
+
+    pde = pml4->entries[map.PDP_i];
+    pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+    pde = pd->entries[map.PD_i];
+    pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+    pde = pd->entries[map.PT_i];
+    
+    struct page_table *pt = (struct page_table*)((uint64_t)pde.page_ppn << 12);
+    struct page_table_entry pte = pt->entries[map.P_i];
+
+    uint8_t result = pte.writeable;
+    result |= (pte.user_access << 1);
+    result |= (pte.execution_disabled << 2);
+    result |= (pte.cache_disabled << 3);
+
+    return result;
+}
+
+void mprotect(struct page_directory *pml4, void* address, uint64_t size, uint8_t permissions) {
+    uint64_t start = (uint64_t)address;
+    uint64_t end = start + size;
+    start = start & ~0xfff;
+    end = (end + 0xfff) & ~0xfff;
+
+    for (uint64_t i = start; i < end; i += 0x1000) {
+        set_page_perms(pml4, (void*)i, permissions);
+    }
+}
+
+void mprotect_current(void* address, uint64_t size, uint8_t permissions) {
+    struct page_directory* pml4 = get_pml4();
+    mprotect(pml4, address, size, permissions);
+}
+
+uint8_t is_present(struct page_directory* pml4, void * address) {
+    struct page_map_index map;
+    address_to_map((uint64_t)address, &map);
+
+    struct page_directory_entry pde;
+    struct page_directory *pd;
+
+    pde = pml4->entries[map.PDP_i];
+    pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+    pde = pd->entries[map.PD_i];
+    pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+    pde = pd->entries[map.PT_i];
+    
+    struct page_table *pt = (struct page_table*)((uint64_t)pde.page_ppn << 12);
+    struct page_table_entry pte = pt->entries[map.P_i];
+    kprintf("pte.present: %d\n", pte.present);
+    return pte.present;
+}
+
+uint8_t is_user_access(struct page_directory* pml4, void * address) {
+//Check the user bit for each level of directory also
+    struct page_map_index map;
+    address_to_map((uint64_t)address, &map);
+
+    struct page_directory_entry pde;
+    struct page_directory *pd;
+
+    pde = pml4->entries[map.PDP_i];
+    if (!pde.user_access) {
+        kprintf("PDP not user accessible\n");
+        return 0;
+    }
+    pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+    pde = pd->entries[map.PD_i];
+    if (!pde.user_access) {
+        kprintf("PD not user accessible\n");
+        return 0;
+    }
+    pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+    pde = pd->entries[map.PT_i];
+    if (!pde.user_access) {
+        kprintf("PT not user accessible\n");
+        return 0;
+    }
+
+    struct page_table *pt = (struct page_table*)((uint64_t)pde.page_ppn << 12);
+    struct page_table_entry pte = pt->entries[map.P_i];
+    kprintf("pte.user_access: %d\n", pte.user_access);
+    return pte.user_access;
+}
+
+uint8_t is_executable(struct page_directory* pml4, void * address) {
+    struct page_map_index map;
+    address_to_map((uint64_t)address, &map);
+
+    struct page_directory_entry pde;
+    struct page_directory *pd;
+
+    pde = pml4->entries[map.PDP_i];
+    pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+    pde = pd->entries[map.PD_i];
+    pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+    pde = pd->entries[map.PT_i];
+    
+    struct page_table *pt = (struct page_table*)((uint64_t)pde.page_ppn << 12);
+    struct page_table_entry pte = pt->entries[map.P_i];
+    kprintf("pte.execution_disabled: %d\n", pte.execution_disabled);
+    return !pte.execution_disabled;
 }

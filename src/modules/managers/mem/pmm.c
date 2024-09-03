@@ -8,12 +8,6 @@
 #include <omen/managers/boot/bootloaders/bootloader.h>
 #include <omen/libraries/allocators/buddy_allocator.h>
 
-struct pmm_block {
-    uint64_t base;
-    uint64_t size;
-    uint64_t type;
-};
-
 struct pmm_block main_memory;
 buddy_allocator_t * buddy;
 uint8_t ready = 0;
@@ -62,6 +56,10 @@ void pmm_init() {
     } else {
         ready = 1;
     }
+}
+
+struct pmm_block * get_main_memory() {
+    return &main_memory;
 }
 
 void pmm_list_map() {
