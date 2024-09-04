@@ -192,7 +192,7 @@ void MergeLastAndThisToNext(struct heap_segment_header* header){
 }
 
 void _free(struct heap * cheap, void* address) {
-    if (!cheap->ready) return 0;
+    if (!cheap->ready) return;
     if (address == 0) return;
 
     struct heap_segment_header* header = (struct heap_segment_header*)((uint64_t)address - sizeof(struct heap_segment_header));

@@ -15,9 +15,12 @@
 #include <emulated/dcon.h>
 #include <serial/serial.h>
 #include <acpi/acpi.h>
+#include <omen/managers/dev/fb.h>
 
 void boot_startup() {
     init_bootloader();
+    init_framebuffer();
+    clearscreen(0xffffffff);
     init_devices();
     char * dcon = init_dcon_dd();
     if (dcon == NULL) {
