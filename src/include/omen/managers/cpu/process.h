@@ -29,7 +29,7 @@ typedef struct process {
     long current_nice;
     //int_error_frame_t *frame;
 
-    void * heap_address;
+    void * heap;
 
     unsigned long long sleep_time;
     unsigned long long cpu_time;

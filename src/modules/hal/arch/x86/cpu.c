@@ -1,6 +1,11 @@
 #include <omen/hal/arch/x86/cpu.h>
 #include <omen/managers/boot/bootloaders/bootloader.h>
 #include <omen/libraries/std/stdint.h>
+#include <omen/hal/arch/x86/tss.h>
+#include <omen/libraries/std/string.h>
+#include <omen/libraries/allocators/heap_allocator.h>
+#include <omen/hal/arch/x86/gdt.h>
+#include <omen/hal/arch/x86/int.h>
 #include <omen/apps/debug/debug.h>
 
 #define SIMD_CONTEXT_SIZE 512
@@ -12,6 +17,9 @@
 
 #define FPU_ENABLE_CODE 0x200
 #define FPU_CONTROL_WORD 0x37F
+
+extern void reloadGsFs();
+extern void setGsBase(uint64_t base);
 
 boot_smp_info_t ** cpus;
 uint64_t cpu_count;
@@ -33,7 +41,32 @@ void arch_set_alive(uint8_t cpuid, uint8_t alive) {
 
 void startup_cpu(uint8_t cpuid) {
     cpu_t * lcpu = &cpu[cpuid];
-    if(!lcpu->ready) lcpu->ready = 1;
+    if (lcpu->ready) {
+        return;
+    }
+    kprintf("Starting CPU %d\n", cpuid);
+    lcpu->tss = get_tss(cpuid);
+    lcpu->ctx = kmalloc(sizeof(cpu_context_t));
+    memset(lcpu->ctx, 0, sizeof(cpu_context_t));
+
+    lcpu->kstack = kstackalloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
+    memset(lcpu->kstack - KERNEL_STACK_SIZE, 0, KERNEL_STACK_SIZE);
+
+    void * ist0 = kstackalloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
+    memset(ist0 - KERNEL_STACK_SIZE, 0, KERNEL_STACK_SIZE);
+    void * ist1 = kstackalloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
+    memset(ist1 - KERNEL_STACK_SIZE, 0, KERNEL_STACK_SIZE);
+
+    tss_set_stack(lcpu->tss, lcpu->kstack, 0);
+    tss_set_ist(lcpu->tss, 0, (uint64_t)ist0);
+    tss_set_ist(lcpu->tss, 1, (uint64_t)ist1);
+
+    reloadGsFs();
+    setGsBase((uint64_t)lcpu->tss);
+    load_gdt(cpuid);
+    //syscall enable
+    load_interrupts_for_local_cpu();
+    lcpu->ready = 1;
 }
 
 void arch_init_cpu() {

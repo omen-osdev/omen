@@ -354,3 +354,13 @@ uint8_t is_executable(struct page_directory* pml4, void * address) {
     kprintf("pte.execution_disabled: %d\n", pte.execution_disabled);
     return !pte.execution_disabled;
 }
+
+void * request_current_page_at(void* vaddr, uint8_t flags) {
+    struct page_directory *pml4 = get_pml4();
+    void * result = pmm_alloc(0x1000);
+    if (result == NULL) {
+        panic("ERROR: Could not allocate page for mapping\n");
+    }
+    map_memory(pml4, vaddr, result, flags);
+    return vaddr;
+}
