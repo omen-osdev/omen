@@ -4,6 +4,7 @@
 #include <omen/libraries/std/string.h>
 #include <omen/libraries/std/stdint.h>
 #include <omen/hal/arch/x86/io.h>
+#include <omen/managers/dev/fb.h>
 
 #include "dcon.h"
 
@@ -12,6 +13,7 @@ const char dcon_hook_str[] = "DCON device registered\n";
 void terminal_writer(const char* buffer, uint64_t size) {
     for(uint64_t i = 0; i < size; i++) {
    	outb(0xe9, buffer[i]);
+   	putchar(buffer[i]);
    }
 }
 

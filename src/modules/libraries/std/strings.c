@@ -2,7 +2,20 @@
 #include <omen/libraries/std/ctype.h>
 
 void *memchr(const void *s, int c, size_t n) {__UNDEFINED();}
-void *memmove(void *dest, const void *src, size_t n) {__UNDEFINED();}
+void *memmove(void *dest, const void *src, size_t n) {
+
+    //TODO improve this by specification, since this is just a hack
+    uint8_t *d = (uint8_t *)dest;
+    uint8_t *s = (uint8_t *)src;
+    
+    if(d < s) {
+        for(uint64_t i = 0; i < n; i++) {
+            d[i] = s[i];
+            s[i] = 0;
+        }
+    }
+
+}
 void *strcat(char *dest, const char *src) {
     char *dest_start = dest;
     while (*dest != '\0') {
