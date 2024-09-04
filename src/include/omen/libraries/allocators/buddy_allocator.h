@@ -34,7 +34,7 @@ static inline size_t buddy_sizeof_metadata(size_t num_levels) {
 
 buddy_allocator_t *buddy_create(void *address, size_t size, size_t page_size);
 void buddy_init(buddy_allocator_t *allocator, void *address, size_t size, size_t page_size);
-
+void buddy_offset(buddy_allocator_t *allocator, void *offset);
 void *buddy_alloc(buddy_allocator_t *allocator, size_t size);
 void buddy_free(buddy_allocator_t *allocator, void *ptr);
 

@@ -23,7 +23,7 @@ void init_process() {
         .nice = 0,
         .current_nice = 0,
         //.frame = NULL,
-        .heap_address = NULL,
+        .heap = NULL,
         .sleep_time = 0,
         .cpu_time = 0,
         .last_scheduled = 0,

@@ -17,7 +17,7 @@ typedef int process_status_t;
 typedef struct process {
     cpu_context_t *context;
     cpu_t *cpu;
-    pdTable *vm;
+    struct page_directory* vm;
     process_status_t status;
 
     uint8_t privilege;
@@ -29,7 +29,7 @@ typedef struct process {
     long current_nice;
     //int_error_frame_t *frame;
 
-    void * heap_address;
+    void * heap;
 
     unsigned long long sleep_time;
     unsigned long long cpu_time;
