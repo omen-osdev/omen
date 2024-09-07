@@ -376,9 +376,18 @@ void sigfree(void* address) {
 
 void * kmalloc(uint64_t size) {
     LOCK_HEAP(&kernelGlobalHeap);
-    void * result = _malloc(get_pml4(), &kernelGlobalHeap, size);
+    //TODO: Change this
+    uint64_t pages = size / PAGE_SIZE;
+    if (size % PAGE_SIZE) pages++;
+    void * ptr = pmm_alloc(pages);
+    if (ptr == 0) {UNLOCK_RETURN(&kernelGlobalHeap, 0);}
+    for (uint64_t i = 0; i < pages; i++) {
+        void * physical = virtual_to_physical(get_pml4(), ptr + i * PAGE_SIZE);
+        map_memory(get_pml4(), ptr + i * PAGE_SIZE, physical, PAGE_WRITE_BIT | PAGE_USER_BIT);
+    }
+    //void * result = _malloc(get_pml4(), &kernelGlobalHeap, size);
     UNLOCK_HEAP(&kernelGlobalHeap);
-    return result;
+    return ptr;
 }
 
 void kfree(void* address) {

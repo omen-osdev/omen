@@ -19,6 +19,7 @@
 
 void boot_startup() {
     init_bootloader();
+    init_simd();
     init_framebuffer();
     clearscreen(0xffffffff);
     init_devices();
@@ -38,6 +39,8 @@ void boot_startup() {
     device_list();
     init_acpi();
     init_serial_dd();
+    kprintf("Booting kernel...\n");
+
     struct madt_header* madt = get_acpi_madt();
     if (madt != 0) {
         register_apic(madt, 0x0);

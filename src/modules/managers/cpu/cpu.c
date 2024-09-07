@@ -2,9 +2,12 @@
 #include <omen/hal/hal.h>
 
 void init_cpus() {
-    arch_init_simd();
     arch_init_fpu();
     arch_init_cpu();
+}
+
+void init_simd() {
+    arch_init_simd();
 }
 
 void enable_cpu(uint64_t cpu_index) {
