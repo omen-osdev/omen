@@ -1,0 +1,7 @@
+version: '3.8'
+
+services:
+  man:
+    build:
+      context: .
+    image: osdev

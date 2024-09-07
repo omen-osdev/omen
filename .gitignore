@@ -1,0 +1,9 @@
+**/*.out
+**/*.o
+**/*.unit-test-out
+build/
+dependencies/
+**/.cache/
+**/compile_commands.json
+.vscode/
+*.gdb
