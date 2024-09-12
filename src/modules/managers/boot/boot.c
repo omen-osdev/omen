@@ -16,6 +16,8 @@
 #include <serial/serial.h>
 #include <acpi/acpi.h>
 #include <omen/managers/dev/fb.h>
+#include <ps2/ps2.h>
+#include <omen/apps/debug/dshell.h>
 
 void boot_startup() {
     init_bootloader();
@@ -27,29 +29,29 @@ void boot_startup() {
     if (dcon == NULL) {
         DBG_ERROR("Failed to initialize DCON device\n");
     }
-
     init_debugger(dcon);
     set_current_tty(dcon);
+    kprintf("Early startup complete...\n");
     pmm_init();
     init_paging();
     init_heap();
     create_gdt();
     init_interrupts();
     init_cpus();
-    device_list();
     init_acpi();
-    init_serial_dd();
-    kprintf("Booting kernel...\n");
-
     struct madt_header* madt = get_acpi_madt();
     if (madt != 0) {
         register_apic(madt, 0x0);
     }
-
+    kprintf("Secondary startup complete...\n");
+    init_serial_dd();
+    init_ps2_dd(fb_get_width(), fb_get_height());
+    kprintf("Device startup complete...\n");
     kprintf("Booting from %s %s...\n", get_bootloader_name(), get_bootloader_version());
     kprintf("Booting kernel...\n");
     kprintf("Active subsystems: APIC, ACPI, VMM, PMM, HEAP, SERIAL\n");
     kprintf("Enabling interrupts...\n");
+    mask_interrupt(PIT_IRQ);
     __asm__ volatile("sti");
-    kprintf("bad@omen:~/# TODOTODOTODO");
+    init_dshell();
 }

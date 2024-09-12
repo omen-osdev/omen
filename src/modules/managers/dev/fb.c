@@ -609,3 +609,11 @@ void init_framebuffer() {
 	height = fb[0]->height;
 
 }
+
+size_t fb_get_width() {
+	return width;
+}
+
+size_t fb_get_height() {
+	return height;
+}

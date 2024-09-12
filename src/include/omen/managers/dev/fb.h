@@ -10,5 +10,7 @@ void scroll();
 void putpixel(uint64_t, uint64_t, uint32_t);
 void putchar(char);
 void init_framebuffer();
+size_t fb_get_width();
+size_t fb_get_height();
 
 #endif

@@ -29,11 +29,12 @@ status_t register_char(const uint8_t major, const char* name, struct file_operat
         RECOVERABLE_ERROR(INVALID_ARGUMENT, "File operations not provided");
     }
 
-    if (char_device_drivers[major].registered) {
+    uint8_t major_id = major & 0x7f;
+
+    if (char_device_drivers[major_id].registered) {
         RECOVERABLE_ERROR(INVALID_ARGUMENT, "Major number already registered");
     }
 
-    uint8_t major_id = major & 0x7f;
     strncpy(char_device_drivers[major_id].name, name, strlen(name));
     char_device_drivers[major_id].fops = fops;
     char_device_drivers[major_id].registered = true;
