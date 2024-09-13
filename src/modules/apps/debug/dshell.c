@@ -2,6 +2,9 @@
 #include <omen/libraries/std/string.h>
 #include <omen/libraries/std/stdint.h>
 #include <omen/apps/debug/debug.h>
+#include <omen/managers/cpu/process.h>
+#include <omen/managers/mem/vmm.h>
+#include <dummy/dummy.h>
 #include <ps2/ps2.h>
 #include <generic/config.h>
 
@@ -26,10 +29,21 @@ void test(int argc, char* argv[]) {
     }
 }
 
+void spawn(int argc, char* argv[]) {
+    process_t * new = create_user_process(dummy_main);
+    mprotect(new->vm, dummy_main, 0x1000, VMM_USER_BIT);
+    kprintf("New process created with pid %d\n", new->pid);
+    yield(new);
+}
+
 struct command cmdlist[] = {
     {
         .keyword = "test",
         .handler = test
+    },
+    {
+        .keyword = "spawn",
+        .handler = spawn
     },
     {
         .keyword = "help",

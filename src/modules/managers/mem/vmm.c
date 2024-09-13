@@ -280,6 +280,45 @@ void mprotect(struct page_directory *pml4, void* address, uint64_t size, uint8_t
     }
 }
 
+void duplicate_current_pml4(struct page_directory* new_pml4) {
+    struct page_directory* pml4 = get_pml4();
+    for (uint64_t i = 0; i < 512; i++) {
+        struct page_directory_entry pde = pml4->entries[i];
+        if (pde.present) {
+            struct page_directory* pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+            struct page_directory* new_pd = (struct page_directory*)pmm_alloc(PAGE_SIZE);
+            if (new_pd == NULL) {
+                panic("ERROR: Could not allocate page for new PD\n");
+            }
+            memcpy(new_pd, pd, PAGE_SIZE);
+            pde.page_ppn = (uint64_t)new_pd >> 12;
+            new_pml4->entries[i] = pde;
+
+            for (uint64_t j = 0; j < 512; j++) {
+                struct page_directory_entry pde = pd->entries[j];
+                if (pde.present) {
+                    struct page_table* pt = (struct page_table*)((uint64_t)pde.page_ppn << 12);
+                    struct page_table* new_pt = (struct page_table*)pmm_alloc(PAGE_SIZE);
+                    if (new_pt == NULL) {
+                        panic("ERROR: Could not allocate page for new PT\n");
+                    }
+                    memcpy(new_pt, pt, PAGE_SIZE);
+                    pde.page_ppn = (uint64_t)new_pt >> 12;
+                    new_pd->entries[j] = pde;
+
+                    for (uint64_t k = 0; k < 512; k++) {
+                        struct page_table_entry pte = pt->entries[k];
+                        if (pte.present) {
+                            struct page_table_entry new_pte = pte;
+                            new_pt->entries[k] = new_pte;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 void mprotect_current(void* address, uint64_t size, uint8_t permissions) {
     struct page_directory* pml4 = get_pml4();
     mprotect(pml4, address, size, permissions);

@@ -4,11 +4,15 @@
 #include <omen/managers/mem/pmm.h>
 #include <omen/hal/arch/x86/vm.h>
 
-
+#define VMM_WRITE_BIT     0x1
+#define VMM_USER_BIT      0x2
+#define VMM_NX_BIT        0x4
+#define VMM_CACHE_DISABLE 0x8
 
 void init_paging();
 struct page_directory* get_pml4();
 void invalidate_current_pml4();
+void duplicate_current_pml4(struct page_directory* new_pml4);
 void set_pml4(struct page_directory* pml4);
 uint8_t get_page_perms(struct page_directory *pml4, void* address);
 void * virtual_to_physical(struct page_directory *, void*);

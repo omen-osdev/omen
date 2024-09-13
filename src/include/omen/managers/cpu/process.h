@@ -6,6 +6,14 @@
 #include <omen/managers/io/signal/signal.h>
 #include <omen/libraries/std/stdint.h>
 
+#define PROCESS_STATUS_READY 0
+#define PROCESS_STATUS_RUNNING 1
+#define PROCESS_STATUS_SLEEPING 2
+#define PROCESS_STATUS_WAITING 3
+#define PROCESS_STATUS_ZOMBIE 4
+#define PROCESS_STATUS_STOPPED 5
+#define PROCESS_STATUS_DEAD 6
+
 struct descriptors {
     uint8_t stdin;
     uint8_t stdout;
@@ -55,12 +63,18 @@ typedef struct process {
 
     int * open_files;
 
+    char fxsave_region[512] __attribute__((aligned(16)));
+
     void * entry_address;
     struct descriptors* descriptors;
     struct process *next, *prev;
 
 } process_t;
 
+void returnoexit();
+void yield(process_t * next);
+process_t * create_user_process(void * init);
+process_t * get_current_process();
 char * get_current_tty();
 void set_current_tty(char * tty);
 #endif
