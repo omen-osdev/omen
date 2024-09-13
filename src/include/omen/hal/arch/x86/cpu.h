@@ -53,6 +53,8 @@ typedef struct cpu {
     struct tss *tss;
 } cpu_t;
 
+cpu_t * arch_get_cpu(uint8_t cpuid);
+cpu_t * arch_get_bsp_cpu();
 void arch_set_alive(uint8_t cpuid, uint8_t alive);
 void arch_init_cpu();
 void arch_init_fpu();

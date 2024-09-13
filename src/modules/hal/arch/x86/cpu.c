@@ -2,6 +2,7 @@
 #include <omen/managers/boot/bootloaders/bootloader.h>
 #include <omen/libraries/std/stdint.h>
 #include <omen/hal/arch/x86/tss.h>
+#include <omen/hal/arch/x86/syscall.h>
 #include <omen/libraries/std/string.h>
 #include <omen/libraries/allocators/heap_allocator.h>
 #include <omen/hal/arch/x86/gdt.h>
@@ -64,9 +65,17 @@ void startup_cpu(uint8_t cpuid) {
     reloadGsFs();
     setGsBase((uint64_t)lcpu->tss);
     load_gdt(cpuid);
-    //syscall enable
+    syscall_enable(GDT_KERNEL_CODE_ENTRY * sizeof(gdt_entry_t), GDT_USER_CODE_ENTRY * sizeof(gdt_entry_t));
     load_interrupts_for_local_cpu();
     lcpu->ready = 1;
+}
+
+cpu_t * arch_get_cpu(uint8_t cpuid) {
+    return &cpu[cpuid];
+}
+
+cpu_t * arch_get_bsp_cpu() {
+    return &cpu[bsp_lapic_id];
 }
 
 void arch_init_cpu() {

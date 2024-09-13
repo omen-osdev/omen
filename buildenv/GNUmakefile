@@ -69,6 +69,7 @@ SRCDIR := $(ABSDIR)/src
 INCDIR := $(SRCDIR)/include
 CONFDIR := $(SRCDIR)/conf
 DRVDIR := $(SRCDIR)/drivers
+APPDIR := $(SRCDIR)/apps
 BUILDHOME := $(ABSDIR)/build
 BUILDDIR := $(ABSDIR)/build/bin
 OBJDIR := $(ABSDIR)/build/lib
@@ -98,6 +99,7 @@ override CFLAGS +=       \
 	-I$(INCDIR)          \
 	-I$(CONFDIR)         \
 	-I$(DRVDIR)          \
+	-I$(APPDIR)          \
     -std=c11             \
     -ffreestanding       \
     -fno-pie             \
