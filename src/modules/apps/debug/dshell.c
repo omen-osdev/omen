@@ -60,6 +60,10 @@ void help(int argc, char* argv[]) {
     }
 }
 
+void print_prompt() {
+    kprintf("dev@omen:~$ ");
+}
+
 void ex_dbgshell(const char * command) {
     char cmd[1024] = {0};
     strncpy(cmd, command, strlen(command));
@@ -78,12 +82,14 @@ void ex_dbgshell(const char * command) {
             break;
         }
     }
+
+    print_prompt();
 }
 
 void dshell_cb(void* data, char c, int ignore) {
     (void)data;
     (void)ignore;
-    kprintf("%x", c);
+    //kprintf("%x", c);
     switch (c) {
         case 0x0:
             break;
@@ -95,7 +101,7 @@ void dshell_cb(void* data, char c, int ignore) {
                 kprintf(" ");
             #endif
             break;
-        case 0x1c:
+        case 0xd:
             #ifdef DSHELL_ECHO
                 kprintf("\n");
             #endif
@@ -129,5 +135,7 @@ void init_dshell() {
         .handler = dshell_cb
     };
     ps2_subscribe((void*)&subscriptor, PS2_DEVICE_KEYBOARD, PS2_DEVICE_GENERIC_EVENT);
-    kprintf("DShell initialized\n");
+    kprintf("Debug shell initialized\n");
+    help(0, 0);
+    print_prompt();
 }

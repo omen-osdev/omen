@@ -61,9 +61,13 @@ char handle_keyboard(uint8_t scancode) {
         case RightShift+0x80:
             keyboard->right_shift_pressed = 0;
             return;
+        case Spacebar:
+            return 0x1b;
+        case Backspace:
+            return 0x8;
         case Enter:
             keyboard->intro_buffered = 1;
-            return;
+            return 0xd;
     }
 
     char ascii = translate(scancode, keyboard->left_shift_pressed || keyboard->right_shift_pressed);
