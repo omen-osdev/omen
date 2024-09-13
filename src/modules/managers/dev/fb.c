@@ -574,6 +574,28 @@ void putchar(char ch) {
 		}
 		return;
 	}
+	if (ch == '\b') {
+		if(posx == 0) {
+			if(posy == 0) {
+				return;
+			}
+			posx = ((width - (width % 8)) / 8) - 1;
+			posy--;
+		} else {
+			posx--;
+		}
+		putchar(' ');
+		if(posx == 0) {
+			if(posy == 0) {
+				return;
+			}
+			posx = ((width - (width % 8)) / 8) - 1;
+			posy--;
+		} else {
+			posx--;
+		}
+		return;
+	}
 
 	uint64_t x0 = posx * 8;
 	uint64_t y0 = posy * 16;
