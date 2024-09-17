@@ -19,9 +19,6 @@
 #define FPU_ENABLE_CODE 0x200
 #define FPU_CONTROL_WORD 0x37F
 
-extern void reloadGsFs();
-extern void setGsBase(uint64_t base);
-
 boot_smp_info_t ** cpus;
 uint64_t cpu_count;
 uint32_t bsp_lapic_id;
@@ -62,8 +59,6 @@ void startup_cpu(uint8_t cpuid) {
     tss_set_ist(lcpu->tss, 0, (uint64_t)ist0);
     tss_set_ist(lcpu->tss, 1, (uint64_t)ist1);
 
-    reloadGsFs();
-    setGsBase((uint64_t)lcpu->tss);
     load_gdt(cpuid);
     syscall_enable(GDT_KERNEL_CODE_ENTRY * sizeof(gdt_entry_t), GDT_USER_CODE_ENTRY * sizeof(gdt_entry_t));
     load_interrupts_for_local_cpu();
