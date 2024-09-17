@@ -15,8 +15,10 @@
 extern void newctxswtch(cpu_context_t * old_task, cpu_context_t * new_task, void* fxsave, void* fxrstor);
 extern void newctxcreat(void* rsp, void* intro);
 extern void newuctxcreat(void* rsp, void* intro);
+extern void reloadGsFs();
+extern void setGsBase(uint64_t base);
 
-static process_t current_process;
+process_t current_process;
 
 void init_user_context(process_t * task, void * init) {
     cpu_context_t * context = task->context;
@@ -25,7 +27,7 @@ void init_user_context(process_t * task, void * init) {
     memset(stack_top, 0, PROCESS_STACK_SIZE);
     void * stack = stack_top + PROCESS_STACK_SIZE;
     //TODO: Initialize the stack
-    newuctxcreat(stack, init);
+    newuctxcreat(&stack, init);
     
     context->cr3  = (uint64_t) task->vm;
     context->info = kmalloc(sizeof(struct cpu_context_info));
@@ -34,21 +36,21 @@ void init_user_context(process_t * task, void * init) {
     context->info->cs = get_user_code_selector();
     context->info->ss = get_user_data_selector();
     context->info->thread = 0;
-    context->rax = 0;
-    context->rbx = 0;
-    context->rcx = 0;
-    context->rdx = 0;
-    context->rsi = 0;
-    context->rdi = 0;
-    context->rbp = 0;
-    context->r8 = 0;
-    context->r9 = 0;
-    context->r10 = 0;
-    context->r11 = 0;
-    context->r12 = 0;
-    context->r13 = 0;
-    context->r14 = 0;
-    context->r15 = 0;
+    context->rax = 1;
+    context->rbx = 2;
+    context->rcx = 3;
+    context->rdx = 4;
+    context->rsi = 5;
+    context->rdi = 6;
+    context->rbp = 7;
+    context->r8 = 8;
+    context->r9 = 9;
+    context->r10 = 10;
+    context->r11 = 11;
+    context->r12 = 12;
+    context->r13 = 13;
+    context->r14 = 14;
+    context->r15 = 15;
     context->interrupt_number = 0;
     context->error_code = 0;
     context->rip = (uint64_t)init;
@@ -120,6 +122,7 @@ void yield(process_t * next) {
     }
 
     syscall_set_user_gs((uint64_t)next->context);
+    syscall_set_kernel_gs((uint64_t)next->cpu->ctx);
     tss_set_stack(next->cpu->tss, next->cpu->ustack, 3);
     newctxswtch(prev->context, next->context, prev->fxsave_region, next->fxsave_region);
 }
@@ -131,7 +134,7 @@ process_t * get_current_process() {
 void init_process() {
     //This is a debug processs
     current_process = (process_t) {
-        .context = NULL,
+        .context = kmalloc(sizeof(cpu_context_t)),
         .cpu = NULL,
         .vm = NULL,
         .status = 0,
@@ -140,6 +143,7 @@ void init_process() {
         //TODO: Implement signal queue
         //.signal_queue = NULL,
         //.signal_handlers = {0},
+        .fxsave_region = {0},
         .nice = 0,
         .current_nice = 0,
         //.frame = NULL,
@@ -165,6 +169,16 @@ void init_process() {
         .next = NULL,
         .prev = NULL
     };
+
+    cpu_t * lcpu = arch_get_bsp_cpu();
+    lcpu->ctx = kmalloc(sizeof(cpu_context_t));
+    memset(lcpu->ctx, 0x69, sizeof(cpu_context_t));
+    memset(lcpu->ctx, 0, sizeof(cpu_context_t));
+    lcpu->ctx->info = kmalloc(sizeof(struct cpu_context_info));
+    memset(lcpu->ctx->info, 0, sizeof(struct cpu_context_info));
+    current_process.cpu = lcpu;
+    reloadGsFs();
+    setGsBase((uint64_t)lcpu->ctx);
 }
 
 char * get_current_tty() {

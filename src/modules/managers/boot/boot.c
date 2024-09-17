@@ -43,6 +43,7 @@ void boot_startup() {
     if (madt != 0) {
         register_apic(madt, 0x0);
     }
+    init_process();
     kprintf("Secondary startup complete...\n");
     init_serial_dd();
     init_ps2_dd(fb_get_width(), fb_get_height());

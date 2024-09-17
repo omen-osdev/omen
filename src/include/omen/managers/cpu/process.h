@@ -71,6 +71,7 @@ typedef struct process {
 
 } process_t;
 
+void init_process();
 void returnoexit();
 void yield(process_t * next);
 process_t * create_user_process(void * init);
