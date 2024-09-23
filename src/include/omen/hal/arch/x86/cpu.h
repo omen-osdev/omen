@@ -45,10 +45,10 @@ typedef struct cpu_context {
 
 typedef struct cpu {
     uint64_t cid;
-    struct cpu_context* ctx;
+    struct cpu_context* kctx;
     void* kstack;
+    struct cpu_context* uctx;
     void* ustack;
-    //thread
     uint8_t ready;
     struct tss *tss;
 } cpu_t;

@@ -76,6 +76,7 @@ void returnoexit();
 void yield(process_t * next);
 process_t * create_user_process(void * init);
 process_t * get_current_process();
+void add_process(process_t * task);
 char * get_current_tty();
 void set_current_tty(char * tty);
 #endif

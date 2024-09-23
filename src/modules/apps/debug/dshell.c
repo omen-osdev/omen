@@ -33,6 +33,7 @@ void spawn(int argc, char* argv[]) {
     process_t * new = create_user_process(dummy_main);
     mprotect(new->vm, dummy_main, 0x1000, VMM_USER_BIT);
     kprintf("New process created with pid %d\n", new->pid);
+    add_process(new);
     yield(new);
 }
 

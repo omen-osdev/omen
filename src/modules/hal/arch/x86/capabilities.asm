@@ -52,6 +52,14 @@ getKernelGsBase:
     rdmsr
     ret
 
+setKernelGsBase:
+    mov eax, edi
+    shr rdi, 32
+    mov edx, edi
+    mov ecx, gs_kernel_base
+    wrmsr
+    ret
+
 ;Get the rflags register
 getRflags:
     pushfq
@@ -92,6 +100,10 @@ setRflags:
     popfq
     ret
 
+_swapgs:
+    swapgs
+    ret
+
 GLOBAL getCr0
 GLOBAL getCr2
 GLOBAL getCr3
@@ -105,4 +117,6 @@ GLOBAL getRflags
 GLOBAL getApicId
 GLOBAL reloadGsFs
 GLOBAL setGsBase
+GLOBAL setKernelGsBase
 GLOBAL setRflags
+GLOBAL _swapgs

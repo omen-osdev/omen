@@ -17,6 +17,8 @@
 #define MAX_CPUS 256
 #define MAX_NUMA_NODES 16
 
+#define MAX_PROCESSES 256
+
 //Per type of device/driver
 #define MAX_DEVICES 256
 #define MAX_DEVICE_DRIVERS 256
