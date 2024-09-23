@@ -15,10 +15,15 @@
 extern void newctxswtch(cpu_context_t * old_task, cpu_context_t * new_task, void* fxsave, void* fxrstor);
 extern void newctxcreat(void* rsp, void* intro);
 extern void newuctxcreat(void* rsp, void* intro);
+
 extern void reloadGsFs();
 extern void setGsBase(uint64_t base);
+extern void getGsBase(uint64_t * base);
+extern void setKernelGsBase(uint64_t base);
 
-process_t current_process;
+//TODO: Jonbardo modify this to use ur linked list :D
+process_t process_list[MAX_PROCESSES] = {0};
+uint32_t process_count = 0;
 
 void init_user_context(process_t * task, void * init) {
     cpu_context_t * context = task->context;
@@ -86,7 +91,7 @@ process_t * create_user_process(void * init) {
     task->entry_address = init;
     task->tty = 0;
     task->descriptors = 0;
-    task->parent = &current_process;
+    task->parent = get_current_process();
     
     if (task->parent) {
         task->uid = task->parent->uid;
@@ -108,6 +113,11 @@ process_t * create_user_process(void * init) {
     return task;
 }
 
+void add_process(process_t * task) {
+    process_list[process_count] = *task;
+    process_count++;
+}
+
 void returnoexit() {
     panic("Returned from a process!\n");
 }
@@ -115,77 +125,34 @@ void returnoexit() {
 //TODO: Implement a real yield
 void yield(process_t * next) {
     __asm__("cli");
-    process_t * prev = &current_process;
-
-    if (next == &current_process) {
-        panic("Trying to yield to the same process!\n");
-    }
-
-    syscall_set_user_gs((uint64_t)next->context);
-    syscall_set_kernel_gs((uint64_t)next->cpu->ctx);
+    process_t * prev = get_current_process();
+    setGsBase((uint64_t)next->context);
     tss_set_stack(next->cpu->tss, next->cpu->ustack, 3);
     newctxswtch(prev->context, next->context, prev->fxsave_region, next->fxsave_region);
 }
 
+//TODO: This is awful
 process_t * get_current_process() {
-    return &current_process;
-}
+    
+    //getGsBase
+    uint64_t current_context;
+    getGsBase(&current_context);
 
-void init_process() {
-    //This is a debug processs
-    current_process = (process_t) {
-        .context = kmalloc(sizeof(cpu_context_t)),
-        .cpu = NULL,
-        .vm = NULL,
-        .status = 0,
-        .privilege = 0,
-        .signal_pending = 0,
-        //TODO: Implement signal queue
-        //.signal_queue = NULL,
-        //.signal_handlers = {0},
-        .fxsave_region = {0},
-        .nice = 0,
-        .current_nice = 0,
-        //.frame = NULL,
-        .heap = NULL,
-        .sleep_time = 0,
-        .cpu_time = 0,
-        .last_scheduled = 0,
-        .exit_code = 0,
-        .exit_signal = 0,
-        .pdeath_signal = 0,
-        .pid = 0,
-        .ppid = 0,
-        .parent = NULL,
-        .uid = 0,
-        .gid = 0,
-        .regular_tty = "",
-        .io_tty = "",
-        .tty = NULL,
-        .locks = 0,
-        .open_files = NULL,
-        .entry_address = NULL,
-        .descriptors = NULL,
-        .next = NULL,
-        .prev = NULL
-    };
+    for (uint32_t i = 0; i < process_count; i++) {
+        process_t * task = &process_list[i];
+        if (task && task->context == (cpu_context_t *)current_context) {
+            return task;
+        }
+    }
 
-    cpu_t * lcpu = arch_get_bsp_cpu();
-    lcpu->ctx = kmalloc(sizeof(cpu_context_t));
-    memset(lcpu->ctx, 0x69, sizeof(cpu_context_t));
-    memset(lcpu->ctx, 0, sizeof(cpu_context_t));
-    lcpu->ctx->info = kmalloc(sizeof(struct cpu_context_info));
-    memset(lcpu->ctx->info, 0, sizeof(struct cpu_context_info));
-    current_process.cpu = lcpu;
-    reloadGsFs();
-    setGsBase((uint64_t)lcpu->ctx);
+    panic("Could not find current process!\n");
 }
 
 char * get_current_tty() {
-    return current_process.tty;
+    return get_current_process()->tty;
 }
 
 void set_current_tty(char * tty) {
-    current_process.tty = tty;
+    get_current_process()->tty = tty;
 }
 

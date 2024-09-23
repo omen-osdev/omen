@@ -42,13 +42,3 @@ void global_syscall_handler(cpu_context_t* ctx) {
         SYSRET(ctx, SYSCALL_ERROR);
     }
 }
-
-void syscall_set_user_gs(uintptr_t addr)
-{
-    cpu_set_msr_u64(MSR_GS_BASE, addr);
-}
-
-void syscall_set_kernel_gs(uintptr_t addr)
-{
-    cpu_set_msr_u64(MSR_KERN_GS_BASE, addr);
-}
