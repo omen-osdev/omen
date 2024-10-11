@@ -11,7 +11,7 @@ struct cpu_context_info {
     uint64_t thread;
 }__attribute__((packed));
 
-typedef struct cpu_context {
+typedef struct context {
     uint64_t cr3;
 
     struct cpu_context_info* info;
@@ -41,21 +41,18 @@ typedef struct cpu_context {
     uint64_t rflags; 
     uint64_t rsp; 
     uint64_t ss;
-} __attribute__((packed)) cpu_context_t;
+} __attribute__((packed)) context_t;
 
 typedef struct cpu {
     uint64_t cid;
-    struct cpu_context* kctx;
-    void* kstack;
-    struct cpu_context* uctx;
+    struct cpu_context_info *cinfo;
     void* ustack;
-    uint8_t ready;
     struct tss *tss;
-} cpu_t;
+} cpu_context_t;
 
-cpu_t * arch_get_cpu(uint8_t cpuid);
-cpu_t * arch_get_bsp_cpu();
-void arch_set_alive(uint8_t cpuid, uint8_t alive);
+cpu_context_t * arch_get_cpu(uint8_t cpuid);
+cpu_context_t * arch_get_bsp_cpu();
+
 void arch_init_cpu();
 void arch_init_fpu();
 void arch_init_simd();

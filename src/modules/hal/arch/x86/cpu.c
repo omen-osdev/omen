@@ -27,31 +27,13 @@ extern void _swapgs();
 boot_smp_info_t ** cpus;
 uint64_t cpu_count;
 uint32_t bsp_lapic_id;
-cpu_t cpu[MAX_CPUS];
+cpu_context_t cpu[MAX_CPUS];
 
 void callback(boot_smp_info_t *lcpu) {
     (void)lcpu;
+    kprintf("CPU %d is halting\n", lcpu->processor_id);
     while (1) {
-        kprintf("CPU %d is halting\n", lcpu->processor_id);
-        while (!cpu[lcpu->processor_id].ready) {
-        }
-    }
-}
-
-void arch_set_alive(uint8_t cpuid, uint8_t alive) {
-    cpu[cpuid].ready = alive;
-}
-
-void startup_ctx(cpu_context_t ** ctx, void ** stack) {
-    *ctx = kmalloc(sizeof(cpu_context_t));
-    memset(*ctx, 0, sizeof(cpu_context_t));
-    (*ctx)->info = kmalloc(sizeof(struct cpu_context_info));
-    memset((*ctx)->info, 0, sizeof(struct cpu_context_info));
-
-    if (stack) {
-        *stack = kstackalloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
-        memset(*stack - KERNEL_STACK_SIZE, 0, KERNEL_STACK_SIZE);
-        (*ctx)->info->stack = (uint64_t)*stack;
+       __asm__("hlt");
     }
 }
 
@@ -68,45 +50,50 @@ void startup_tss(struct tss ** tss, uint8_t cpuid, void * kstack) {
 }
 
 void startup_cpu(uint8_t cpuid) {
-    cpu_t * lcpu = &cpu[cpuid];
-    if (lcpu->ready) {
-        return;
-    }
-    kprintf("Starting CPU %d\n", cpuid);
+    cpu_context_t * ctx = &cpu[cpuid];
+    kprintf("Starting CPU %d\n", ctx->cid);
+    ctx->ustack = 0;
+    ctx->cinfo = kmalloc(sizeof(struct cpu_context_info));
+    memset(ctx->cinfo, 0, sizeof(struct cpu_context_info));
+    ctx->cinfo->cs = GDT_KERNEL_CODE_ENTRY * sizeof(gdt_entry_t);
+    ctx->cinfo->ss = GDT_KERNEL_DATA_ENTRY * sizeof(gdt_entry_t);
+    ctx->cinfo->stack = (uint64_t)kstackalloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
+    memset(ctx->cinfo->stack - KERNEL_STACK_SIZE, 0, KERNEL_STACK_SIZE);
+    ctx->cinfo->thread = 0;
 
-    startup_ctx(&lcpu->kctx, &lcpu->kstack);
-    startup_ctx(&lcpu->uctx, &lcpu->ustack);
-    startup_tss(&lcpu->tss, cpuid, lcpu->kstack);
+    startup_tss(&(ctx->tss), cpuid, ctx->cinfo->stack);
 
     load_gdt(cpuid);
     reloadGsFs();
-    setGsBase((uint64_t)lcpu->uctx);
-    setKernelGsBase((uint64_t)lcpu->kctx);
+    setGsBase((uint64_t)ctx);
+    setKernelGsBase((uint64_t)ctx);
 
     syscall_enable(GDT_KERNEL_CODE_ENTRY * sizeof(gdt_entry_t), GDT_USER_CODE_ENTRY * sizeof(gdt_entry_t));
     load_interrupts_for_local_cpu();
-    lcpu->ready = 1;
 }
 
-cpu_t * arch_get_cpu(uint8_t cpuid) {
+cpu_context_t * arch_get_cpu(uint8_t cpuid) {
     return &cpu[cpuid];
 }
 
-cpu_t * arch_get_bsp_cpu() {
+cpu_context_t * arch_get_bsp_cpu() {
     return &cpu[bsp_lapic_id];
 }
 
 void arch_init_cpu() {
     bsp_lapic_id = get_smp_bsp_lapic_id();
     cpu_count = get_smp_cpu_count();
+    
     if (cpu_count > MAX_CPUS) {
         cpu_count = MAX_CPUS;
     }
+
     cpus = get_smp_cpus();
 
     for (uint64_t i = 0; i < cpu_count; i++) {
         cpu[i].cid = cpus[i]->lapic_id;
-        cpus[i]->goto_address = callback;
+        if (cpu[i].cid != bsp_lapic_id)
+            cpus[i]->goto_address = callback;
     }
 
     startup_cpu(bsp_lapic_id);

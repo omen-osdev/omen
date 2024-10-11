@@ -18,6 +18,10 @@
 #include <omen/managers/dev/fb.h>
 #include <ps2/ps2.h>
 #include <omen/apps/debug/dshell.h>
+#include <omen/apps/panic/panic.h>
+//TODO: Delete this, we need an elf loader
+#include <dummy/dummy.h>
+
 
 void boot_startup() {
     init_bootloader();
@@ -43,7 +47,6 @@ void boot_startup() {
     if (madt != 0) {
         register_apic(madt, 0x0);
     }
-    init_process();
     kprintf("Secondary startup complete...\n");
     init_serial_dd();
     init_ps2_dd(fb_get_width(), fb_get_height());
@@ -54,5 +57,6 @@ void boot_startup() {
     kprintf("Enabling interrupts...\n");
     mask_interrupt(PIT_IRQ);
     __asm__ volatile("sti");
-    init_dshell();
+    init_process(dummy_main, 0x1000);
+    panic("¡Returned from the scheduler!\n");
 }
