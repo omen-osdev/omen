@@ -2,6 +2,7 @@
 #include <omen/libraries/std/stdint.h>
 #include <omen/managers/dev/devices.h>
 #include <omen/hal/arch/x86/io.h>
+#include <omen/hal/arch/x86/cpu.h>
 #include <omen/hal/arch/x86/int.h>
 #include <omen/libraries/allocators/heap_allocator.h>
 
@@ -20,7 +21,7 @@ struct ps2_subscriber *mouse_all_subscribers = 0;
 struct ps2_subscriber *keyboard_event_subscribers = 0;
 struct ps2_subscriber *mouse_event_subscribers = 0;
 
-void KeyboardInt_Handler(struct cpu_context* ctx, uint8_t cpuid) {
+void KeyboardInt_Handler(cpu_context_t* ctx, uint8_t cpuid) {
     (void)ctx;
     (void)cpuid;
     uint8_t scancode = inb(0x60);
@@ -38,7 +39,7 @@ void KeyboardInt_Handler(struct cpu_context* ctx, uint8_t cpuid) {
     }
 }
 
-void MouseInt_Handler(struct cpu_context* ctx, uint8_t cpuid) {
+void MouseInt_Handler(cpu_context_t* ctx, uint8_t cpuid) {
     (void)ctx;
     (void)cpuid;
     struct ps2_mouse_status mouse;

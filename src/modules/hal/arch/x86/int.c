@@ -39,9 +39,9 @@ uint64_t get_offset(struct idtdescentry* entry) {
     return offset;
 }
 
-void (*dynamic_interrupt_handlers[256])(cpu_context_t* ctx, uint8_t cpuid) = {0};
+void (*dynamic_interrupt_handlers[256])(context_t* ctx, uint8_t cpuid) = {0};
 
-void PageFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {
+void PageFault_Handler(context_t* ctx, uint8_t cpuid) {
     (void)ctx;
     (void)cpuid;
     uint64_t faulting_address;
@@ -52,38 +52,38 @@ void PageFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {
     panic("Page fault\n");
 }
 
-void DoubleFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {
+void DoubleFault_Handler(context_t* ctx, uint8_t cpuid) {
     (void)ctx;
     (void)cpuid;
     panic("Double fault\n");
 }
 
-void GPFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {
+void GPFault_Handler(context_t* ctx, uint8_t cpuid) {
     (void)ctx;
     (void)cpuid;
     panic("General protection fault\n");
 }
 
-void PCI_Handler(cpu_context_t* ctx, uint8_t cpuid) {
+void PCI_Handler(context_t* ctx, uint8_t cpuid) {
     (void)ctx;
     (void)cpuid;
     panic("PCI_Handler Not implemented\n");
 }
 
-void Syscall_Handler(cpu_context_t* ctx, uint8_t cpuid) {
+void Syscall_Handler(context_t* ctx, uint8_t cpuid) {
     (void)ctx;
     (void)cpuid;
     panic("Syscall_Handler Not implemented\n");
 }
 
 //you may need save_all here
-void PitInt_Handler(cpu_context_t* ctx, uint8_t cpuid) {
+void PitInt_Handler(context_t* ctx, uint8_t cpuid) {
     (void)ctx;
     (void)cpuid;
     panic("PitInt_Handler Not implemented\n");
 }
 
-void Serial1Int_Handler(cpu_context_t* ctx, uint8_t cpuid) {
+void Serial1Int_Handler(context_t* ctx, uint8_t cpuid) {
     (void)ctx;
     (void)cpuid;
     char c = inb(0x3f8);
@@ -92,7 +92,7 @@ void Serial1Int_Handler(cpu_context_t* ctx, uint8_t cpuid) {
     kprintf("\n");
 }
 
-void Serial2Int_Handler(cpu_context_t* ctx, uint8_t cpuid) {
+void Serial2Int_Handler(context_t* ctx, uint8_t cpuid) {
     (void)ctx;
     (void)cpuid;
     char c = inb(0x3f8);
@@ -101,7 +101,7 @@ void Serial2Int_Handler(cpu_context_t* ctx, uint8_t cpuid) {
     kprintf("\n");
 }
 
-static void interrupt_exception_handler(cpu_context_t* ctx, uint8_t cpu_id) {
+static void interrupt_exception_handler(context_t* ctx, uint8_t cpu_id) {
     printf("GENERIC EXCEPTION %d ON CPU %d\n", ctx->interrupt_number, cpu_id);
     panic("Exception\n");
 }
@@ -187,9 +187,9 @@ const char * get_io_tty() {
     return io_tty;
 }
 
-void global_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
+void global_interrupt_handler(context_t* ctx, uint8_t cpu_id) {
     if (!IS_EXCEPTION(ctx)) notify_eoi_required(ctx->interrupt_number);
-    void (*handler)(cpu_context_t* ctx, uint8_t cpu_id) = (void*)dynamic_interrupt_handlers[ctx->interrupt_number];
+    void (*handler)(context_t* ctx, uint8_t cpu_id) = (void*)dynamic_interrupt_handlers[ctx->interrupt_number];
     
     if (ctx->interrupt_number == DYNAMIC_HANDLER) {
         if (dynamic_interrupt != 0 && dynamic_interrupt != DYNAMIC_HANDLER) {   

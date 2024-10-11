@@ -23,8 +23,8 @@ struct descriptors {
 typedef int process_status_t;
 
 typedef struct process {
-    cpu_context_t *context;
-    cpu_t *cpu;
+    context_t *context;
+    cpu_context_t *cpu;
     struct page_directory* vm;
     process_status_t status;
 
@@ -71,12 +71,15 @@ typedef struct process {
 
 } process_t;
 
-void init_process();
+void init_process(uint64_t addr, uint64_t size);
 void returnoexit();
-void yield(process_t * next);
+void fork();
+void yield();
+void execve(const char * path, const char * argv, const char * envp);
+void exit(int error_code);
+void yield_to(process_t * next);
 process_t * create_user_process(void * init);
 process_t * get_current_process();
-void add_process(process_t * task);
 char * get_current_tty();
 void set_current_tty(char * tty);
 #endif
