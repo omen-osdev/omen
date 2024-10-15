@@ -5,6 +5,7 @@
 #include <omen/hal/hal.h>
 #include <omen/managers/io/signal/signal.h>
 #include <omen/libraries/std/stdint.h>
+#include <omen/managers/mem/vmm.h>
 
 #define PROCESS_STATUS_READY 0
 #define PROCESS_STATUS_RUNNING 1
@@ -73,7 +74,7 @@ typedef struct process {
 
 void init_process(uint64_t addr, uint64_t size);
 void returnoexit();
-void fork();
+int16_t fork();
 void yield();
 void execve(const char * path, const char * argv, const char * envp);
 void exit(int error_code);

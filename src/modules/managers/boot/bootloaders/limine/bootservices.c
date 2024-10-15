@@ -43,6 +43,10 @@ uint64_t _get_kernel_address_virtual() {
     return CALL_SERVICE(KERNEL)->virtual_base;
 }
 
+uint64_t _get_hhdm_address() {
+    return CALL_SERVICE(HHDM)->offset;
+}
+
 uint64_t _get_rsdp_address() {
     return (uint64_t)CALL_SERVICE(RSDP)->address;
 }
@@ -87,6 +91,7 @@ struct bootloader_operations limine_boot_ops = {
     .get_framebuffers = (void * (*)(void))_get_framebuffers,
     .get_kernel_address_physical = _get_kernel_address_physical,
     .get_kernel_address_virtual = _get_kernel_address_virtual,
+    .get_hhdm_address = _get_hhdm_address,
     .get_memory_map_base = _get_memory_map_base,
     .get_memory_map_entries = _get_memory_map_entries,
     .get_memory_map_length = _get_memory_map_length,

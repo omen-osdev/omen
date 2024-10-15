@@ -20,6 +20,6 @@ int sys_open(const char * path, int flags);
 int sys_close(int fd);
 int sys_ioctl(int fd, unsigned long request, void * arg);
 void sys_sched_yield();
-void sys_fork();
+short sys_fork();
 void sys_exit(int error_code);
 void sys_execve(const char * path, const char * argv, const char * envp);

@@ -5,6 +5,7 @@
 #define TERMINAL    terminal_request
 #define MEMMAP      memmap_request
 #define KERNEL      kernel_address_request
+#define HHDM        hhdm_request
 #define RSDP        rsdp_request
 #define SMBIOS      smbios_request
 #define TIME        time_request
@@ -48,5 +49,9 @@ static volatile struct limine_stack_size_request stack_size_request = {
 static volatile struct limine_framebuffer_request framebuffer_request = {
     .id = LIMINE_FRAMEBUFFER_REQUEST,
     .revision = 1
+};
+static volatile struct limine_hhdm_request hhdm_request = {
+    .id = LIMINE_HHDM_REQUEST,
+    .revision = 0
 };
 #endif // _LIMINE_REQUESTS_H

@@ -35,7 +35,7 @@ struct page_table_entry{
     uint64_t dirty              : 1;
     uint64_t size               : 1;
     uint64_t global             : 1;
-    uint64_t ignored_2          : 3;
+    uint64_t os                 : 3;
     uint64_t page_ppn           : 28;
     uint64_t reserved_1         : 12; // must be 0
     uint64_t ignored_1          : 11;

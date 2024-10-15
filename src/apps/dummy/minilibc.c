@@ -27,8 +27,8 @@ int sys_ioctl(int fd, unsigned long request, void * arg) {
 void sys_sched_yield() {
     syscall(24, 0, 0, 0, 0, 0, 0);
 }
-void sys_fork() {
-    syscall(57, 0, 0, 0, 0, 0, 0);
+short sys_fork() {
+    return syscall(57, 0, 0, 0, 0, 0, 0);
 }
 void sys_execve(const char * path, const char * argv, const char * envp) {
     syscall(59, (uint64_t)path, (uint64_t)argv, (uint64_t)envp, 0, 0, 0);

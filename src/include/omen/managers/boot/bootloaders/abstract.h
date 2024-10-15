@@ -16,6 +16,7 @@ struct bootloader_operations {
     uint64_t (*get_memory_map_type)(uint64_t);
     uint64_t (*get_kernel_address_physical)();
     uint64_t (*get_kernel_address_virtual)();
+    uint64_t (*get_hhdm_address)();
     uint64_t (*get_rsdp_address)();
     uint64_t (*get_smbios32_address)();
     uint64_t (*get_smbios64_address)();
