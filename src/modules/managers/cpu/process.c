@@ -14,9 +14,9 @@
 #include <dummy/dummy.h>
 
 extern void newctxswtch(context_t * old_task, context_t * new_task, void* fxsave, void* fxrstor);
+extern void newctxsave(context_t * ctx, void* fxsave, void * cr3);
 extern void newctxcreat(void* rsp, void* intro);
 extern void newuctxcreat(void* rsp, void* intro);
-
 extern void reloadGsFs();
 extern void setGsBase(uint64_t base);
 extern void getGsBase(uint64_t * base);
@@ -128,15 +128,31 @@ process_t * create_user_process(void * init) {
         task->gid = 0;
         task->ppid = 0;
     }
-
     task->vm = kmalloc(sizeof(struct page_directory));
     memset(task->vm, 0, sizeof(struct page_directory));
     duplicate_current_pml4(task->vm);
-    task->context = kmalloc(sizeof(cpu_context_t)); 
-    memset(task->context, 0, sizeof(cpu_context_t));
+    task->context = kmalloc(sizeof(context_t)); 
+    memset(task->context, 0, sizeof(context_t));
     init_user_context(task, init);
     kprintf("Process %d created\n", task->pid);
     return task;    
+}
+
+process_t * duplicate_process(process_t * parent) {
+    process_t * task = &(process_list[process_count++]);
+    memcpy(task, parent, sizeof(process_t));
+    task->pid = get_next_pid();
+    task->ppid = parent->pid;
+    task->vm = kmalloc(sizeof(struct page_directory));
+    memset(task->vm, 0, sizeof(struct page_directory));
+    duplicate_pml4(parent->vm, task->vm, 1);
+    task->context = kmalloc(sizeof(context_t));
+    memcpy(task->context, parent->context, sizeof(context_t));
+    task->context->info = kmalloc(sizeof(struct cpu_context_info));
+    memcpy(task->context->info, parent->context->info, sizeof(struct cpu_context_info));
+    memcpy(task->fxsave_region, parent->fxsave_region, 512);
+    task->context->cr3 = (uint64_t) task->vm;
+    return task;
 }
 
 void _idle() {
@@ -186,9 +202,15 @@ process_t * sched() {
     return current_process;
 }
 
-void fork() {
-    process_t * child = create_user_process(current_process->entry_address);
-    yield_to(child);
+int16_t fork() {   
+    process_t * child = duplicate_process(current_process);
+    child->status = PROCESS_STATUS_READY;
+    newctxsave(child->context, child->fxsave_region, child->vm);
+    if (current_process == child) {
+        return 0;
+    } else {
+        return child->pid;
+    }
 }
 
 void exit(int error_code) {

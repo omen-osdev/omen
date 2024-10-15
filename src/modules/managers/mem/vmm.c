@@ -5,6 +5,7 @@
 #include <omen/apps/panic/panic.h>
 #include <omen/managers/boot/bootloaders/bootloader.h>
 #include <omen/libraries/std/string.h>
+#include <omen/libraries/allocators/heap_allocator.h>
 #include <generic/config.h>
 
 #define CACHE_BIT_SET(x)((x & PAGE_CACHE_DISABLE) >> 3)
@@ -75,6 +76,35 @@ void invalidate_current_pml4() {
     set_pml4(pml4);
 }
 
+void debug_maps(struct page_directory* pml4) {
+    //Print the bits of ptes
+    for (uint64_t i = 0; i < 512; i++) {
+        struct page_directory_entry pde = pml4->entries[i];
+        if (pde.present) {
+            struct page_directory* pdp = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+            for (uint64_t j = 0; j < 512; j++) {
+                struct page_directory_entry pde = pdp->entries[j];
+                if (pde.present) {
+                    struct page_directory* pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+                    for (uint64_t k = 0; k < 512; k++) {
+                        struct page_directory_entry pde = pd->entries[k];
+                        if (pde.present) {
+                            struct page_table* pt = (struct page_table*)((uint64_t)pde.page_ppn << 12);
+                            for (uint64_t l = 0; l < 512; l++) {
+                                struct page_table_entry pte = pt->entries[l];
+                                if (pte.present && pte.user_access) {
+                                    //Print address and perms
+                                    kprintf("%llx\n", (i << 39) | (j << 30) | (k << 21) | (l << 12));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 void init_paging() {
     struct page_directory * pml4 = (struct page_directory*)pmm_alloc(PAGE_SIZE);
     if (pml4 == NULL) {
@@ -82,7 +112,6 @@ void init_paging() {
     }
     struct page_directory * original;
     __asm__("movq %%cr3, %0" : "=r"(original));
-
 
     memset(pml4, 0, PAGE_SIZE);
 
@@ -142,6 +171,9 @@ void init_paging() {
         kprintf("Crashing: KERNEL_START: %llx VIRT_ADDR: %p\n", linker_kstart, virtual_start);
         panic("init_paging: kernel virtual address does not match KERNEL_START");
     }
+
+    debug_maps(pml4);
+
 }
 
 struct page_directory* get_entry(struct page_directory* pd, uint64_t index) {
@@ -269,6 +301,44 @@ uint8_t get_page_perms(struct page_directory *pml4, void* address) {
     return result;
 }
 
+uint8_t get_os_bits(struct page_directory *pml4, void* address) {
+    struct page_map_index map;
+    address_to_map((uint64_t)address, &map);
+
+    struct page_directory_entry pde;
+    struct page_directory *pd;
+
+    pde = pml4->entries[map.PDP_i];
+    pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+    pde = pd->entries[map.PD_i];
+    pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+    pde = pd->entries[map.PT_i];
+    
+    struct page_table *pt = (struct page_table*)((uint64_t)pde.page_ppn << 12);
+    struct page_table_entry pte = pt->entries[map.P_i];
+
+    return pte.os;
+}
+
+void set_os_bits(struct page_directory *pml4, void* address, uint8_t bits) {
+    struct page_map_index map;
+    address_to_map((uint64_t)address, &map);
+
+    struct page_directory_entry pde;
+    struct page_directory *pd;
+
+    pde = pml4->entries[map.PDP_i];
+    pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+    pde = pd->entries[map.PD_i];
+    pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
+    pde = pd->entries[map.PT_i];
+    
+    struct page_table *pt = (struct page_table*)((uint64_t)pde.page_ppn << 12);
+    struct page_table_entry *pte = &pt->entries[map.P_i];
+
+    pte->os = bits;
+}
+
 void mprotect(struct page_directory *pml4, void* address, uint64_t size, uint8_t permissions) {
     uint64_t start = (uint64_t)address;
     uint64_t end = start + size;
@@ -280,8 +350,34 @@ void mprotect(struct page_directory *pml4, void* address, uint64_t size, uint8_t
     }
 }
 
-void duplicate_current_pml4(struct page_directory* new_pml4) {
-    struct page_directory* pml4 = get_pml4();
+uint8_t remap_allocate_cow(struct page_directory * pml4, void * address_raw) {
+
+    void * address = (void*)((uint64_t)address_raw & 0xFFFFFFFFFFFFF000);
+    uint8_t current_perms = get_page_perms(pml4, address);
+    uint8_t os_bits = get_os_bits(pml4, address);
+
+    if (current_perms & 1 || !(os_bits & 1)) {
+        return 0;
+    }
+
+    void * new_page = pmm_alloc(PAGE_SIZE);
+    if (new_page == NULL) {
+        panic("ERROR: Could not allocate page for remap\n");
+    }
+
+    //Map the new page to cow_working_page
+    map_memory(pml4, COW_WORKING_PAGE, new_page, PAGE_WRITE_BIT);
+    //Copy the data from the old page to the new page
+    memcpy(COW_WORKING_PAGE, address, PAGE_SIZE);
+    //Map the new page to the address
+    map_memory(pml4, address, new_page, current_perms | PAGE_WRITE_BIT);
+    //Remove the old page from the cow list
+    set_os_bits(pml4, address, 0);
+
+    return 1;
+}
+
+void duplicate_pml4(struct page_directory * pml4, struct page_directory* new_pml4, uint8_t use_cow) {
     for (uint64_t i = 0; i < 512; i++) {
         struct page_directory_entry pde = pml4->entries[i];
         if (pde.present) {
@@ -311,12 +407,24 @@ void duplicate_current_pml4(struct page_directory* new_pml4) {
                         if (pte.present) {
                             struct page_table_entry new_pte = pte;
                             new_pt->entries[k] = new_pte;
+                            //Prepare for COW
+                            if (use_cow && pte.writeable && pte.user_access) {
+                                new_pte.writeable = 0;
+                                pte.writeable = 0;
+                            }
                         }
                     }
                 }
             }
         }
     }
+    kprintf("Duplicated PML4:\n");
+    debug_maps(new_pml4);
+}
+
+void duplicate_current_pml4(struct page_directory* new_pml4) {
+    struct page_directory* pml4 = get_pml4();
+    duplicate_pml4(pml4, new_pml4, 0);
 }
 
 void mprotect_current(void* address, uint64_t size, uint8_t permissions) {

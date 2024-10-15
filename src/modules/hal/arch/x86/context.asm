@@ -1,5 +1,6 @@
 [bits 64]
 global newctxswtch
+global newctxsave
 global newctxcreat
 global newuctxcreat
 extern returnoexit
@@ -13,6 +14,44 @@ extern returnoexit
 
 %define save(offset, register) mov [rdi + (8 * offset)], register
 %define load(offset, register) mov register, [rsi + (8 * offset)]
+
+; RSI context
+; RDI fxsave_area
+; RDX cr3
+newctxsave:
+    save(0,rdx)
+    save(2,rax)
+    save(3,rbx)
+    save(4,rcx)
+    save(5,rdx)
+    save(6,rsi)
+    save(7,rdi)
+    save(8,rbp)
+    save(9,r8)
+    save(10,r9)
+    save(11,r10)
+    save(12,r11)
+    save(13,r12)
+    save(14,r13)
+    save(15,r14)
+    save(16,r15)
+    xor rax, rax
+    save(17,rax)
+    save(18,rax)
+    pop rax
+    save(19,rax) ; Return address
+    push rax
+    mov rax, cs
+    save(20,rax) ;cs
+    pushfq
+    pop rax
+    save(21,rax) ; rflags
+    mov rax, rsp
+    save(22,rax) ; rsp
+    mov rax, ss
+    save(23,rax) ; ss
+    fxsave [rsi]
+    ret
 
 ; RDI old's context
 ; RSI new's context
@@ -75,14 +114,15 @@ newctxswtch:
     load(14, r13)
     load(15, r14)
     load(16, r15)
-    load(19, rax) ; rip
-    push rax 
     load(20, rax) ; cs
     load(21, rax) ; rflags
     push rax
     popfq
     load(22, rsp) ; rsp
     load(23, rax) ; ss
+    pop rax
+    load(19, rax) ; rip
+    push rax 
     load(2, rax)
     load(7, rdi)
     load(6, rsi)

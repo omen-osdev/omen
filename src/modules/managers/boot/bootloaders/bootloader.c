@@ -50,6 +50,10 @@ uint64_t get_kernel_address_virtual() {
     return bootloader_operations->get_kernel_address_virtual();
 }
 
+uint64_t get_hhdm_address() {
+    return bootloader_operations->get_hhdm_address();
+}
+
 uint64_t get_rsdp_address() {
     return bootloader_operations->get_rsdp_address();
 }

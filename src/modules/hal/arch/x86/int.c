@@ -46,9 +46,18 @@ void PageFault_Handler(context_t* ctx, uint8_t cpuid) {
     (void)cpuid;
     uint64_t faulting_address;
     __asm__ volatile("mov %%cr2, %0" : "=r" (faulting_address));
-    kprintf("Page Fault Address: ");
-    kprintf("%lx", (uint64_t)faulting_address);
-    kprintf("\n");
+    kprintf("Page Fault Address: %lx\n", (uint64_t)faulting_address);
+    process_t * task = get_current_process();
+    
+    if (task) {
+        if (remap_allocate_cow(task->vm, (void*)faulting_address)) {
+            kprintf("COW'ed the shit out of %lx\n", (uint64_t)faulting_address);
+            return;
+        }
+    } else {
+        panic("On pagefault handler, can't get task\n");
+    }
+
     panic("Page fault\n");
 }
 

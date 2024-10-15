@@ -95,6 +95,7 @@ void sched_yield_syscall_handler(process_t*task, context_t* ctx) {
     (void)task;
     (void)ctx;
     kprintf("[PID: %d] SCHED_YIELD_SYSCALL()\n", task->pid);
+    yield();
     SYSRET(ctx, SYSCALL_SUCCESS);
 }
 
@@ -102,8 +103,9 @@ void fork_syscall_handler(process_t*task, context_t* ctx) {
     (void)task;
     (void)ctx;
     kprintf("[PID: %d] FORK_SYSCALL()\n", task->pid);
-    fork();
-    SYSRET(ctx, SYSCALL_SUCCESS);
+    uint64_t child_pid = (uint64_t)fork();
+    kprintf("Child PID: %d\n", child_pid);
+    SYSRET(ctx, child_pid);
 }
 
 void execve_syscall_handler(process_t*task, context_t* ctx) {
@@ -151,8 +153,6 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
 };
 
 void global_syscall_handler(context_t* ctx) {
-
-    yield();
 
     process_t * current_task = get_current_process();
 
