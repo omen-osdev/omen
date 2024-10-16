@@ -80,19 +80,19 @@ void debug_directory(struct page_directory* pd, uint8_t levels) {
     for (uint64_t i = 0; i < 512; i++) {
         struct page_directory_entry pde = pd->entries[i];
         if (pde.present) {
-            kprintf("[%d] PD Entry: %llx BITS (W:%d U:%d NX:%d C:%d)\n", i, pde.page_ppn, pde.writeable, pde.user_access, pde.execution_disabled, pde.cache_disabled);
+            kprintf("[%d] PD Entry: %llx BITS (H: %d W:%d U:%d NX:%d C:%d)\n", i, pde.page_ppn, pde.size, pde.writeable, pde.user_access, pde.execution_disabled, pde.cache_disabled);
             if (levels >= 2) {
                 struct page_directory* pd = (struct page_directory*)((uint64_t)pde.page_ppn << 12);
                 for (uint64_t j = 0; j < 512; j++) {
                     struct page_directory_entry pde = pd->entries[j];
                     if (pde.present) {
-                        kprintf("    [%d] PT Entry: %llx BITS (W:%d U:%d NX:%d C:%d)\n", j, pde.page_ppn, pde.writeable, pde.user_access, pde.execution_disabled, pde.cache_disabled);
+                        kprintf("    [%d] PT Entry: %llx BITS (H: %d W:%d U:%d NX:%d C:%d)\n", j, pde.page_ppn, pde.size, pde.writeable, pde.user_access, pde.execution_disabled, pde.cache_disabled);
                         if (levels >= 3) {
                             struct page_table* pt = (struct page_table*)((uint64_t)pde.page_ppn << 12);
                             for (uint64_t k = 0; k < 512; k++) {
                                 struct page_table_entry pte = pt->entries[k];
                                 if (pte.present) {
-                                    kprintf("        [%d] P Entry: %llx (Virt: %llx -> Phys: %llx) BITS (W:%d U:%d NX:%d C:%d)\n", k, pte.page_ppn, (i << 39) | (j << 30) | (k << 21), (pte.page_ppn << 12), pte.writeable, pte.user_access, pte.execution_disabled, pte.cache_disabled);
+                                    kprintf("        [%d] P Entry: %llx (Virt: %llx -> Phys: %llx) BITS (H: %d W:%d U:%d NX:%d C:%d)\n", k, pte.page_ppn, (i << 39) | (j << 30) | (k << 21), (pte.page_ppn << 12), pte.size, pte.writeable, pte.user_access, pte.execution_disabled, pte.cache_disabled);
                                 }
                             }
                         }
@@ -148,6 +148,38 @@ void debug_compare_maps(struct page_directory* pd, struct page_directory* pd2) {
     }
 }
 
+struct memory_segment {
+    uint64_t start;
+    uint64_t end;
+    uint8_t flags;
+};
+
+void create_memory_segment(struct page_directory * pml4, struct memory_segment * segment) {
+    uint64_t start = segment->start;
+    uint64_t end = segment->end;
+    uint8_t flags = segment->flags;
+
+    start = start & ~0xfff;
+    end = (end + 0xfff) & ~0xfff;
+
+    kprintf("Creating %d pages\n", (end - start) / 0x1000);
+
+    for (uint64_t i = start; i < end; i += 0x1000) {
+        map_memory(pml4, (void*)i, (void*)i, flags);
+    }
+}
+void create_memory_map(struct page_directory * pml4) {
+    struct memory_segment segment_alpha = {0x0000000000001000, 0x0000000180000000, PAGE_WRITE_BIT};
+    struct memory_segment segment_beta = {0xffff800000000000, 0xffff800180000000, 0};
+    struct memory_segment segment_gamma = {0xffffffff80000000, 0xffffffff8001b000, 0};
+    struct memory_segment segment_delta = {0xffffffff8001b000, 0xffffffff8009a000, PAGE_WRITE_BIT};
+
+    create_memory_segment(pml4, &segment_alpha);
+    create_memory_segment(pml4, &segment_beta);
+    create_memory_segment(pml4, &segment_gamma);
+    create_memory_segment(pml4, &segment_delta);
+}
+
 void init_paging() {
     struct page_directory * pml4 = (struct page_directory*)pmm_alloc(PAGE_SIZE);
     if (pml4 == NULL) {
@@ -160,7 +192,7 @@ void init_paging() {
 
     kprintf("Original PML4: %llx\n", original);
     debug_directory(original, 2);
-    duplicate_pml4(original, pml4, 0);
+    create_memory_map(pml4);
     debug_directory(pml4, 2);
     __asm__("movq %0, %%cr3" : : "r" (pml4));
 
@@ -378,6 +410,8 @@ uint8_t remap_allocate_cow(struct page_directory * pml4, void * address_raw) {
 }
 
 void duplicate_pml4(struct page_directory * pd, struct page_directory* new_pd, uint8_t use_cow) {
+    debug_directory(pd, 2);
+
     memcpy(new_pd, pd, PAGE_SIZE);
     for (uint64_t i = 0; i < 512; i++) {
         struct page_directory_entry pde = pd->entries[i];
@@ -406,6 +440,7 @@ void duplicate_pml4(struct page_directory * pd, struct page_directory* new_pd, u
                                 new_pte->writeable = 0;
                                 pte.os = 1;
                                 pte.writeable = 0;
+                                kprintf("Set address %llx as COW\n", (i << 39) | (j << 30) | (k << 21));
                             }
                         }
                     }
