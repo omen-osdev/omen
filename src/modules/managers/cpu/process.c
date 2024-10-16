@@ -145,16 +145,20 @@ process_t * create_user_process(void * init) {
 process_t * duplicate_process(process_t * parent) {
     process_t * task = &(process_list[process_count++]);
     memcpy(task, parent, sizeof(process_t));
-    task->pid = get_next_pid();
-    task->ppid = parent->pid;
+
     task->vm = kmalloc(sizeof(struct page_directory));
     memset(task->vm, 0, sizeof(struct page_directory));
     duplicate_pml4(parent->vm, task->vm, 1);
+
     task->context = kmalloc(sizeof(context_t));
-    memcpy(task->context, parent->context, sizeof(context_t));
     task->context->info = kmalloc(sizeof(struct cpu_context_info));
+    
+    memcpy(task->context, parent->context, sizeof(context_t));
     memcpy(task->context->info, parent->context->info, sizeof(struct cpu_context_info));
     memcpy(task->fxsave_region, parent->fxsave_region, 512);
+    
+    task->pid = get_next_pid();
+    task->ppid = parent->pid;
     task->context->cr3 = (uint64_t) task->vm;
     return task;
 }
@@ -172,10 +176,7 @@ void init_process(uint64_t address, uint64_t size) {
 
     current_process = &process_list[0];
     current_process_index = 0;
-    
-    process_t dummy_process = {0};
-    dummy_process.context = kmalloc(sizeof(context_t));
-    memset(dummy_process.context, 0, sizeof(context_t));
+
     tss_set_stack(current_process->cpu->tss, current_process->context->info->stack, 3);
     //mprotect(current_process->vm, 0xffffffff8001a620, 0x1000, VMM_USER_BIT | VMM_WRITE_BIT);
     //fxrstor current_process->fxsave_region
@@ -210,9 +211,6 @@ process_t * sched() {
 int16_t fork() {   
     process_t * child = duplicate_process(current_process);
     child->status = PROCESS_STATUS_READY;
-    memcpy(child->context, current_process->context, sizeof(context_t));
-    child->context->info = kmalloc(sizeof(struct cpu_context_info));
-    memcpy(child->context->info, current_process->context->info, sizeof(struct cpu_context_info));
     child->context->rax = 0;
     return child->pid;
 }
