@@ -1,5 +1,5 @@
 #include "dummy.h"
-#include "minilibc.h"
+#include <minilibc/minilibc.h>
 
 int dummy_main(int argc, char **argv) {
     (void)argc;

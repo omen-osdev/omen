@@ -75,10 +75,9 @@ typedef struct process {
 void init_process(uint64_t addr, uint64_t size);
 void returnoexit();
 int16_t fork();
-void yield();
+process_t * sched();
 void execve(const char * path, const char * argv, const char * envp);
 void exit(int error_code);
-void yield_to(process_t * next);
 process_t * create_user_process(void * init);
 process_t * get_current_process();
 char * get_current_tty();

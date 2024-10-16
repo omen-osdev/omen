@@ -148,25 +148,10 @@ all:
 
 kernel: $(OBJS) link
 
-$(OBJDIR)/io/interrupts.o: $(SRCDIR)/io/interrupts.c
+$(OBJDIR)/apps/%.o: $(SRCDIR)/apps/%.c
 #	@ echo !==== COMPILING $^
 	@ mkdir -p $(@D)
 	@$(CC) $(CFLAGS) -mgeneral-regs-only -c $^ -o $@
-
-$(OBJDIR)/drivers/serial/serial.o: $(SRCDIR)/drivers/serial/serial.c
-#	@ echo !==== COMPILING $^ with -mgeneral-regs-only
-	@ mkdir -p $(@D)
-	@$(CC) $(CFLAGS) -c $^ -o $@
-
-$(OBJDIR)/util/json.o: $(SRCDIR)/util/json.c
-#	@ echo !==== COMPILING $^ with -mgeneral-regs-only
-	@ mkdir -p $(@D)
-	@$(CC) $(CFLAGS) -c $^ -o $@
-
-$(OBJDIR)/util/dbgprinter.o: $(SRCDIR)/util/dbgprinter.c
-#	@ echo !==== COMPILING $^
-	@ mkdir -p $(@D)
-	@$(CC) $(CFLAGS) -c $^ -o $@
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
 #	@ echo !==== COMPILING $^

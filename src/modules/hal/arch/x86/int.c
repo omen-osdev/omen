@@ -47,6 +47,7 @@ void PageFault_Handler(context_t* ctx, uint8_t cpuid) {
     uint64_t faulting_address;
     __asm__ volatile("mov %%cr2, %0" : "=r" (faulting_address));
     kprintf("Page Fault Address: %lx\n", (uint64_t)faulting_address);
+    kprintf("Error code: %lx\n", ctx->error_code);
     process_t * task = get_current_process();
     
     if (task) {
@@ -230,7 +231,7 @@ void global_interrupt_handler(context_t* ctx, uint8_t cpu_id) {
         //    local_apic_eoi(cpu_id, ctx->interrupt_number);
         //} else if (requires_preemption()) {
         //    local_apic_eoi(cpu_id, ctx->interrupt_number);
-        //    yield();
+        //    //YIELD
         //} else {
         //    local_apic_eoi(cpu_id, ctx->interrupt_number);
         //}

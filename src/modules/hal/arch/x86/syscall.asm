@@ -56,7 +56,7 @@ syscall_entry:
     push rcx             ; current IP
     push 0x0             ; error code
     push 0x0             ; int number
-    mov rbp, [rbp + 0x38] ; rip
+    mov rbp, [rbp + 0x38] ; rbp
 
     push    r15
     push    r14

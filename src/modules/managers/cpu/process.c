@@ -12,11 +12,14 @@
 #include <omen/apps/debug/debug.h>
 //TODO: Delete this, we need an elf loader
 #include <dummy/dummy.h>
+#include <idle/idle.h>
 
+//Always inlined
 extern void newctxswtch(context_t * old_task, context_t * new_task, void* fxsave, void* fxrstor);
 extern void newctxsave(context_t * ctx, void* fxsave, void * cr3);
 extern void newctxcreat(void* rsp, void* intro);
 extern void newuctxcreat(void* rsp, void* intro);
+
 extern void reloadGsFs();
 extern void setGsBase(uint64_t base);
 extern void getGsBase(uint64_t * base);
@@ -33,6 +36,7 @@ void init_user_context(process_t * task, void * init) {
 
     void * stack_top = kmalloc(PROCESS_STACK_SIZE);
     memset(stack_top, 0, PROCESS_STACK_SIZE);
+    mprotect(task->vm, stack_top, PROCESS_STACK_SIZE, VMM_USER_BIT | VMM_WRITE_BIT);
     void * stack = stack_top + PROCESS_STACK_SIZE;
     //TODO: Initialize the stack
     newuctxcreat(&stack, init);
@@ -155,13 +159,6 @@ process_t * duplicate_process(process_t * parent) {
     return task;
 }
 
-void _idle() {
-    while(1) {
-        //syscall yield
-        __asm__("syscall" : : "a" (24));
-    }
-}
-
 void returnoexit() {
     panic("Returned from a process!\n");
 }
@@ -170,8 +167,8 @@ void init_process(uint64_t address, uint64_t size) {
     process_t * idle_proc = create_user_process(_idle);
     idle_proc->pid = 0;
     mprotect(idle_proc->vm, idle_proc->entry_address, 0x1000, VMM_USER_BIT);
-    process_t * init_proc = create_user_process(address);
-    mprotect(init_proc->vm, init_proc->entry_address, size, VMM_USER_BIT);
+    //process_t * init_proc = create_user_process(address);
+    //mprotect(init_proc->vm, init_proc->entry_address, size, VMM_USER_BIT);
 
     current_process = &process_list[0];
     current_process_index = 0;
@@ -179,9 +176,17 @@ void init_process(uint64_t address, uint64_t size) {
     process_t dummy_process = {0};
     dummy_process.context = kmalloc(sizeof(context_t));
     memset(dummy_process.context, 0, sizeof(context_t));
-
     tss_set_stack(current_process->cpu->tss, current_process->context->info->stack, 3);
-    newctxswtch(dummy_process.context, current_process->context, dummy_process.fxsave_region, current_process->fxsave_region);
+    //mprotect(current_process->vm, 0xffffffff8001a620, 0x1000, VMM_USER_BIT | VMM_WRITE_BIT);
+    //fxrstor current_process->fxsave_region
+    //cr3 = current_process->vm
+    //rsp = current_process->context->rsp
+    //ret
+
+    __asm__("mov %0, %%rsp\n"
+            "mov %1, %%cr3\n"
+            "fxrstor %2\n"
+            "ret\n" : : "r" (current_process->context->rsp), "r" (current_process->vm), "m" (current_process->fxsave_region));
 }
 
 process_t * sched() {
@@ -205,41 +210,21 @@ process_t * sched() {
 int16_t fork() {   
     process_t * child = duplicate_process(current_process);
     child->status = PROCESS_STATUS_READY;
-    newctxsave(child->context, child->fxsave_region, child->vm);
-    if (current_process == child) {
-        return 0;
-    } else {
-        return child->pid;
-    }
+    memcpy(child->context, current_process->context, sizeof(context_t));
+    child->context->info = kmalloc(sizeof(struct cpu_context_info));
+    memcpy(child->context->info, current_process->context->info, sizeof(struct cpu_context_info));
+    child->context->rax = 0;
+    return child->pid;
 }
 
 void exit(int error_code) {
     current_process->status = PROCESS_STATUS_ZOMBIE;
     current_process->exit_code = error_code;
-    yield();
+    sched();
 }
 
 void execve(const char * path, const char * argv, const char * envp) {
     //TODO: Implement an elf loader
-}
-
-void yield_to(process_t * next) {
-    __asm__("cli");
-    kprintf("Yielding to %d\n", next->pid);
-    process_t * prev = current_process;
-    current_process = next;
-    tss_set_stack(current_process->cpu->tss, current_process->context->info->stack, 3);
-    newctxswtch(prev->context, current_process->context, prev->fxsave_region, current_process->fxsave_region);
-}
-
-//TODO: Implement a real yield
-void yield() {
-    __asm__("cli");
-    process_t * prev = current_process;
-    sched();
-    kprintf("Yielding from %d to %d\n", prev->pid, current_process->pid);
-    tss_set_stack(current_process->cpu->tss, current_process->context->info->stack, 3);
-    newctxswtch(prev->context, current_process->context, prev->fxsave_region, current_process->fxsave_region);
 }
 
 //TODO: This is awful
