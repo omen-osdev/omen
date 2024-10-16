@@ -12,7 +12,7 @@
 
 #define SYSCALL_HANDLER_COUNT 256
 
-typedef void (*syscall_handler)(process_t*caller_task, context_t* ctx);
+typedef uint64_t (*syscall_handler)(process_t*caller_task, context_t* ctx);
 extern void syscall_enable(uint16_t kernel_segment, uint16_t user_segment);
 void global_syscall_handler(context_t* ctx);
 #endif
