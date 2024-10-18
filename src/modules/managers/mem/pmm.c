@@ -21,10 +21,10 @@ void pmm_init() {
     uint64_t biggest = 0;
     int64_t biggest_index = -1;
     for (uint64_t i = 0; i < entries; i++) {
+        kprintf("Entry %d: base: 0x%x, length: 0x%x, type: %d\n", i, get_memory_map_base(i), get_memory_map_length(i), get_memory_map_type(i));
         if (get_memory_map_type(i) == BOOTLOADER_MEMMAP_USABLE && get_memory_map_length(i) > biggest) {
             biggest = get_memory_map_length(i);
             biggest_index = i;
-            break;
         }
     }
 
@@ -38,15 +38,16 @@ void pmm_init() {
     main_memory.type = get_memory_map_type(biggest_index);
 
     //TODO: Jonbardo, xq?
-    uint64_t power = 0;
-    uint64_t size = main_memory.size;
-    while (size > 0) {
-        size >>= 1;
-        power++;
+    uint64_t prev = 0;
+    for (uint64_t i = 0; i < 64; i++) {
+        if ((1 << i) >= main_memory.size) {
+            break;
+        }
+        prev = 1 << i;
     }
-    power--;
-    kprintf("Real: %lu Used: %lu Lost: %lu\n", main_memory.size, 1 << power, main_memory.size - (1 << power));
-    main_memory.size = 1 << power;
+
+    kprintf("Real: %llx Used: %llx Lost: %llx\n", main_memory.size, prev, main_memory.size - prev);
+    main_memory.size = prev;
 
     buddy = buddy_create((void*)main_memory.base, main_memory.size, PAGE_SIZE);
 

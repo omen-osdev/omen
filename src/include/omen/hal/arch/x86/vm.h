@@ -18,7 +18,8 @@ struct page_directory_entry {
     uint64_t accessed                  :1;
     uint64_t ignored_3                 :1;
     uint64_t size                      :1; // 0 means page directory mapped
-    uint64_t ignored_2                 :4;
+    uint64_t global                    :1;
+    uint64_t os                        :3;
     uint64_t page_ppn                  :28;
     uint64_t reserved_1                :12; // must be 0
     uint64_t ignored_1                 :11;
