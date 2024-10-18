@@ -15,7 +15,7 @@ void init_paging();
 struct page_directory* get_pml4();
 void invalidate_current_pml4();
 uint8_t remap_allocate_cow(struct page_directory * pml4, void * address);
-void duplicate_pml4(struct page_directory * pml4, struct page_directory* new_pml4, uint8_t use_cow);
+void duplicate_pml4(struct page_directory * pml4, struct page_directory* new_pml4, uint64_t min_pdp, uint64_t max_pdp, uint8_t use_cow);
 void duplicate_current_pml4(struct page_directory* new_pml4);
 void set_pml4(struct page_directory* pml4);
 uint8_t get_page_perms(struct page_directory *pml4, void* address);

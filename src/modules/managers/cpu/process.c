@@ -148,7 +148,7 @@ process_t * duplicate_process(process_t * parent) {
 
     task->vm = kmalloc(sizeof(struct page_directory));
     memset(task->vm, 0, sizeof(struct page_directory));
-    duplicate_pml4(parent->vm, task->vm, 1);
+    duplicate_pml4(parent->vm, task->vm, 0, 512, 1);
 
     task->context = kmalloc(sizeof(context_t));
     task->context->info = kmalloc(sizeof(struct cpu_context_info));
