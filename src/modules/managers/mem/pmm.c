@@ -40,7 +40,7 @@ void pmm_init() {
     //TODO: Jonbardo, xq?
     uint64_t prev = 0;
     for (uint64_t i = 0; i < 64; i++) {
-        if ((1 << i) >= main_memory.size) {
+        if (((uint64_t)(1 << i)) >= main_memory.size) {
             break;
         }
         prev = 1 << i;
