@@ -132,7 +132,6 @@ newctxswtch:
 ; RDI init function
 userspace_trampoline: 
     pop rsi ; Pop stack pointer
-    mov rsi, [rsi]
     pop rdi ; Pop init function
 
     push (4 * 8) | 3 ; CS
@@ -168,7 +167,7 @@ newuctxcreat:
     push returnoexit
     push 0x0
     push rsi ; Init function
-    push rdi ; Stack pointer
+    push qword [rdi] ; Stack pointer
     push userspace_trampoline
 
     mov [rdi], rsp

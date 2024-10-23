@@ -15,10 +15,7 @@
 #include <idle/idle.h>
 
 //Always inlined
-extern void newctxswtch(context_t * old_task, context_t * new_task, void* fxsave, void* fxrstor);
-extern void newctxsave(context_t * ctx, void* fxsave, void * cr3);
-extern void newctxcreat(void* rsp, void* intro);
-extern void newuctxcreat(void* rsp, void* intro);
+extern void newuctxcreat(uint64_t rsp, uint64_t intro);
 
 extern void reloadGsFs();
 extern void setGsBase(uint64_t base);
@@ -36,10 +33,10 @@ void init_user_context(process_t * task, void * init) {
 
     void * stack_top = kmalloc(PROCESS_STACK_SIZE);
     memset(stack_top, 0, PROCESS_STACK_SIZE);
-    mprotect(task->vm, stack_top, PROCESS_STACK_SIZE, VMM_USER_BIT | VMM_WRITE_BIT);
     void * stack = stack_top + PROCESS_STACK_SIZE;
+    mprotect_current(stack_top, PROCESS_STACK_SIZE, VMM_USER_BIT | VMM_WRITE_BIT);
     //TODO: Initialize the stack
-    newuctxcreat(&stack, init);
+    newuctxcreat((uint64_t)&stack, (uint64_t)init);
     
     context->cr3  = (uint64_t) task->vm;
     context->info = kmalloc(sizeof(struct cpu_context_info));
@@ -134,11 +131,14 @@ process_t * create_user_process(void * init) {
     }
     task->vm = kmalloc(sizeof(struct page_directory));
     memset(task->vm, 0, sizeof(struct page_directory));
-    duplicate_current_pml4(task->vm);
     task->context = kmalloc(sizeof(context_t)); 
     memset(task->context, 0, sizeof(context_t));
     init_user_context(task, init);
+    mprotect_current(task->entry_address, 0x1000, VMM_USER_BIT); //TODO: change this for the elf loader
+    duplicate_current_pml4(task->vm);
     kprintf("Process %d created\n", task->pid);
+    kprintf("Stack permissions: %d\n", get_page_perms(task->vm, task->context->rsp));
+    kprintf("Is stack user access: %d\n", is_user_access(task->vm, task->context->rsp));
     return task;    
 }
 
@@ -148,7 +148,6 @@ process_t * duplicate_process(process_t * parent) {
 
     task->vm = kmalloc(sizeof(struct page_directory));
     memset(task->vm, 0, sizeof(struct page_directory));
-    duplicate_pml4(parent->vm, task->vm, 0, 512, 1);
 
     task->context = kmalloc(sizeof(context_t));
     task->context->info = kmalloc(sizeof(struct cpu_context_info));
@@ -160,6 +159,9 @@ process_t * duplicate_process(process_t * parent) {
     task->pid = get_next_pid();
     task->ppid = parent->pid;
     task->context->cr3 = (uint64_t) task->vm;
+
+    duplicate_pml4(parent->vm, task->vm, 0, 0x200);
+    set_cow(parent->vm, task->vm);
     return task;
 }
 
@@ -170,13 +172,12 @@ void returnoexit() {
 void init_process(uint64_t address, uint64_t size) {
     process_t * idle_proc = create_user_process(_idle);
     idle_proc->pid = 0;
-    mprotect(idle_proc->vm, idle_proc->entry_address, 0x1000, VMM_USER_BIT);
     //process_t * init_proc = create_user_process(address);
     //mprotect(init_proc->vm, init_proc->entry_address, size, VMM_USER_BIT);
 
     current_process = &process_list[0];
     current_process_index = 0;
-
+    
     tss_set_stack(current_process->cpu->tss, current_process->context->info->stack, 3);
     //mprotect(current_process->vm, 0xffffffff8001a620, 0x1000, VMM_USER_BIT | VMM_WRITE_BIT);
     //fxrstor current_process->fxsave_region
