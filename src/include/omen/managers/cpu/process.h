@@ -6,6 +6,7 @@
 #include <omen/managers/io/signal/signal.h>
 #include <omen/libraries/std/stdint.h>
 #include <omen/managers/mem/vmm.h>
+#include <omen/libraries/allocators/heap_allocator.h>
 
 #define PROCESS_STATUS_READY 0
 #define PROCESS_STATUS_RUNNING 1
@@ -23,10 +24,17 @@ struct descriptors {
 
 typedef int process_status_t;
 
+struct vm_area {
+    void * start;
+    void * end;
+    uint8_t flags;
+    struct vm_area * next;
+};
+
 typedef struct process {
     context_t *context;
     cpu_context_t *cpu;
-    struct page_directory* vm;
+    struct vm_area *vm_areas;
     process_status_t status;
 
     uint8_t privilege;
@@ -38,7 +46,7 @@ typedef struct process {
     long current_nice;
     //int_error_frame_t *frame;
 
-    void * heap;
+    struct heap * heap;
 
     unsigned long long sleep_time;
     unsigned long long cpu_time;
@@ -73,6 +81,7 @@ typedef struct process {
 } process_t;
 
 void init_process(uint64_t addr, uint64_t size);
+uint8_t is_in_vmarea(process_t* process, void * address);
 void returnoexit();
 int16_t fork();
 process_t * sched();

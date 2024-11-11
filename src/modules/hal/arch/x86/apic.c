@@ -179,7 +179,8 @@ void ioapic_init(uint64_t ioapic_id) {
 
     struct ioapic* ioapic = actx.ioapics[ioapic_id];
     uint64_t ioapic_address = (uint64_t)ioapic->ioapic_address;
-    map_current_memory((void*)ioapic_address, (void*)ioapic_address, PAGE_WRITE_BIT);
+    struct page_directory* pml4 = get_pml4();
+    map_memory(pml4, (void*)ioapic_address, (void*)ioapic_address, 0x1000, PAGE_WRITE_BIT);
     uint64_t ioapic_version = ioapic_read_register(
         (void*)ioapic_address,
         IOAPIC_VERSION

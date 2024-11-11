@@ -2,6 +2,7 @@
 #define HEAP_H
 
 #include <omen/libraries/std/stdint.h>
+#include <omen/managers/mem/vmm.h>
 #include <omen/managers/cpu/process.h>
 #include <omen/libraries/concurrency/mutex.h>
 //This code comes from https://github.com/kot-org/Kot/blob/main/Sources/Kernel/Src/heap/heap.h
@@ -17,8 +18,11 @@ struct heap_segment_header {
 } __attribute__((aligned(0x10)));
 
 struct heap {
+    struct page_directory * pd;
+    void* heapStart;
     void* heapEnd;
-    void* lastStack;
+    void* stackStart;
+    void* stackEnd;
     struct heap_segment_header* lastSegment;
     struct heap_segment_header* mainSegment;
     uint64_t totalSize;
@@ -30,30 +34,13 @@ struct heap {
     spinlock_t stack_lock;
 };
 
-extern struct heap kernelGlobalHeap;
-extern struct heap userGlobalHeap;
-
-void init_heap();
-
+struct heap * init_heap(struct page_directory * pml4, uint8_t user_access, uint64_t heapStart, uint64_t heapEnd, uint64_t stackStart, uint64_t stackEnd);
+void * malloc(struct heap * heap, uint64_t size);
 void * kmalloc(uint64_t size);
+void free(struct heap * heap, void* address);
 void kfree(void* address);
-void * kcalloc(uint64_t num, uint64_t size);
-void * krealloc(void* buffer, uint64_t size);
+void * stackalloc(struct heap * heap, uint64_t length);
 void * kstackalloc(uint64_t length);
-
-void * smalloc(uint64_t size);
-void sfree(void* address);
-
-void * sigmalloc(uint64_t size);
-void sigfree(void* address);
-
-void create_user_heap(process_t * task, struct heap * cheap);
-void * umalloc(process_t * task, uint64_t size);
-void ufree(process_t * task, void* address);
-void * ucalloc(process_t * task, uint64_t num, uint64_t size);
-void * urealloc(process_t * task, void* buffer, uint64_t size);
-void * ustackalloc(process_t * task, uint64_t length);
-int heap_safeguard(struct heap * cheap);
-//void debug_heap();
-//void walk_heap();
+struct heap * get_kernel_heap();
+void set_kernel_heap(struct heap * heap);
 #endif

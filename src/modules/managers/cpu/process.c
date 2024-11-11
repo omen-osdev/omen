@@ -22,23 +22,65 @@ extern void setGsBase(uint64_t base);
 extern void getGsBase(uint64_t * base);
 extern void setKernelGsBase(uint64_t base);
 
+
 //TODO: Jonbardo modify this to use ur linked list :D
 process_t process_list[MAX_PROCESSES] = {0};
 process_t *current_process = process_list;
 uint32_t current_process_index = 0;
 uint32_t process_count = 0;
 
-void init_user_context(process_t * task, void * init) {
+uint8_t is_in_vmarea(process_t* process, void * address) {
+    struct vm_area * current = process->vm_areas;
+    while (current) {
+        if (address >= current->start && address < current->end) {
+            return 1;
+        }
+        current = current->next;
+    }
+    return 0;
+}
+
+void create_vmarea(process_t* process, void * start, void * end, uint8_t flags) {
+    struct vm_area * new_area = kmalloc(sizeof(struct vm_area));
+    new_area->start = start;
+    new_area->end = end;
+    new_area->flags = flags;
+    new_area->next = process->vm_areas;
+    process->vm_areas = new_area;
+}
+
+void remove_vmarea(process_t* process, void * start) {
+    struct vm_area * current = process->vm_areas;
+    struct vm_area * previous = 0;
+
+    while (current) {
+        if (current->start == start) {
+            if (previous) {
+                previous->next = current->next;
+            } else {
+                process->vm_areas = current->next;
+            }
+            free(process->heap, current);
+            return;
+        }
+        previous = current;
+        current = current->next;
+    }
+}
+
+void init_user_context(struct page_directory* pml4, process_t * task, void * init) {
     context_t * context = task->context;
 
     void * stack_top = kmalloc(PROCESS_STACK_SIZE);
     memset(stack_top, 0, PROCESS_STACK_SIZE);
     void * stack = stack_top + PROCESS_STACK_SIZE;
-    mprotect_current(stack_top, PROCESS_STACK_SIZE, VMM_USER_BIT | VMM_WRITE_BIT);
+    mprotect(pml4, stack_top, PROCESS_STACK_SIZE, VMM_USER_BIT | VMM_WRITE_BIT);
+    kprintf("Stack permissions after creating: %d\n", get_page_perms(pml4, stack_top));
+    kprintf("Is stack user access after creating: %d\n", is_user_access(pml4, stack_top));
+    create_vmarea(task, stack_top, stack, VMM_USER_BIT | VMM_WRITE_BIT);
     //TODO: Initialize the stack
     newuctxcreat((uint64_t)&stack, (uint64_t)init);
     
-    context->cr3  = (uint64_t) task->vm;
     context->info = kmalloc(sizeof(struct cpu_context_info));
     memset(context->info, 0, sizeof(struct cpu_context_info));
     context->info->stack = (uint64_t) stack;
@@ -129,25 +171,22 @@ process_t * create_user_process(void * init) {
         task->gid = 0;
         task->ppid = 0;
     }
-    task->vm = kmalloc(sizeof(struct page_directory));
-    memset(task->vm, 0, sizeof(struct page_directory));
+
     task->context = kmalloc(sizeof(context_t)); 
     memset(task->context, 0, sizeof(context_t));
-    init_user_context(task, init);
-    mprotect_current(task->entry_address, 0x1000, VMM_USER_BIT); //TODO: change this for the elf loader
-    duplicate_current_pml4(task->vm);
+    struct page_directory * pd = get_pml4();
+    init_user_context(pd, task, init);
+    mprotect(pd, task->entry_address, 0x1000, VMM_USER_BIT); //TODO: change this for the elf loader
+    task->context->cr3 = duplicate_current_pml4();
     kprintf("Process %d created\n", task->pid);
-    kprintf("Stack permissions: %d\n", get_page_perms(task->vm, task->context->rsp));
-    kprintf("Is stack user access: %d\n", is_user_access(task->vm, task->context->rsp));
-    return task;    
+    kprintf("Stack permissions: %d\n", get_page_perms(task->context->cr3, task->context->rsp));
+    kprintf("Is stack user access: %d\n", is_user_access(task->context->cr3, task->context->rsp));
+    return task;
 }
 
 process_t * duplicate_process(process_t * parent) {
     process_t * task = &(process_list[process_count++]);
     memcpy(task, parent, sizeof(process_t));
-
-    task->vm = kmalloc(sizeof(struct page_directory));
-    memset(task->vm, 0, sizeof(struct page_directory));
 
     task->context = kmalloc(sizeof(context_t));
     task->context->info = kmalloc(sizeof(struct cpu_context_info));
@@ -158,10 +197,9 @@ process_t * duplicate_process(process_t * parent) {
     
     task->pid = get_next_pid();
     task->ppid = parent->pid;
-    task->context->cr3 = (uint64_t) task->vm;
+    task->context->cr3 = duplicate_pd(parent->context->cr3, 1, 1);
+    task->heap = parent->heap;
 
-    duplicate_pml4(parent->vm, task->vm, 0, 0x200);
-    set_cow(parent->vm, task->vm);
     return task;
 }
 
@@ -171,24 +209,18 @@ void returnoexit() {
 
 void init_process(uint64_t address, uint64_t size) {
     process_t * idle_proc = create_user_process(_idle);
+    idle_proc->heap = init_heap(idle_proc->context->cr3, 1, 0xffffffff80000000, 0xffffffff8ffff000, 0xffffffff90000000, 0xffffffff9ffff000);
     idle_proc->pid = 0;
-    //process_t * init_proc = create_user_process(address);
-    //mprotect(init_proc->vm, init_proc->entry_address, size, VMM_USER_BIT);
 
     current_process = &process_list[0];
     current_process_index = 0;
     
     tss_set_stack(current_process->cpu->tss, current_process->context->info->stack, 3);
-    //mprotect(current_process->vm, 0xffffffff8001a620, 0x1000, VMM_USER_BIT | VMM_WRITE_BIT);
-    //fxrstor current_process->fxsave_region
-    //cr3 = current_process->vm
-    //rsp = current_process->context->rsp
-    //ret
 
     __asm__("mov %0, %%rsp\n"
             "mov %1, %%cr3\n"
             "fxrstor %2\n"
-            "ret\n" : : "r" (current_process->context->rsp), "r" (current_process->vm), "m" (current_process->fxsave_region));
+            "ret\n" : : "r" (current_process->context->rsp), "r" (current_process->context->cr3), "m" (current_process->fxsave_region));
 }
 
 process_t * sched() {
@@ -238,4 +270,3 @@ char * get_current_tty() {
 void set_current_tty(char * tty) {
     current_process->tty = tty;
 }
-

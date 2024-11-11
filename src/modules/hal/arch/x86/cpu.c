@@ -31,7 +31,6 @@ cpu_context_t cpu[MAX_CPUS];
 
 void callback(boot_smp_info_t *lcpu) {
     (void)lcpu;
-    kprintf("CPU %d is halting\n", lcpu->processor_id);
     while (1) {
        __asm__("hlt");
     }

@@ -154,18 +154,30 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [61 ... 255] = undefined_syscall_handler
 };
 
+#define SYSCALL_RESULT_ADDR 0xffffffffc0000000
 void global_syscall_handler(context_t* ctx) {
 
+    struct page_directory * current_pml4 = get_pml4();
+    struct page_directory * kernel_pml4 = get_kernel_pml4();
+    uint64_t * result = pmm_alloc(1*sizeof(uint64_t));
+    map_memory(kernel_pml4, SYSCALL_RESULT_ADDR, result, 0x1000, PAGE_WRITE_BIT);
+    map_memory(current_pml4, SYSCALL_RESULT_ADDR, result, 0x1000, PAGE_WRITE_BIT);
+    *result = SYSCALL_SUCCESS;
+    //TODO: WOW THIS IS UTTERLY STUPID
+    duplicate_entry(kernel_pml4, current_pml4, ctx);
+    duplicate_entry(kernel_pml4, current_pml4, current_pml4);
+
+    set_pml4(get_kernel_pml4());
     process_t * current_task = get_current_process();
+    
     memcpy(current_task->context, ctx, sizeof(context_t));
     __asm__("fxsave %0" : : "m" (current_task->fxsave_region));
 
-    uint64_t result = SYSCALL_SUCCESS;
     if (ctx->rax < SYSCALL_HANDLER_COUNT) {
-        result = syscall_handlers[ctx->rax](current_task, ctx);
+        *result = syscall_handlers[ctx->rax](current_task, ctx);
     } else {
         kprintf("Syscall number overflow %d\n", ctx->rax);
-        result = SYSCALL_ERROR;
+        *result = SYSCALL_ERROR;
     }
 
     current_task = get_current_process();
@@ -173,5 +185,6 @@ void global_syscall_handler(context_t* ctx) {
     __asm__("fxrstor %0" : "=m" (current_task->fxsave_region));
     memcpy(ctx, current_task->context, sizeof(context_t));
     tss_set_stack(current_task->cpu->tss, current_task->context->info->stack, 3);
-    SYSRET(ctx, result);
+    set_pml4(current_pml4);
+    SYSRET(ctx, *result);
 }

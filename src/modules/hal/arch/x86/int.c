@@ -50,13 +50,11 @@ void PageFault_Handler(context_t* ctx, uint8_t cpuid) {
     kprintf("Error code: %lx\n", ctx->error_code);
     process_t * task = get_current_process();
     
-    if (task) {
-        if (remap_allocate_cow(task->vm, (void*)faulting_address)) {
+    if (task && is_in_vmarea(task, (void*)faulting_address)) {
+        if (remap_allocate_cow(task->context->cr3, (void*)faulting_address)) {
             kprintf("COW'ed the shit out of %lx\n", (uint64_t)faulting_address);
             return;
         }
-    } else {
-        panic("On pagefault handler, can't get task\n");
     }
 
     panic("Page fault\n");
@@ -161,14 +159,17 @@ void init_interrupts() {
     idtr.limit = 256 * sizeof(struct idtdescentry) - 1;
     idtr.offset = (uint64_t)kmalloc(256 * sizeof(struct idtdescentry));
     memset((void*)idtr.offset, 0, 256 * sizeof(struct idtdescentry));
-    mprotect_current((void*)idtr.offset, 256 * sizeof(struct idtdescentry), PAGE_USER_BIT | PAGE_WRITE_BIT);
+
+    struct page_directory* pml4 = get_pml4();
+
+    mprotect(pml4, (void*)idtr.offset, 256 * sizeof(struct idtdescentry), PAGE_USER_BIT | PAGE_WRITE_BIT);
 
     for (int i = 0; i < 256; i++) {
         set_idt_gate((uint64_t)interrupt_vector[i], i, IDT_TA_InterruptGate, 1, get_kernel_code_selector());
     }
 
     set_idt_gate((uint64_t)DoubleFault_Handler, 8, IDT_TA_InterruptGate, 1, get_kernel_code_selector());
-    mprotect_current((void*)idtr.offset, 256 * sizeof(struct idtdescentry), PAGE_USER_BIT);
+    mprotect(pml4, (void*)idtr.offset, 256 * sizeof(struct idtdescentry), PAGE_USER_BIT);
 
     for (int i = 0; i < 32; i++) {
         dynamic_interrupt_handlers[i] = interrupt_exception_handler;

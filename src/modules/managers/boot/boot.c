@@ -22,7 +22,6 @@
 //TODO: Delete this, we need an elf loader
 #include <dummy/dummy.h>
 
-
 void boot_startup() {
     init_bootloader();
     init_simd();
@@ -38,7 +37,7 @@ void boot_startup() {
     kprintf("Early startup complete...\n");
     pmm_init();
     init_paging();
-    init_heap();
+    set_kernel_heap(init_heap(get_pml4(), 0, 0xffffffff60000000, 0xffffffff6ffff000, 0xffffffff70000000, 0xffffffff7ffff000));
     create_gdt();
     init_interrupts();
     init_cpus();
