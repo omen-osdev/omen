@@ -22,7 +22,6 @@ extern void setGsBase(uint64_t base);
 extern void getGsBase(uint64_t * base);
 extern void setKernelGsBase(uint64_t base);
 
-
 //TODO: Jonbardo modify this to use ur linked list :D
 process_t process_list[MAX_PROCESSES] = {0};
 process_t *current_process = process_list;

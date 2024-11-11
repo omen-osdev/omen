@@ -7,8 +7,12 @@
 #define PAGE_WRITE_BIT     0x1
 #define PAGE_USER_BIT      0x2
 #define PAGE_NX_BIT        0x4
+<<<<<<< HEAD
 #define PAGE_CACHE_DISABLE_BIT 0x8
 #define PAGE_COW_BIT       0x1
+=======
+#define PAGE_CACHE_DISABLE 0x8
+>>>>>>> 1a314df58cc1f4265f30f0834be4a4dacbed469b
 
 struct page_directory_entry {
     uint64_t present                   :1;
@@ -20,7 +24,11 @@ struct page_directory_entry {
     uint64_t ignored_3                 :1;
     uint64_t size                      :1; // 0 means page directory mapped
     uint64_t global                    :1;
+<<<<<<< HEAD
     uint64_t cow                        :3;
+=======
+    uint64_t os                        :3;
+>>>>>>> 1a314df58cc1f4265f30f0834be4a4dacbed469b
     uint64_t page_ppn                  :28;
     uint64_t reserved_1                :12; // must be 0
     uint64_t ignored_1                 :11;
@@ -37,7 +45,11 @@ struct page_table_entry{
     uint64_t dirty              : 1;
     uint64_t size               : 1;
     uint64_t global             : 1;
+<<<<<<< HEAD
     uint64_t cow                 : 3;
+=======
+    uint64_t os                 : 3;
+>>>>>>> 1a314df58cc1f4265f30f0834be4a4dacbed469b
     uint64_t page_ppn           : 28;
     uint64_t reserved_1         : 12; // must be 0
     uint64_t ignored_1          : 11;
