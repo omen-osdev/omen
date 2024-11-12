@@ -59,9 +59,7 @@ void * malloc(struct heap * heap, uint64_t size) {
     if (heap->ready == 0) {
         panic("ERROR: Heap not ready\n");
     }
-    if (heap->pd != get_pml4()) {
-        panic("ERROR: Heap not in current process\n");
-    }
+
     //void * result = _malloc(&kernelGlobalHeap, size);
     uint64_t last_address = (uint64_t)heap->heapEnd;
 
@@ -90,9 +88,7 @@ void free(struct heap * heap, void* address) {
     if (heap->ready == 0) {
         panic("ERROR: Heap not ready\n");
     }
-    if (heap->pd != get_pml4()) {
-        panic("ERROR: Heap not in current process\n");
-    }
+
     //_free(&kernelGlobalHeap, address);
     panic("kfree not implemented\n");
     UNLOCK_HEAP(heap);
@@ -103,9 +99,7 @@ void * stackalloc(struct heap * heap, uint64_t length) {
     if (heap->ready == 0) {
         panic("ERROR: Heap not ready\n");
     }
-    if (heap->pd != get_pml4()) {
-        panic("ERROR: Heap not in current process\n");
-    }
+
     //void * result = _stackalloc(&kernelGlobalHeap, length);
     uint64_t last_address = (uint64_t)heap->stackEnd;
 

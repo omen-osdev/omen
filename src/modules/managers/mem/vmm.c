@@ -367,7 +367,13 @@ struct page_directory * duplicate_pd(struct page_directory * pml4, uint8_t share
     }
 
     memset(new_pml4, 0, PAGE_SIZE);
-    for (uint64_t i = 0; i < 512; i++) {
+    uint64_t max = 512;
+    if (share_kernel) {
+        max = 256;
+        for (uint64_t i = 256; i < 512; i++)
+            new_pml4->entries[i] = pml4->entries[i];
+    }
+    for (uint64_t i = 0; i < max; i++) {
         struct page_directory_entry * pml4e = GET_PDE(pml4, i);
         struct page_directory_entry * new_pml4e = GET_PDE(new_pml4, i);
         if (pml4e->present) {
