@@ -229,6 +229,7 @@ void returnoexit() {
 }
 
 void init_process(uint64_t address, uint64_t size) {
+    kprintf("Hello there techzynth!\n");
     process_t * idle_proc = create_user_process(_idle);
     idle_proc->heap = init_heap(idle_proc->context->cr3, 1, 0xffffffff80000000, 0xffffffff8ffff000, 0xffffffff90000000, 0xffffffff9ffff000);
     idle_proc->pid = 0;
