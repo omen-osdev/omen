@@ -27,3 +27,10 @@ int check_msr(void)
     __cpuid(1, cpuinfo[0], cpuinfo[1], cpuinfo[2], cpuinfo[3]);
     return (CPUID_GETMSR(cpuinfo));
 }
+
+int get_maxphyaddr(void)
+{
+    int cpuinfo[4];
+    __cpuid(0x80000008, cpuinfo[0], cpuinfo[1], cpuinfo[2], cpuinfo[3]);
+    return (cpuinfo[0] & 0xff);
+}

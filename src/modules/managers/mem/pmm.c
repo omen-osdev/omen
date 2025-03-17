@@ -78,7 +78,18 @@ void * pmm_alloc(uint64_t size) {
     if (!ready) {
         return NULL;
     }
-    return buddy_alloc(buddy, size);
+    void * ptr = buddy_alloc(buddy, size);
+    if (ptr) {
+        memset(ptr, 0, size);
+    }
+    return ptr;
+}
+
+void * pmm_alloc_page() {
+    if (!ready) {
+        return NULL;
+    }
+    return buddy_alloc(buddy, PAGE_SIZE);
 }
 
 void pmm_free(void * ptr) {

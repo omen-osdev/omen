@@ -12,11 +12,13 @@
 #include <omen/hal/arch/x86/apic.h>
 #include <omen/hal/arch/x86/int.h>
 #include <omen/hal/arch/x86/gdt.h>
+#include <omen/hal/arch/x86/vm.h>
 #include <emulated/dcon.h>
 #include <serial/serial.h>
 #include <acpi/acpi.h>
 #include <omen/managers/dev/fb.h>
 #include <ps2/ps2.h>
+#include <omen/hal/arch/x86/getcpuid.h>
 #include <omen/apps/debug/dshell.h>
 #include <omen/apps/panic/panic.h>
 //TODO: Delete this, we need an elf loader
@@ -35,6 +37,11 @@ void boot_startup() {
     init_debugger(dcon);
     set_current_tty(dcon);
     kprintf("Early startup complete...\n");
+
+    if (get_maxphyaddr() != MAXPHYADDR) {
+        panic("Invalid MAXPHYADDR\n");
+    }
+
     pmm_init();
     init_paging();
     set_kernel_heap(init_heap(get_pml4(), 0, 0xffffffff60000000, 0xffffffff6ffff000, 0xffffffff70000000, 0xffffffff7ffff000));

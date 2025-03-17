@@ -6,8 +6,6 @@
 #include <omen/apps/debug/debug.h>
 #include <omen/apps/panic/panic.h>
 #include <omen/libraries/concurrency/mutex.h>
-//This code comes from https://github.com/kot-org/Kot/blob/main/Sources/Kernel/Src/heap/heap.cpp
-//Thank you Konect!!!
 #define HEAP_SIGNATURE  0xcafebabe
 
 #define LOCK_HEAP(heap) (spinlock_lock(&((heap)->heap_lock)))
@@ -41,14 +39,12 @@ void _initHeap(struct heap * cheap, struct page_directory * pml4, void* heapStar
 }
 
 struct heap * init_heap(struct page_directory * pml4, uint8_t user_access, uint64_t heapStart, uint64_t heapEnd, uint64_t stackStart, uint64_t stackEnd) {
-    struct heap * cheap = (struct heap*)pmm_alloc(sizeof(struct heap));
+    struct heap * cheap = (struct heap*)allocate_vmm(pml4, sizeof(struct heap), PAGE_WRITE_BIT);
     if (cheap == NULL) {
         panic("ERROR: Could not allocate heap\n");
     }
+    printf("Cheap is at %llx\n", cheap);
     memset(cheap, 0, sizeof(struct heap));
-    
-    map_memory(pml4, (void*)cheap, cheap, 0x1000, PAGE_WRITE_BIT);
-
     _initHeap(cheap, pml4, (void*)heapStart, (void*)heapEnd, (void*)stackStart, (void*)stackEnd, user_access);
 
     return cheap;
@@ -60,66 +56,25 @@ void * malloc(struct heap * heap, uint64_t size) {
         panic("ERROR: Heap not ready\n");
     }
 
-    //void * result = _malloc(&kernelGlobalHeap, size);
-    uint64_t last_address = (uint64_t)heap->heapEnd;
-
-    uint64_t pages = size / PAGE_SIZE;
-    if (size % PAGE_SIZE) pages++;
-
-    for (uint64_t i = 0; i < pages; i++) {
-        void * buffer = pmm_alloc(PAGE_SIZE);
-        if (buffer == NULL) {
-            panic("ERROR: Could not allocate page for heap\n");
-        }
-
-        memset(buffer, 0, PAGE_SIZE);
-        map_memory(heap->pd, heap->heapEnd, buffer, PAGE_SIZE, PAGE_WRITE_BIT);
-
-        heap->heapEnd = (void*)((uint64_t)heap->heapEnd - (uint64_t)PAGE_SIZE);
-    }
+    void * ptr = allocate_vmm(heap->pd, size, PAGE_WRITE_BIT);
+    memset(ptr, 0, size);
 
     UNLOCK_HEAP(heap);
-    return (void*)last_address;
+    return ptr;
 }
 
 void free(struct heap * heap, void* address) {
-    //TODO: Implement unmap on free
     LOCK_HEAP(heap);
     if (heap->ready == 0) {
         panic("ERROR: Heap not ready\n");
     }
 
-    //_free(&kernelGlobalHeap, address);
-    panic("kfree not implemented\n");
+    free_vmm(heap->pd, address);
     UNLOCK_HEAP(heap);
 }
 
 void * stackalloc(struct heap * heap, uint64_t length) {
-    LOCK_STACK(heap);
-    if (heap->ready == 0) {
-        panic("ERROR: Heap not ready\n");
-    }
-
-    //void * result = _stackalloc(&kernelGlobalHeap, length);
-    uint64_t last_address = (uint64_t)heap->stackEnd;
-
-    uint64_t pages = length / PAGE_SIZE;
-    if (length % PAGE_SIZE) pages++;
-
-    for (uint64_t i = 0; i < pages; i++) {
-        void * buffer = pmm_alloc(PAGE_SIZE);
-        if (buffer == NULL) {
-            panic("ERROR: Could not allocate page for stack\n");
-        }
-
-        memset(buffer, 0, PAGE_SIZE);
-        map_memory(heap->pd, heap->stackEnd, buffer, PAGE_SIZE, PAGE_WRITE_BIT);
-
-        heap->stackEnd = (void*)((uint64_t)heap->stackEnd - (uint64_t)PAGE_SIZE);
-    }
-
-    UNLOCK_STACK(heap);
-    return (void*)last_address;
+    return malloc(heap, length);
 }
 
 void * kmalloc(uint64_t size) {

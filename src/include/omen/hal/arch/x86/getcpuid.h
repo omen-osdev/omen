@@ -11,5 +11,7 @@ int check_apic(void);
 
 int check_msr(void);
 
+int get_maxphyaddr(void);
+
 #endif
 #endif

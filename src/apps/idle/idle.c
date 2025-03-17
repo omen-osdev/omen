@@ -7,8 +7,7 @@ void _idle() {
         j++;
     }
     
-    //volatile short pid = sys_fork();
-    short pid = 1;
+    volatile short pid = sys_fork();
 
     if (pid == 0) {
         const char child[] = "child\n";
@@ -19,7 +18,7 @@ void _idle() {
             i++;
         }
 
-        //sys_write(1, text, 32);
+        sys_write(1, text, 32);
 
     } else {
         const char parent[] = "parent\n";
@@ -30,11 +29,11 @@ void _idle() {
             i++;
         }
 
-        //sys_write(1, text, 32);
+        sys_write(1, text, 32);
     }
 
     while(1) {
         //syscall yield, do not optimize this
-        //sys_sched_yield();
+        sys_sched_yield();
     }
 }
