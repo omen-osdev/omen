@@ -50,8 +50,6 @@ typedef struct process {
     long current_nice;
     //int_error_frame_t *frame;
 
-    struct heap * heap;
-
     unsigned long long sleep_time;
     unsigned long long cpu_time;
     unsigned long long last_scheduled;

@@ -12,30 +12,27 @@
 #define PAGE_SIZE_4KIB      0x1000
 #define PAGE_SIZE_DIR       0x1
 
-#define CACHE_BIT_SET(x)((x & PAGE_CACHE_DISABLE_BIT) >> 3)
-#define NX_BIT_SET(x)((x & PAGE_NX_BIT) >> 2)
-#define USER_BIT_SET(x)((x & PAGE_USER_BIT) >> 1)
-#define WRITE_BIT_SET(x)(x & PAGE_WRITE_BIT)
-#define COW_BIT_SET(x)(x & PAGE_COW_BIT)
-
 #define PHYSICAL_MEMORY_OFFSET 0xffffA00000000000
 #define PHYSICAL_MEMORY_SIZE   0x0000004000000000
 
 #define TO_IDENTITY_MAP(addr) ((addr) + PHYSICAL_MEMORY_OFFSET)
 #define FROM_IDENTITY_MAP(addr) ((addr) - PHYSICAL_MEMORY_OFFSET)
 
-#define IS_PRESENT(entry) (entry->directory.P)
-#define IS_WRITEABLE(entry) (entry->directory.RW)
-#define IS_USER_ACCESS(entry) (entry->directory.US)
-#define IS_EXECUTABLE(entry) (!(entry->directory.XD))
+#define CACHE_BIT_SET(x)((x & PAGE_CACHE_DISABLE_BIT) >> 3)
+#define NX_BIT_SET(x)((x & PAGE_NX_BIT) >> 2)
+#define USER_BIT_SET(x)((x & PAGE_USER_BIT) >> 1)
+#define WRITE_BIT_SET(x)(x & PAGE_WRITE_BIT)
 
+#define IS_PRESENT(entry) ((entry)->directory.P)
+#define IS_WRITEABLE(entry) ((entry)->directory.RW)
+#define IS_USER_ACCESS(entry) ((entry)->directory.US)
+#define IS_EXECUTABLE(entry) (!((entry)->directory.XD))
 
-#define TO_HUGE_ENTRY(entry) ((struct huge_entry*)entry)
-#define TO_BIG_ENTRY(entry) ((struct big_entry*)entry)
-#define TO_REGULAR_ENTRY(entry) ((struct directory_entry*)entry)
-#define TO_DIRECTORY_ENTRY(entry) ((struct directory_entry*)entry)
-
-#define GET_PPDP(entry) (entry->directory.PDPP)
+#define GET_PDPP_HUGE(entry) ((uint64_t)(((uint64_t)(entry)->huge.PDPP) << 30))
+#define GET_PDPP_BIG(entry) ((uint64_t)(((uint64_t)(entry)->big.PDPP) << 21))
+#define GET_PDPP_REGULAR(entry) ((uint64_t)(((uint64_t)(entry)->regular.PDPP) << 12))
+#define GET_PDPP_DIR(entry) ((uint64_t)(((uint64_t)(entry)->directory.PDPP) << 12))
+#define GET_ENTRY(root, index) (vm_entry*)(&((root)->entries[(index)]))
 
 void address_to_map(uint64_t address, struct page_map_index* map) {
     address >>= 12;
@@ -57,6 +54,21 @@ void map_to_address(struct page_map_index* map, uint64_t* address) {
     *address <<= 9;
     *address |= map->PT_index;
     *address <<= 12;
+}
+
+uint64_t get_pdpp(vm_entry * entry, uint64_t size)
+{
+    switch (size)
+    {
+        case PAGE_SIZE_1GIB:
+            return GET_PDPP_HUGE(entry);
+        case PAGE_SIZE_2MIB:
+            return GET_PDPP_BIG(entry);
+        case PAGE_SIZE_4KIB:
+            return GET_PDPP_REGULAR(entry);
+        default:
+            return GET_PDPP_DIR(entry);
+    }
 }
 
 void switch_cr3(struct page_directory* cr3)
@@ -84,7 +96,7 @@ void init_entry(vm_entry * entry, uint64_t size, uint64_t page_ppn)
     entry->directory.PWT = 0;        //3
     entry->directory.PCD = 0;        //4
     entry->directory.A = 0;          //5
-    entry->directory.D = 0;          //6
+    entry->directory.IGNORED1 = 0;          //6
     entry->directory.PS = 0;         //7
     entry->directory.IGNORED2 = 0;   //8-10
     entry->directory.R = 0;          //11
@@ -96,23 +108,21 @@ void init_entry(vm_entry * entry, uint64_t size, uint64_t page_ppn)
     switch (size)
     {
         case PAGE_SIZE_1GIB:
-            entry.huge.PS = 1;
-            //entry.huge.PPDP is 10 bits
-            entry.huge.PPDP = page_ppn >> 30;
+            entry->huge.PS = 1;
+            entry->huge.PDPP = page_ppn >> 30;
             break;
         case PAGE_SIZE_2MIB:
-            entry.big.PS = 1;
-            //entry.big.PDPP is 19 bits
-            entry.big.PDPP = page_ppn >> 21;
+            entry->big.PS = 1;
+            entry->big.PDPP = page_ppn >> 21;
             break;
         case PAGE_SIZE_4KIB:
-            //entry.regular.PDPP is 28 bits
-            entry.regular.PDPP = page_ppn >> 12;
+            entry->regular.PDPP = page_ppn >> 12;
+            break;
+        default:
+            entry->directory.PDPP = page_ppn >> 12;
             break;
     }
 }
-
-#define GET_ENTRY(root, index) ((struct vm_entry*)&(root->entries[index]))
 
 void map_address(struct page_directory* root, void * virtual_address, void * physical_address, uint64_t size)
 {
@@ -127,7 +137,7 @@ void map_address(struct page_directory* root, void * virtual_address, void * phy
         init_entry(pml4entry, PAGE_SIZE_DIR, (uint64_t)pmm_alloc_page());
     }
 
-    pdptable = (struct page_table*)((uint64_t)GET_PPDP(pml4entry) << 12);
+    pdptable = (struct page_directory*)get_pdpp(pml4entry, PAGE_SIZE_DIR);
     pdptentry = GET_ENTRY(pdptable, map.PDP_index);
 
     if (!IS_PRESENT(pdptentry)) {
@@ -138,18 +148,19 @@ void map_address(struct page_directory* root, void * virtual_address, void * phy
         } else {
             init_entry(pdptentry, PAGE_SIZE_DIR, (uint64_t)pmm_alloc_page());
         }
-    } else if (TO_HUGE_ENTRY(pdptentry)->PS) {
+    } else if (pdptentry->huge.PS) {
         if (size == PAGE_SIZE_1GIB) {
             init_entry(pdptentry, PAGE_SIZE_1GIB, (uint64_t)physical_address);
             flush_tlb_entry(virtual_address);
+            kprintf("1g Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, get_pdpp(pdptentry, PAGE_SIZE_1GIB));
             return;
         } else {
-            kprintf("%llx 1g Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, physical_address, TO_HUGE_ENTRY(pdptentry)->PPDP << 30);
+            kprintf("%llx 1g Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, physical_address, get_pdpp(pdptentry, PAGE_SIZE_1GIB));
             panic("1GiB Mapping overlap detected\n");
         }
     }
 
-    pdtable = (struct page_table*)((uint64_t)GET_PPDP(pdptentry) << 12);
+    pdtable = (struct page_directory*)get_pdpp(pdptentry, PAGE_SIZE_DIR);
     pdentry = GET_ENTRY(pdtable, map.PD_index);
 
     if (!IS_PRESENT(pdentry)) {
@@ -160,18 +171,19 @@ void map_address(struct page_directory* root, void * virtual_address, void * phy
         } else {
             init_entry(pdentry, PAGE_SIZE_DIR, (uint64_t)pmm_alloc_page());
         }
-    } else if (TO_BIG_ENTRY(pdentry)->PS) {
+    } else if (pdptentry->big.PS) {
         if (size == PAGE_SIZE_2MIB) {
             init_entry(pdentry, PAGE_SIZE_2MIB, (uint64_t)physical_address);
             flush_tlb_entry(virtual_address);
+            kprintf("2m Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, get_pdpp(pdentry, PAGE_SIZE_2MIB));
             return;
         } else {
-            kprintf("%llx 2m Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, physical_address, TO_BIG_ENTRY(pdentry)->PDPP << 21);
+            kprintf("2m Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, physical_address);
             panic("2MiB Mapping overlap detected\n");
         }
     }
 
-    pttable = (struct page_table*)((uint64_t)GET_PPDP(pdentry) << 12);
+    pttable = (struct page_directory*)get_pdpp(pdentry, PAGE_SIZE_DIR);
     ptentry = GET_ENTRY(pttable, map.PT_index);
 
     if (!IS_PRESENT(ptentry)) {
@@ -179,11 +191,10 @@ void map_address(struct page_directory* root, void * virtual_address, void * phy
         flush_tlb_entry(virtual_address);
         return;
     } else {
-        kprintf("%llx 4k Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, physical_address, TO_REGULAR_ENTRY(ptentry)->PDPP << 12);
-        panic("4KiB Mapping overlap detected\n");
+        kprintf("4k Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, physical_address);
+        init_entry(ptentry, PAGE_SIZE_4KIB, (uint64_t)physical_address);
+        flush_tlb_entry(virtual_address);
     }
-
-    flush_tlb_entry(virtual_address);
 }
 
 void * allocate_vmm_page(struct page_directory * pml4, uint8_t flags)
@@ -218,6 +229,11 @@ void * allocate_vmm(struct page_directory * pml4, uint64_t size, uint8_t flags)
     return buffer;
 }
 
+void * allocate_current_vmm(uint64_t size, uint8_t flags)
+{
+    return allocate_vmm(get_current_cr3(), size, flags);
+}
+
 void free_vmm(struct page_directory * pml4, void * address)
 {
     if (FROM_IDENTITY_MAP(address) == NULL)
@@ -226,6 +242,10 @@ void free_vmm(struct page_directory * pml4, void * address)
     }
     pmm_free(FROM_IDENTITY_MAP(address));
     unmap_memory(pml4, address);
+}
+
+void * free_current_vmm(void * address) {
+    return free_vmm(get_current_cr3(), address);
 }
 
 void map_range(struct page_directory* root, void * virtual_start, void * physical_start, uint64_t page_size, uint64_t size)
@@ -249,31 +269,33 @@ void duplicate_page_directory(struct page_directory* root, struct page_directory
 {
     for (int i = 0; i < 512; i++)
     {
-        struct page_directory_entry* entry = &(root->entries[i]);
-        if (entry->present)
+        vm_entry* entry = GET_ENTRY(root, i);
+        vm_entry* new_entry = GET_ENTRY(new, i);
+        if (IS_PRESENT(entry))
         {
-            (&(new->entries[i]))->present = entry->present;
-            (&(new->entries[i]))->writeable = entry->writeable;
-            (&(new->entries[i]))->user_access = entry->user_access;
-            (&(new->entries[i]))->write_through = entry->write_through;
-            (&(new->entries[i]))->cache_disabled = entry->cache_disabled;
-            (&(new->entries[i]))->accessed = entry->accessed;
-            (&(new->entries[i]))->ignored_3 = entry->ignored_3;
-            (&(new->entries[i]))->size = entry->size;
-            (&(new->entries[i]))->global = entry->global;
-            (&(new->entries[i]))->cow = entry->cow;
-            (&(new->entries[i]))->reserved_1 = entry->reserved_1;
-            (&(new->entries[i]))->ignored_1 = entry->ignored_1;
-            (&(new->entries[i]))->execution_disabled = entry->execution_disabled;
+            new_entry->directory.P = entry->directory.P;
+            new_entry->directory.RW = entry->directory.RW;
+            new_entry->directory.US = entry->directory.US;
+            new_entry->directory.PWT = entry->directory.PWT;
+            new_entry->directory.PCD = entry->directory.PCD;
+            new_entry->directory.A = entry->directory.A;
+            new_entry->directory.IGNORED1 = entry->directory.IGNORED1;
+            new_entry->directory.PS = entry->directory.PS;
+            new_entry->directory.IGNORED2 = entry->directory.IGNORED2;
+            new_entry->directory.R = entry->directory.R;
+            new_entry->directory.PDPP = 0; //CHANGED LATED
+            new_entry->directory.RESERVED = entry->directory.RESERVED;
+            new_entry->directory.IGNORED3 = entry->directory.IGNORED3;
+            new_entry->directory.XD = entry->directory.XD;
 
-            if (level == 0 || entry->size)
+            if (level == 0 || entry->directory.PS)
             {
-                (&(new->entries[i]))->page_ppn = entry->page_ppn;
+                new_entry->directory.PDPP = entry->directory.PDPP;
             } else {
-                (&(new->entries[i]))->page_ppn = ((uint64_t)pmm_alloc_page()) >> 12;
+                new_entry->directory.PDPP = ((uint64_t)pmm_alloc_page()) >> 12;
                 duplicate_page_directory(
-                    (struct page_directory*)((uint64_t)entry->page_ppn << 12),
-                    (struct page_directory*)((uint64_t)(&(new->entries[i]))->page_ppn << 12),
+                    (struct page_directory*)get_pdpp(entry, PAGE_SIZE_DIR),
+                    (struct page_directory*)get_pdpp(new_entry, PAGE_SIZE_DIR),
                     level - 1
                 );
             }
@@ -291,42 +313,55 @@ void unmap_address(struct page_directory* root, void* virtual_address)
     struct page_map_index map;
     address_to_map((uint64_t)virtual_address, &map);
 
-    struct page_directory* pml4 = root;
-    struct page_directory_entry* pml4entry = (struct page_directory_entry*)&(pml4->entries[map.PML4_index]);
-    if (!pml4entry->present)
+    struct page_directory *pdptable, *pdtable, *pttable;
+    vm_entry *pml4entry, *pdptentry, *pdentry, *ptentry;
+
+    pml4entry = GET_ENTRY(root, map.PML4_index);
+    if (!IS_PRESENT(pml4entry))
     {
         return;
     }
 
-    struct page_table* pdptable = (struct page_table*)((uint64_t)pml4entry->page_ppn << 12);
-    struct page_table_entry* pdptentry = (struct page_table_entry*)&(pdptable->entries[map.PDP_index]);
+    pdptable = (struct page_directory*)get_pdpp(pml4entry, PAGE_SIZE_DIR);
+    pdptentry = GET_ENTRY(pdptable, map.PDP_index);
 
-    if (!pdptentry->present)
+    if (!IS_PRESENT(pdptentry))
+    {
+        return;
+    }
+    
+    if (pdptentry->huge.PS)
+    {
+        pdptentry->directory.P = 0;
+        return;
+    }
+
+    pdtable = (struct page_directory*)get_pdpp(pdptentry, PAGE_SIZE_DIR);
+    pdentry = GET_ENTRY(pdtable, map.PD_index);
+
+    if (!IS_PRESENT(pdentry))
+    {
+        return;
+    }
+    if (pdptentry->big.PS)
+    {
+        pdptentry->directory.P = 0;
+        return;
+    }
+
+    pttable = (struct page_directory*)get_pdpp(pdentry, PAGE_SIZE_DIR);
+    ptentry = GET_ENTRY(pttable, map.PT_index);
+
+    if (!IS_PRESENT(ptentry))
     {
         return;
     }
 
-    struct page_table* pdtable = (struct page_table*)((uint64_t)pdptentry->page_ppn << 12);
-    struct page_table_entry* pdentry = (struct page_table_entry*)&(pdtable->entries[map.PD_index]);
-
-    if (!pdentry->present)
-    {
-        return;
-    }
-
-    struct page_table* pttable = (struct page_table*)((uint64_t)pdentry->page_ppn << 12);
-    struct page_table_entry* ptentry = (struct page_table_entry*)&(pttable->entries[map.PT_index]);
-
-    if (!ptentry->present)
-    {
-        return;
-    }
-
-    ptentry->present = 0;
-    flush_tlb_entry(virtual_address);
+    ptentry->directory.P = 0;
 }
+    
 
-void* get_physical_address(struct page_directory* cr3, void* virtual_address)
+void* get_physical_address(struct page_directory* root, void* virtual_address)
 {
     struct page_map_index map;
     address_to_map((uint64_t)virtual_address, &map);
@@ -338,49 +373,47 @@ void* get_physical_address(struct page_directory* cr3, void* virtual_address)
     kprintf("[DEBUG] PT index: %d\n", map.PT_index);
     kprintf("[DEBUG] Offset: %llx\n", (uint64_t)virtual_address & 0xfff);
 
-    struct page_directory* pml4 = cr3;
-    struct page_directory_entry* pml4entry = (struct page_directory_entry*)&(pml4->entries[map.PML4_index]);
-    if (!pml4entry->present)
+    struct page_directory* pdptable, *pdtable, *pttable;
+    vm_entry *pml4entry, *pdptentry, *pdentry, *ptentry;
+    pml4entry = GET_ENTRY(root, map.PML4_index);
+    if (!IS_PRESENT(pml4entry))
     {
         panic("[DEBUG][PML4] pml4->entries[PML4_index] not present\n");
     }
 
-    struct page_table* pdptable = (struct page_table*)((uint64_t)pml4entry->page_ppn << 12);
-    struct page_table_entry* pdptentry = (struct page_table_entry*)&(pdptable->entries[map.PDP_index]);
+    pdptable = (struct page_directory*)get_pdpp(pml4entry, PAGE_SIZE_DIR);
+    pdptentry = GET_ENTRY(pdptable, map.PDP_index);
 
-    if (!pdptentry->present)
+    if (!IS_PRESENT(pdptentry))
     {
         panic("[DEBUG][PDP] pdptable->entries[PDP_index] not present\n");
-        return NULL;
-    } else if (pdptentry->size)
+    } else if (pdptentry->huge.PS)
     {
         kprintf("[DEBUG][PDP] pdptable->entries[PDP_index] is a 1GiB page\n");
-        return (void*)((uint64_t)pdptentry->page_ppn << 18 | ((uint64_t)virtual_address & 0x3fffff));
+        return (void*)(get_pdpp(pdptentry, PAGE_SIZE_1GIB) | ((uint64_t)virtual_address & 0x3fffffff));
     }
+    
+    pdtable = (struct page_directory*)get_pdpp(pdptentry, PAGE_SIZE_DIR);
+    pdentry = GET_ENTRY(pdtable, map.PD_index);
 
-    struct page_table* pdtable = (struct page_table*)((uint64_t)pdptentry->page_ppn << 12);
-    struct page_table_entry* pdentry = (struct page_table_entry*)&(pdtable->entries[map.PD_index]);
-
-    if (!pdentry->present)
+    if (!IS_PRESENT(pdentry))
     {
         panic("[DEBUG][PD] pdtable->entries[PD_index] not present\n");
-        return NULL;
-    } else if (pdentry->size)
+    } else if (pdptentry->big.PS)
     {
         kprintf("[DEBUG][PD] pdtable->entries[PD_index] is a 2MiB page\n");
-        return (void*)((uint64_t)pdentry->page_ppn << 12 | ((uint64_t)virtual_address & 0x1fffff));
+        return (void*)(get_pdpp(pdentry, PAGE_SIZE_2MIB) | ((uint64_t)virtual_address & 0x1fffff));
     }
 
-    struct page_table* pttable = (struct page_table*)((uint64_t)pdentry->page_ppn << 12);
-    struct page_table_entry* ptentry = (struct page_table_entry*)&(pttable->entries[map.PT_index]);
+    pttable = (struct page_directory*)get_pdpp(pdentry, PAGE_SIZE_DIR);
+    ptentry = GET_ENTRY(pttable, map.PT_index);
 
-    if (!ptentry->present)
+    if (!IS_PRESENT(ptentry))
     {
         panic("[DEBUG][PT] pttable->entries[PT_index] not present\n");
-        return NULL;
     }
 
-    return (void*)((uint64_t)ptentry->page_ppn << 12 | ((uint64_t)virtual_address & 0xfff));
+    return (void*)(get_pdpp(ptentry, PAGE_SIZE_4KIB) | ((uint64_t)virtual_address & 0xfff));
 }
 
 void init_vmm()
@@ -396,6 +429,9 @@ void init_vmm()
     kprintf("Allocated page at 0x%llx\n", addr);
 
     debug_address(global_cr3, addr);
+
+    memset(addr, 0x42, PAGE_SIZE_4KIB);
+    kprintf("Value at 0x%llx: 0x%llx\n", addr, *((uint64_t*)addr));
 
     map_address(global_cr3, (void*)0xffff900000000000, (void*)FROM_IDENTITY_MAP(addr), PAGE_SIZE_4KIB);
     memset((void*)0xffff900000000000, 0x42, PAGE_SIZE_4KIB);
@@ -433,26 +469,29 @@ struct page_directory * duplicate_pd(struct page_directory * pml4, uint8_t share
     {
         for (int i = 256; i < 512; i++)
         {
-            if (pml4->entries[i].present)
-            {
-                (&(new_pml4->entries[i]))->present = pml4->entries[i].present;
-                (&(new_pml4->entries[i]))->writeable = pml4->entries[i].writeable;
-                (&(new_pml4->entries[i]))->user_access = pml4->entries[i].user_access;
-                (&(new_pml4->entries[i]))->write_through = pml4->entries[i].write_through;
-                (&(new_pml4->entries[i]))->cache_disabled = pml4->entries[i].cache_disabled;
-                (&(new_pml4->entries[i]))->accessed = pml4->entries[i].accessed;
-                (&(new_pml4->entries[i]))->ignored_3 = pml4->entries[i].ignored_3;
-                (&(new_pml4->entries[i]))->size = pml4->entries[i].size;
-                (&(new_pml4->entries[i]))->global = pml4->entries[i].global;
-                (&(new_pml4->entries[i]))->cow = pml4->entries[i].cow;
-                (&(new_pml4->entries[i]))->page_ppn = pml4->entries[i].page_ppn;
-                (&(new_pml4->entries[i]))->reserved_1 = pml4->entries[i].reserved_1;
-                (&(new_pml4->entries[i]))->ignored_1 = pml4->entries[i].ignored_1;
-                (&(new_pml4->entries[i]))->execution_disabled = pml4->entries[i].execution_disabled;
+            vm_entry* entry = GET_ENTRY(pml4, i);
+            vm_entry* new_entry = GET_ENTRY(new_pml4, i);
 
+            if (IS_PRESENT(entry))
+            {
+                new_entry->directory.P = entry->directory.P;
+                new_entry->directory.RW = entry->directory.RW;
+                new_entry->directory.US = entry->directory.US;
+                new_entry->directory.PWT = entry->directory.PWT;
+                new_entry->directory.PCD = entry->directory.PCD;
+                new_entry->directory.A = entry->directory.A;
+                new_entry->directory.IGNORED1 = entry->directory.IGNORED1;
+                new_entry->directory.PS = entry->directory.PS;
+                new_entry->directory.IGNORED2 = entry->directory.IGNORED2;
+                new_entry->directory.R = entry->directory.R;
+                new_entry->directory.PDPP = entry->directory.PDPP;
+                new_entry->directory.RESERVED = entry->directory.RESERVED;
+                new_entry->directory.IGNORED3 = entry->directory.IGNORED3;
+                new_entry->directory.XD = entry->directory.XD;
+            
                 duplicate_page_directory(
-                    (struct page_directory*)((uint64_t)pml4->entries[i].page_ppn << 12),
-                    (struct page_directory*)((uint64_t)(&(new_pml4->entries[i]))->page_ppn << 12),
+                    (struct page_directory*)((uint64_t)entry->directory.PDPP << 12),
+                    (struct page_directory*)((uint64_t)new_entry->directory.PDPP << 12),
                     2
                 );
             }
@@ -497,13 +536,12 @@ void init_paging() {
     init_vmm();
 }
 
-void set_permissions(struct page_table_entry* entry, uint8_t flags)
+void set_permissions(vm_entry* entry, uint8_t flags)
 {
-    entry->writeable = WRITE_BIT_SET(flags);
-    entry->user_access = USER_BIT_SET(flags);
-    entry->cache_disabled = CACHE_BIT_SET(flags);
-    entry->execution_disabled = NX_BIT_SET(flags);
-    entry->cow = COW_BIT_SET(flags);
+    entry->directory.RW = WRITE_BIT_SET(flags);
+    entry->directory.US = USER_BIT_SET(flags);
+    entry->directory.PCD = CACHE_BIT_SET(flags);
+    entry->directory.XD = NX_BIT_SET(flags);    
 }
 
 uint64_t mprotect_page(struct page_directory * root, void* address, uint8_t flags)
@@ -513,54 +551,57 @@ uint64_t mprotect_page(struct page_directory * root, void* address, uint8_t flag
 
     kprintf("Mprotecting vaddr: %llx (phys: %llx) with flags: %x\n", address, get_physical_address(root, address), flags);
 
-    struct page_directory* pml4 = root;
-    struct page_directory_entry* pml4entry = (struct page_directory_entry*)&(pml4->entries[map.PML4_index]);
-    if (!pml4entry->present)
-    {
-        return 0;
-    } else if (pml4entry->size)
+    struct page_directory* pdptable, *pdtable, *pttable;
+    vm_entry *pml4entry, *pdptentry, *pdentry, *ptentry;
+
+    pml4entry = GET_ENTRY(root, map.PML4_index);
+    if (!IS_PRESENT(pml4entry))
     {
         return 0;
     }
-    struct page_table* pdptable = (struct page_table*)((uint64_t)pml4entry->page_ppn << 12);
-    struct page_table_entry* pdptentry = (struct page_table_entry*)&(pdptable->entries[map.PDP_index]);
 
-    if (!pdptentry->present)
+    pdptable = (struct page_directory*)get_pdpp(pml4entry, PAGE_SIZE_DIR);
+    pdptentry = GET_ENTRY(pdptable, map.PDP_index);
+
+    if (!IS_PRESENT(pdptentry))
     {
         return 0;
-    } else if (pdptentry->size)
+    }
+    
+    if (pdptentry->huge.PS)
     {
         set_permissions(pdptentry, flags);
         if (USER_BIT_SET(flags))
         {
-            pml4entry->user_access = 1;
-            pdptentry->user_access = 1;
+            pml4entry->directory.US = 1;
+            pdptentry->huge.US = 1;
         }
         return PAGE_SIZE_1GIB;
     }
 
-    struct page_table* pdtable = (struct page_table*)((uint64_t)pdptentry->page_ppn << 12);
-    struct page_table_entry* pdentry = (struct page_table_entry*)&(pdtable->entries[map.PD_index]);
+    pdtable = (struct page_directory*)get_pdpp(pdptentry, PAGE_SIZE_DIR);
+    pdentry = GET_ENTRY(pdtable, map.PD_index);
 
-    if (!pdentry->present)
+    if (!IS_PRESENT(pdentry))
     {
         return 0;
-    } else if (pdentry->size)
+    }
+    if (pdptentry->big.PS)
     {
         set_permissions(pdentry, flags);
         if (USER_BIT_SET(flags))
         {
-            pml4entry->user_access = 1;
-            pdptentry->user_access = 1;
-            pdentry->user_access = 1;
+            pml4entry->directory.US = 1;
+            pdptentry->directory.US = 1;
+            pdentry->big.US = 1;
         }
         return PAGE_SIZE_2MIB;
     }
 
-    struct page_table* pttable = (struct page_table*)((uint64_t)pdentry->page_ppn << 12);
-    struct page_table_entry* ptentry = (struct page_table_entry*)&(pttable->entries[map.PT_index]);
+    pttable = (struct page_directory*)get_pdpp(pdentry, PAGE_SIZE_DIR);
+    ptentry = GET_ENTRY(pttable, map.PT_index);
 
-    if (!ptentry->present)
+    if (!IS_PRESENT(ptentry))
     {
         return 0;
     }
@@ -568,10 +609,10 @@ uint64_t mprotect_page(struct page_directory * root, void* address, uint8_t flag
     set_permissions(ptentry, flags);
     if (USER_BIT_SET(flags))
     {
-        pml4entry->user_access = 1;
-        pdptentry->user_access = 1;
-        pdentry->user_access = 1;
-        ptentry->user_access = 1;
+        pml4entry->directory.US = 1;
+        pdptentry->directory.US = 1;
+        pdentry->directory.US = 1;
+        ptentry->regular.US = 1;
     }
 
     return PAGE_SIZE_4KIB;
@@ -593,221 +634,233 @@ void mprotect(struct page_directory * root, void* address, uint64_t size, uint8_
     }
 }
 
-
-uint8_t is_present(struct page_directory* pml4, void * address) {
+uint8_t get_page_perms(struct page_directory *pml4, void* address)
+{
     struct page_map_index map;
     address_to_map((uint64_t)address, &map);
 
-    struct page_directory* pml4table = pml4;
-    struct page_directory_entry* pml4entry = (struct page_directory_entry*)&(pml4table->entries[map.PML4_index]);
-    if (!pml4entry->present)
+    struct page_directory* pdptable, *pdtable, *pttable;
+    vm_entry *pml4entry, *pdptentry, *pdentry, *ptentry;
+
+    pml4entry = GET_ENTRY(pml4, map.PML4_index);
+    if (!IS_PRESENT(pml4entry))
     {
         return 0;
     }
 
-    struct page_table* pdptable = (struct page_table*)((uint64_t)pml4entry->page_ppn << 12);
-    struct page_table_entry* pdptentry = (struct page_table_entry*)&(pdptable->entries[map.PDP_index]);
+    pdptable = (struct page_directory*)get_pdpp(pml4entry, PAGE_SIZE_DIR);
+    pdptentry = GET_ENTRY(pdptable, map.PDP_index);
 
-    if (!pdptentry->present)
+    if (!IS_PRESENT(pdptentry))
     {
         return 0;
-    } else if (pdptentry->size)
+    }
+    
+    if (pdptentry->huge.PS)
+    {
+        uint8_t user_bit = (pml4entry->directory.US & pdptentry->huge.US);
+        return pdptentry->huge.RW | (user_bit << 1) | (pdptentry->huge.XD << 2) | (pdptentry->huge.PCD << 3);
+    }
+
+    pdtable = (struct page_directory*)get_pdpp(pdptentry, PAGE_SIZE_DIR);
+    pdentry = GET_ENTRY(pdtable, map.PD_index);
+
+    if (!IS_PRESENT(pdentry))
+    {
+        return 0;
+    }
+
+    if (pdptentry->big.PS)
+    {
+        uint8_t user_bit = (pml4entry->directory.US & pdptentry->directory.US & pdentry->big.US);
+        return pdentry->big.RW | (user_bit << 1) | (pdentry->big.XD << 2) | (pdentry->big.PCD << 3);
+    }
+
+    pttable = (struct page_directory*)get_pdpp(pdentry, PAGE_SIZE_DIR);
+    ptentry = GET_ENTRY(pttable, map.PT_index);
+
+    if (!IS_PRESENT(ptentry))
+    {
+        return 0;
+    }
+
+    uint8_t user_bit = (pml4entry->directory.US & pdptentry->directory.US & pdentry->directory.US & ptentry->regular.US);
+    return ptentry->regular.RW | (user_bit << 1) | (ptentry->regular.XD << 2) | (ptentry->regular.PCD << 3);
+}
+
+uint8_t is_user_access(struct page_directory* pml4, void * address)
+{
+    return USER_BIT_SET(get_page_perms(pml4, address));
+}
+
+uint8_t is_present(struct page_directory* pml4, void * address)
+{
+    struct page_map_index map;
+    address_to_map((uint64_t)address, &map);
+
+    struct page_directory* pdptable, *pdtable, *pttable;
+    vm_entry *pml4entry, *pdptentry, *pdentry, *ptentry;
+
+    pml4entry = GET_ENTRY(pml4, map.PML4_index);
+    if (!IS_PRESENT(pml4entry))
+    {
+        return 0;
+    }
+
+    pdptable = (struct page_directory*)get_pdpp(pml4entry, PAGE_SIZE_DIR);
+    pdptentry = GET_ENTRY(pdptable, map.PDP_index);
+
+    if (!IS_PRESENT(pdptentry))
+    {
+        return 0;
+    }
+    
+    if (pdptentry->huge.PS)
     {
         return 1;
     }
 
-    struct page_table* pdtable = (struct page_table*)((uint64_t)pdptentry->page_ppn << 12);
-    struct page_table_entry* pdentry = (struct page_table_entry*)&(pdtable->entries[map.PD_index]);
+    pdtable = (struct page_directory*)get_pdpp(pdptentry, PAGE_SIZE_DIR);
+    pdentry = GET_ENTRY(pdtable, map.PD_index);
 
-    if (!pdentry->present)
+    if (!IS_PRESENT(pdentry))
     {
         return 0;
-    } else if (pdentry->size)
+    }
+
+    if (pdptentry->big.PS)
     {
         return 1;
     }
 
-    struct page_table* pttable = (struct page_table*)((uint64_t)pdentry->page_ppn << 12);
-    struct page_table_entry* ptentry = (struct page_table_entry*)&(pttable->entries[map.PT_index]);
+    pttable = (struct page_directory*)get_pdpp(pdentry, PAGE_SIZE_DIR);
+    ptentry = GET_ENTRY(pttable, map.PT_index);
 
-    if (!ptentry->present)
+    if (!IS_PRESENT(ptentry))
     {
         return 0;
     }
 
     return 1;
 }
+
 uint8_t is_writeable(struct page_directory* pml4, void * address)
 {
-    struct page_map_index map;
-    address_to_map((uint64_t)address, &map);
-
-    struct page_directory* pml4table = pml4;
-    struct page_directory_entry* pml4entry = (struct page_directory_entry*)&(pml4table->entries[map.PML4_index]);
-    if (!pml4entry->present)
-    {
-        return 0;
-    }
-
-    struct page_table* pdptable = (struct page_table*)((uint64_t)pml4entry->page_ppn << 12);
-    struct page_table_entry* pdptentry = (struct page_table_entry*)&(pdptable->entries[map.PDP_index]);
-
-    if (!pdptentry->present)
-    {
-        return 0;
-    } else if (pdptentry->size)
-    {
-        return pdptentry->writeable;
-    }
-
-    struct page_table* pdtable = (struct page_table*)((uint64_t)pdptentry->page_ppn << 12);
-    struct page_table_entry* pdentry = (struct page_table_entry*)&(pdtable->entries[map.PD_index]);
-
-    if (!pdentry->present)
-    {
-        return 0;
-    } else if (pdentry->size)
-    {
-        return pdentry->writeable;
-    }
-
-    struct page_table* pttable = (struct page_table*)((uint64_t)pdentry->page_ppn << 12);
-    struct page_table_entry* ptentry = (struct page_table_entry*)&(pttable->entries[map.PT_index]);
-
-    if (!ptentry->present)
-    {
-        return 0;
-    }
-
-    return ptentry->writeable;
+    return WRITE_BIT_SET(get_page_perms(pml4, address));
 }
-uint8_t is_user_access(struct page_directory* pml4, void * address) {
-    struct page_map_index map;
-    address_to_map((uint64_t)address, &map);
 
-    struct page_directory* pml4table = pml4;
-    struct page_directory_entry* pml4entry = (struct page_directory_entry*)&(pml4table->entries[map.PML4_index]);
-    if (!pml4entry->present)
-    {
-        return 0;
-    }
-
-    struct page_table* pdptable = (struct page_table*)((uint64_t)pml4entry->page_ppn << 12);
-    struct page_table_entry* pdptentry = (struct page_table_entry*)&(pdptable->entries[map.PDP_index]);
-
-    if (!pdptentry->present)
-    {
-        return 0;
-    } else if (pdptentry->size)
-    {
-        return pdptentry->user_access && pml4entry->user_access;
-    }
-
-    struct page_table* pdtable = (struct page_table*)((uint64_t)pdptentry->page_ppn << 12);
-    struct page_table_entry* pdentry = (struct page_table_entry*)&(pdtable->entries[map.PD_index]);
-
-    if (!pdentry->present)
-    {
-        return 0;
-    } else if (pdentry->size)
-    {
-        return pdentry->user_access && pdptentry->user_access && pml4entry->user_access;
-    }
-
-    struct page_table* pttable = (struct page_table*)((uint64_t)pdentry->page_ppn << 12);
-    struct page_table_entry* ptentry = (struct page_table_entry*)&(pttable->entries[map.PT_index]);
-
-    if (!ptentry->present)
-    {
-        return 0;
-    }
-
-    return ptentry->user_access && pdentry->user_access && pdptentry->user_access && pml4entry->user_access;
-}
 uint8_t is_executable(struct page_directory* pml4, void * address)
+{
+    return NX_BIT_SET(get_page_perms(pml4, address));
+}
+
+void print_entry(vm_entry* entry, uint64_t size)
+{
+    kprintf("DUMPING ENTRY: 0x%llx\n", entry);
+    kprintf("\tP: %d RW: %d US: %d PWT: %d PCD: %d A: %d IGNORED1: %d \n", 
+        entry->directory.P,
+        entry->directory.RW,
+        entry->directory.US,
+        entry->directory.PWT,
+        entry->directory.PCD,
+        entry->directory.A,
+        entry->directory.IGNORED1
+    );
+    kprintf("\tIGNORED2: %d R: %d RESERVED: %d IGNORED3: %d XD: %d\n",
+        entry->directory.IGNORED2,
+        entry->directory.R,
+        entry->directory.RESERVED,
+        entry->directory.IGNORED3,
+        entry->directory.XD
+    );
+
+    switch (size)
+    {
+        case PAGE_SIZE_1GIB:
+            kprintf("\t\t[HUGE ENTRY] PS: %d PDPP: %llx\n", entry->huge.PS, entry->huge.PDPP);
+            kprintf("\t\tPhys addr: 0x%llx\n", entry->huge.PDPP);
+            break;
+        case PAGE_SIZE_2MIB:
+            kprintf("\t\t[BIG ENTRY] PS: %d PDPP: %llx\n", entry->big.PS, entry->big.PDPP);
+            kprintf("\t\tPhys addr: 0x%llx\n", entry->big.PDPP);
+            break;
+        case PAGE_SIZE_4KIB:
+            kprintf("\t\t[REGULAR ENTRY] PDPP: %llx\n", entry->regular.PDPP);
+            kprintf("\t\tPhys addr: 0x%llx\n", entry->regular.PDPP);
+            break;
+        default:
+            kprintf("\t\t[DIRECTORY ENTRY] PS: %d PDPP: %llx\n", entry->directory.PS, entry->directory.PDPP);
+            kprintf("\t\tPhys addr: 0x%llx\n", entry->directory.PDPP);
+            break;
+    }
+}
+
+void debug_address(struct page_directory * pml4, void * address)
 {
     struct page_map_index map;
     address_to_map((uint64_t)address, &map);
 
-    struct page_directory* pml4table = pml4;
-    struct page_directory_entry* pml4entry = (struct page_directory_entry*)&(pml4table->entries[map.PML4_index]);
-    if (!pml4entry->present)
+    struct page_directory* pdptable, *pdtable, *pttable;
+    vm_entry *pml4entry, *pdptentry, *pdentry, *ptentry;
+
+    pml4entry = GET_ENTRY(pml4, map.PML4_index);
+    print_entry(pml4entry, PAGE_SIZE_DIR);
+    if (!IS_PRESENT(pml4entry))
     {
-        return 0;
+        kprintf("PML4 entry not present\n");
+        return;
+    }
+    
+    pdptable = (struct page_directory*)get_pdpp(pml4entry, PAGE_SIZE_DIR);
+    pdptentry = GET_ENTRY(pdptable, map.PDP_index);
+
+    if (!IS_PRESENT(pdptentry))
+    {
+        kprintf("PDPT entry not present\n");
+        print_entry(pdptentry, PAGE_SIZE_DIR);
+        return;
     }
 
-    struct page_table* pdptable = (struct page_table*)((uint64_t)pml4entry->page_ppn << 12);
-    struct page_table_entry* pdptentry = (struct page_table_entry*)&(pdptable->entries[map.PDP_index]);
-
-    if (!pdptentry->present)
+    if (pdptentry->huge.PS)
     {
-        return 0;
-    } else if (pdptentry->size)
-    {
-        return !pdptentry->execution_disabled;
+        kprintf("PDPT entry is a 1GiB page\n");
+        print_entry(pdptentry, PAGE_SIZE_DIR);
+        return;
+    } else {
+        kprintf("PDPT entry is a directory\n");
+        print_entry(pdptentry, PAGE_SIZE_DIR);
     }
 
-    struct page_table* pdtable = (struct page_table*)((uint64_t)pdptentry->page_ppn << 12);
-    struct page_table_entry* pdentry = (struct page_table_entry*)&(pdtable->entries[map.PD_index]);
-
-    if (!pdentry->present)
+    pdtable = (struct page_directory*)get_pdpp(pdptentry, PAGE_SIZE_DIR);
+    pdentry = GET_ENTRY(pdtable, map.PD_index);
+    
+    if (!IS_PRESENT(pdentry))
     {
-        return 0;
-    } else if (pdentry->size)
-    {
-        return !pdentry->execution_disabled;
+        kprintf("PD entry not present\n");
+        print_entry(pdentry, PAGE_SIZE_DIR);
+        return;
     }
 
-    struct page_table* pttable = (struct page_table*)((uint64_t)pdentry->page_ppn << 12);
-    struct page_table_entry* ptentry = (struct page_table_entry*)&(pttable->entries[map.PT_index]);
-
-    if (!ptentry->present)
+    if (pdptentry->big.PS)
     {
-        return 0;
+        kprintf("PD entry is a 2MiB page\n");
+        print_entry(pdentry, PAGE_SIZE_DIR);
+        return;
+    } else {
+        kprintf("PD entry is a directory\n");
+        print_entry(pdentry, PAGE_SIZE_DIR);
     }
 
-    return !ptentry->execution_disabled;
-}
-uint8_t get_page_perms(struct page_directory *pml4, void* address) {
-    struct page_map_index map;
-    address_to_map((uint64_t)address, &map);
+    pttable = (struct page_directory*)get_pdpp(pdentry, PAGE_SIZE_DIR);
+    ptentry = GET_ENTRY(pttable, map.PT_index);
 
-    struct page_directory* pml4table = pml4;
-    struct page_directory_entry* pml4entry = (struct page_directory_entry*)&(pml4table->entries[map.PML4_index]);
-    if (!pml4entry->present)
+    if (!IS_PRESENT(ptentry))
     {
-        return 0;
+        kprintf("PT entry not present\n");
+        print_entry(ptentry, PAGE_SIZE_DIR);
+        return;
     }
 
-    struct page_table* pdptable = (struct page_table*)((uint64_t)pml4entry->page_ppn << 12);
-    struct page_table_entry* pdptentry = (struct page_table_entry*)&(pdptable->entries[map.PDP_index]);
-
-    if (!pdptentry->present)
-    {
-        return 0;
-    } else if (pdptentry->size)
-    {
-        return pdptentry->writeable | (pdptentry->user_access << 1) | (pdptentry->cache_disabled << 2) | (pdptentry->execution_disabled << 3);
-    }
-
-    struct page_table* pdtable = (struct page_table*)((uint64_t)pdptentry->page_ppn << 12);
-    struct page_table_entry* pdentry = (struct page_table_entry*)&(pdtable->entries[map.PD_index]);
-
-    if (!pdentry->present)
-    {
-        return 0;
-    } else if (pdentry->size)
-    {
-        return pdentry->writeable | (pdentry->user_access << 1) | (pdentry->cache_disabled << 2) | (pdentry->execution_disabled << 3);
-    }
-
-    struct page_table* pttable = (struct page_table*)((uint64_t)pdentry->page_ppn << 12);
-    struct page_table_entry* ptentry = (struct page_table_entry*)&(pttable->entries[map.PT_index]);
-
-    if (!ptentry->present)
-    {
-        return 0;
-    }
-
-    return ptentry->writeable | (ptentry->user_access << 1) | (ptentry->cache_disabled << 2) | (ptentry->execution_disabled << 3);
+    kprintf("PT entry is a 4KiB page\n");
+    print_entry(ptentry, PAGE_SIZE_4KIB);
 }

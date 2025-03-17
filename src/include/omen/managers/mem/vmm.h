@@ -20,11 +20,13 @@ void map_memory(struct page_directory * pml4, void * address, void * physical, u
 void mprotect(struct page_directory *, void*, uint64_t, uint8_t);
 uint8_t is_user_access(struct page_directory* pml4, void * address);
 struct page_directory* duplicate_current_pml4();
-
+void debug_address(struct page_directory * pml4, void * address);
 void * allocate_vmm_page(struct page_directory * pml4, uint8_t flags);
 void free_vmm_page(struct page_directory * pml4, void * address);
 void * allocate_vmm(struct page_directory * pml4, uint64_t size, uint8_t flags);
 void free_vmm(struct page_directory * pml4, void * address);
+void * allocate_current_vmm(uint64_t size, uint8_t flags);
+void * free_current_vmm(void * address);
 
 //Only internal use
 void set_kernel_pml4(struct page_directory* pml4);

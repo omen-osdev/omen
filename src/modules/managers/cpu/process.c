@@ -59,7 +59,7 @@ void remove_vmarea(process_t* process, void * start) {
             } else {
                 process->vm_areas = current->next;
             }
-            free(process->heap, current);
+            free(process->context->cr3, current);
             return;
         }
         previous = current;
@@ -152,7 +152,6 @@ process_t * create_user_process(void * init) {
     task->signal_pending = 0;
     task->nice = 0;
     task->privilege = 0;
-    task->heap = 0;
     task->cpu = arch_get_bsp_cpu(); //TODO: Change this for SMP
     task->cpu_time = 0;
     task->last_scheduled = 0;
