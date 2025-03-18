@@ -13,10 +13,11 @@
 #define PAGE_SIZE_DIR       0x1
 
 #define PHYSICAL_MEMORY_OFFSET 0xffffA00000000000
+uint64_t physical_memory_offset = 0;
 #define PHYSICAL_MEMORY_SIZE   0x0000004000000000
 
-#define TO_IDENTITY_MAP(addr) ((addr) + PHYSICAL_MEMORY_OFFSET)
-#define FROM_IDENTITY_MAP(addr) ((addr) - PHYSICAL_MEMORY_OFFSET)
+#define TO_IDENTITY_MAP(addr) ((addr) + physical_memory_offset)
+#define FROM_IDENTITY_MAP(addr) ((addr) - physical_memory_offset)
 
 #define CACHE_BIT_SET(x)((x & PAGE_CACHE_DISABLE_BIT) >> 3)
 #define NX_BIT_SET(x)((x & PAGE_NX_BIT) >> 2)
@@ -61,13 +62,13 @@ uint64_t get_pdpp(vm_entry * entry, uint64_t size)
     switch (size)
     {
         case PAGE_SIZE_1GIB:
-            return GET_PDPP_HUGE(entry);
+            return TO_IDENTITY_MAP(GET_PDPP_HUGE(entry));
         case PAGE_SIZE_2MIB:
-            return GET_PDPP_BIG(entry);
+            return TO_IDENTITY_MAP(GET_PDPP_BIG(entry));
         case PAGE_SIZE_4KIB:
-            return GET_PDPP_REGULAR(entry);
+            return TO_IDENTITY_MAP(GET_PDPP_REGULAR(entry));
         default:
-            return GET_PDPP_DIR(entry);
+            return TO_IDENTITY_MAP(GET_PDPP_DIR(entry));
     }
 }
 
@@ -244,8 +245,8 @@ void free_vmm(struct page_directory * pml4, void * address)
     unmap_memory(pml4, address);
 }
 
-void * free_current_vmm(void * address) {
-    return free_vmm(get_current_cr3(), address);
+void free_current_vmm(void * address) {
+    free_vmm(get_current_cr3(), address);
 }
 
 void map_range(struct page_directory* root, void * virtual_start, void * physical_start, uint64_t page_size, uint64_t size)
@@ -265,7 +266,7 @@ void map_range(struct page_directory* root, void * virtual_start, void * physica
     kprintf("Mapped range from 0x%llx to 0x%llx\n", virtual_start, (uint64_t)virtual_start + size);
 }
 
-void duplicate_page_directory(struct page_directory* root, struct page_directory* new, uint8_t level)
+void duplicate_page_directory(struct page_directory* root, struct page_directory* new, uint8_t level, uint8_t root_on_phys)
 {
     for (int i = 0; i < 512; i++)
     {
@@ -293,7 +294,85 @@ void duplicate_page_directory(struct page_directory* root, struct page_directory
                 new_entry->directory.PDPP = entry->directory.PDPP;
             } else {
                 new_entry->directory.PDPP = ((uint64_t)pmm_alloc_page()) >> 12;
+
+                uint64_t source_pdpp = (root_on_phys) ? GET_PDPP_DIR(entry) : get_pdpp(entry, PAGE_SIZE_DIR);
+
                 duplicate_page_directory(
+                    (struct page_directory*)source_pdpp,
+                    (struct page_directory*)get_pdpp(new_entry, PAGE_SIZE_DIR),
+                    level - 1,
+                    root_on_phys
+                );
+            }
+        }
+    }
+}
+
+void compare_directories(struct page_directory* root, struct page_directory* new, uint8_t level)
+{
+    kprintf("Comparing directories (%llx vs %llx) at level %d\n", root, new, level);
+    for (int i = 0; i < 512; i++)
+    {
+        vm_entry* entry = GET_ENTRY(root, i);
+        vm_entry* new_entry = GET_ENTRY(new, i);
+        if (IS_PRESENT(entry))
+        {
+            if (new_entry->directory.P != entry->directory.P)
+            {
+                kprintf("P bit mismatch at level %d, entry %d\n", level, i);
+            }
+            if (new_entry->directory.RW != entry->directory.RW)
+            {
+                kprintf("RW bit mismatch at level %d, entry %d\n", level, i);
+            }
+            if (new_entry->directory.US != entry->directory.US)
+            {
+                kprintf("US bit mismatch at level %d, entry %d\n", level, i);
+            }
+            if (new_entry->directory.PWT != entry->directory.PWT)
+            {
+                kprintf("PWT bit mismatch at level %d, entry %d\n", level, i);
+            }
+            if (new_entry->directory.PCD != entry->directory.PCD)
+            {
+                kprintf("PCD bit mismatch at level %d, entry %d\n", level, i);
+            }
+            if (new_entry->directory.A != entry->directory.A)
+            {
+                kprintf("A bit mismatch at level %d, entry %d\n", level, i);
+            }
+            if (new_entry->directory.IGNORED1 != entry->directory.IGNORED1)
+            {
+                kprintf("IGNORED1 bit mismatch at level %d, entry %d\n", level, i);
+            }
+            if (new_entry->directory.PS != entry->directory.PS)
+            {
+                kprintf("PS bit mismatch at level %d, entry %d\n", level, i);
+            }
+            if (new_entry->directory.IGNORED2 != entry->directory.IGNORED2)
+            {
+                kprintf("IGNORED2 bit mismatch at level %d, entry %d\n", level, i);
+            }
+            if (new_entry->directory.R != entry->directory.R)
+            {
+                kprintf("R bit mismatch at level %d, entry %d\n", level, i);
+            }
+            if (new_entry->directory.RESERVED != entry->directory.RESERVED)
+            {
+                kprintf("RESERVED bit mismatch at level %d, entry %d\n", level, i);
+            }
+            if (new_entry->directory.IGNORED3 != entry->directory.IGNORED3)
+            {
+                kprintf("IGNORED3 bit mismatch at level %d, entry %d\n", level, i);
+            }
+            if (new_entry->directory.XD != entry->directory.XD)
+            {
+                kprintf("XD bit mismatch at level %d, entry %d\n", level, i);
+            }
+
+            if (level > 0 && !entry->directory.PS)
+            {
+                compare_directories(
                     (struct page_directory*)get_pdpp(entry, PAGE_SIZE_DIR),
                     (struct page_directory*)get_pdpp(new_entry, PAGE_SIZE_DIR),
                     level - 1
@@ -305,7 +384,7 @@ void duplicate_page_directory(struct page_directory* root, struct page_directory
 
 void duplicate_cr3(struct page_directory* root, struct page_directory* new)
 {
-    duplicate_page_directory(root, new, 3);
+    duplicate_page_directory(root, new, 3, 0);
 }
 
 void unmap_address(struct page_directory* root, void* virtual_address)
@@ -418,11 +497,11 @@ void* get_physical_address(struct page_directory* root, void* virtual_address)
 
 void init_vmm()
 {
-
-    struct page_directory* global_cr3 = pmm_alloc_page();
-    memcpy(global_cr3, get_current_cr3(), sizeof(struct page_directory));
-    map_range(global_cr3, (void*)PHYSICAL_MEMORY_OFFSET, (void*)0, PAGE_SIZE_1GIB, PHYSICAL_MEMORY_SIZE);
-    switch_cr3(global_cr3);
+    map_range(get_current_cr3(), (void*)PHYSICAL_MEMORY_OFFSET, (void*)0, PAGE_SIZE_1GIB, PHYSICAL_MEMORY_SIZE);
+    physical_memory_offset = PHYSICAL_MEMORY_OFFSET;
+    struct page_directory* global_cr3 = duplicate_pd(get_current_cr3(), 0, 0, 1);
+    compare_directories(get_current_cr3(), global_cr3, 4);
+    switch_cr3(FROM_IDENTITY_MAP(global_cr3));
     kprintf("Page table switched\n");
     
     void * addr = TO_IDENTITY_MAP(pmm_alloc_page());
@@ -456,15 +535,32 @@ uint8_t remap_allocate_cow(struct page_directory * pml4, void * address_raw) {
     return 0;
 }
 
-struct page_directory * duplicate_pd(struct page_directory * pml4, uint8_t share_kernel, uint8_t use_cow) {
-    
+uint8_t compare_entries(vm_entry* entry1, vm_entry* entry2)
+{
+    return entry1->directory.P == entry2->directory.P &&
+           entry1->directory.RW == entry2->directory.RW &&
+           entry1->directory.US == entry2->directory.US &&
+           entry1->directory.PWT == entry2->directory.PWT &&
+           entry1->directory.PCD == entry2->directory.PCD &&
+           entry1->directory.A == entry2->directory.A &&
+           entry1->directory.IGNORED1 == entry2->directory.IGNORED1 &&
+           entry1->directory.PS == entry2->directory.PS &&
+           entry1->directory.IGNORED2 == entry2->directory.IGNORED2 &&
+           entry1->directory.R == entry2->directory.R &&
+           entry1->directory.RESERVED == entry2->directory.RESERVED &&
+           entry1->directory.IGNORED3 == entry2->directory.IGNORED3 &&
+           entry1->directory.XD == entry2->directory.XD;
+}
+
+struct page_directory * duplicate_pd(struct page_directory * pml4, uint8_t share_kernel, uint8_t use_cow, uint8_t source_on_phys)
+{
     if (use_cow)
     {
         panic("COW not implemented\n");
         return NULL;
     }
 
-    struct page_directory* new_pml4 = pmm_alloc_page();
+    struct page_directory* new_pml4 = TO_IDENTITY_MAP(pmm_alloc_page());
     if (share_kernel)
     {
         for (int i = 256; i < 512; i++)
@@ -484,20 +580,23 @@ struct page_directory * duplicate_pd(struct page_directory * pml4, uint8_t share
                 new_entry->directory.PS = entry->directory.PS;
                 new_entry->directory.IGNORED2 = entry->directory.IGNORED2;
                 new_entry->directory.R = entry->directory.R;
-                new_entry->directory.PDPP = entry->directory.PDPP;
+                new_entry->directory.PDPP = 0; //CHANGED LATED
                 new_entry->directory.RESERVED = entry->directory.RESERVED;
                 new_entry->directory.IGNORED3 = entry->directory.IGNORED3;
                 new_entry->directory.XD = entry->directory.XD;
             
+                uint64_t source_pdpp = (source_on_phys) ? GET_PDPP_DIR(entry) : get_pdpp(entry, PAGE_SIZE_DIR);
+                new_entry->directory.PDPP = ((uint64_t)pmm_alloc_page()) >> 12;
                 duplicate_page_directory(
-                    (struct page_directory*)((uint64_t)entry->directory.PDPP << 12),
-                    (struct page_directory*)((uint64_t)new_entry->directory.PDPP << 12),
-                    2
+                    (struct page_directory*)source_pdpp,
+                    (struct page_directory*)get_pdpp(new_entry, PAGE_SIZE_DIR),
+                    3,
+                    source_on_phys
                 );
             }
         }
     } else {
-        duplicate_cr3(pml4, new_pml4);
+        duplicate_page_directory(pml4, new_pml4, 3, source_on_phys);
     }
 
     return new_pml4;
@@ -510,14 +609,14 @@ void map_memory(struct page_directory * pml4, void * address, void * physical, u
 
 struct page_directory* duplicate_current_pml4() {
     struct page_directory* pml4 = get_pml4();
-    struct page_directory* new_pml4 = pmm_alloc_page();
+    struct page_directory* new_pml4 = TO_IDENTITY_MAP(pmm_alloc_page());
     duplicate_cr3(pml4, new_pml4);
     return new_pml4;
 }
 
 //Only internal use
 void set_pml4(struct page_directory* pml4) {
-    switch_cr3(pml4);
+    switch_cr3(FROM_IDENTITY_MAP(pml4));
 }
 void * virtual_to_physical(struct page_directory * pml4, void * address) {
     return get_physical_address(pml4, address);
@@ -549,7 +648,7 @@ uint64_t mprotect_page(struct page_directory * root, void* address, uint8_t flag
     struct page_map_index map;
     address_to_map((uint64_t)address, &map);
 
-    kprintf("Mprotecting vaddr: %llx (phys: %llx) with flags: %x\n", address, get_physical_address(root, address), flags);
+    kprintf("Mprotecting vaddr: %llx (phys: %llx) with flags (W: %d, U: %d, NX: %d, CD: %d)\n", address, get_physical_address(root, address), WRITE_BIT_SET(flags), USER_BIT_SET(flags), NX_BIT_SET(flags), CACHE_BIT_SET(flags));
 
     struct page_directory* pdptable, *pdtable, *pttable;
     vm_entry *pml4entry, *pdptentry, *pdentry, *ptentry;
@@ -863,4 +962,19 @@ void debug_address(struct page_directory * pml4, void * address)
 
     kprintf("PT entry is a 4KiB page\n");
     print_entry(ptentry, PAGE_SIZE_4KIB);
+}
+
+void * allocate_current_vmm_uspace(uint64_t size, uint8_t flags) 
+{
+    void * buffer = pmm_alloc(size);
+    if (buffer == NULL)
+    {
+        return NULL;
+    }
+    return buffer;
+}
+
+void free_vmm_uspace(void * address)
+{
+    pmm_free(address);
 }

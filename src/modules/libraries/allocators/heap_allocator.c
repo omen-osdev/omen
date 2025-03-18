@@ -25,18 +25,20 @@ void kstackfree(void* address) {
     kfree(address);
 }
 
-void * malloc(struct page_directory * pml4, uint64_t size) {
-    return allocate_vmm(pml4, size, PAGE_WRITE_BIT);
+void * malloc(uint64_t size) {
+    void * ptr = allocate_current_vmm_uspace(size, PAGE_WRITE_BIT);
+    memset(ptr, 0, size);
+    return ptr;
 }
 
-void free(struct page_directory * pml4, void * address) {
-    free_vmm(pml4, address);
+void free(void * address) {
+    free_vmm_uspace(address);
 }
 
-void * stackalloc(struct page_directory * pml4, uint64_t length) {
-    return malloc(pml4, length);
+void * stackalloc(uint64_t length) {
+    return malloc(length);
 }
 
-void stackfree(struct page_directory * pml4, void * address) {
-    free(pml4, address);
+void stackfree(void * address) {
+    free(address);
 }

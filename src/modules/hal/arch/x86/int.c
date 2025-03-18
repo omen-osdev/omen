@@ -169,7 +169,6 @@ void init_interrupts() {
     }
 
     set_idt_gate((uint64_t)DoubleFault_Handler, 8, IDT_TA_InterruptGate, 1, get_kernel_code_selector());
-    mprotect(pml4, (void*)idtr.offset, 256 * sizeof(struct idtdescentry), PAGE_USER_BIT);
 
     for (int i = 0; i < 32; i++) {
         dynamic_interrupt_handlers[i] = interrupt_exception_handler;

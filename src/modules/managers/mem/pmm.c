@@ -6,10 +6,10 @@
 #include <omen/libraries/std/stdint.h>
 #include <omen/apps/debug/debug.h>
 #include <omen/managers/boot/bootloaders/bootloader.h>
-#include <omen/libraries/allocators/buddy_allocator.h>
+#include <omen/libraries/allocators/bitfield_allocator.h>
 
 struct pmm_block main_memory;
-buddy_allocator_t * buddy;
+struct bitfield * bf;
 uint8_t ready = 0;
 
 void pmm_init() {
@@ -37,22 +37,12 @@ void pmm_init() {
     main_memory.size = get_memory_map_length(biggest_index);
     main_memory.type = get_memory_map_type(biggest_index);
 
-    //TODO: Jonbardo, xq?
-    uint64_t prev = 0;
-    for (uint64_t i = 0; i < 64; i++) {
-        if (((uint64_t)(1 << i)) >= main_memory.size) {
-            break;
-        }
-        prev = 1 << i;
-    }
+    kprintf("Real: %llx Used: %llx\n", main_memory.size, main_memory.size);
 
-    kprintf("Real: %llx Used: %llx Lost: %llx\n", main_memory.size, prev, main_memory.size - prev);
-    main_memory.size = prev;
+    bf = (struct bitfield *)init(main_memory.base, main_memory.size, PAGE_SIZE);
 
-    buddy = buddy_create((void*)main_memory.base, main_memory.size, PAGE_SIZE);
-
-    if (buddy == NULL) {
-        kprintf("Failed to create buddy allocator\n");
+    if (bf == NULL) {
+        kprintf("Failed to create bitfield allocator\n");
         ready = 0;
     } else {
         ready = 1;
@@ -78,7 +68,7 @@ void * pmm_alloc(uint64_t size) {
     if (!ready) {
         return NULL;
     }
-    void * ptr = buddy_alloc(buddy, size);
+    void * ptr = allocate(bf, size);
     if (ptr) {
         memset(ptr, 0, size);
     }
@@ -89,12 +79,12 @@ void * pmm_alloc_page() {
     if (!ready) {
         return NULL;
     }
-    return buddy_alloc(buddy, PAGE_SIZE);
+    return allocate(bf, PAGE_SIZE);
 }
 
 void pmm_free(void * ptr) {
     if (!ready) {
         return;
     }
-    buddy_free(buddy, ptr);
+    deallocate(bf, ptr, PAGE_SIZE);
 }

@@ -59,7 +59,7 @@ void remove_vmarea(process_t* process, void * start) {
             } else {
                 process->vm_areas = current->next;
             }
-            free(process->context->cr3, current);
+            free(current);
             return;
         }
         previous = current;
@@ -70,7 +70,7 @@ void remove_vmarea(process_t* process, void * start) {
 void init_user_context(struct page_directory* pml4, process_t * task, void * init) {
     context_t * context = task->context;
 
-    task->ustack_base = kmalloc(PROCESS_STACK_SIZE);
+    task->ustack_base = malloc(PROCESS_STACK_SIZE);
     memset(task->ustack_base, 0, PROCESS_STACK_SIZE);
     task->ustack = task->ustack_base + PROCESS_STACK_SIZE;
     mprotect(pml4, task->ustack_base, PROCESS_STACK_SIZE, VMM_USER_BIT | VMM_WRITE_BIT);
@@ -78,7 +78,6 @@ void init_user_context(struct page_directory* pml4, process_t * task, void * ini
     task->kstack_base = kmalloc(KERNEL_STACK_SIZE);
     memset(task->kstack_base, 0, KERNEL_STACK_SIZE);
     task->kstack = task->kstack_base + KERNEL_STACK_SIZE;
-    mprotect(pml4, task->kstack_base, KERNEL_STACK_SIZE, VMM_WRITE_BIT);
 
     kprintf("Stack permissions after creating: %d\n", get_page_perms(pml4, task->ustack_base));
     kprintf("Is stack user access after creating: %d\n", is_user_access(pml4, task->ustack_base));
@@ -208,7 +207,6 @@ process_t * duplicate_process(process_t * parent) {
     task->kstack_base = kmalloc(KERNEL_STACK_SIZE);
     memset(task->kstack_base, 0, KERNEL_STACK_SIZE);
     task->kstack = (parent->kstack - parent->kstack_base) + task->kstack_base;
-    mprotect(parent->context->cr3, task->kstack_base, KERNEL_STACK_SIZE, VMM_WRITE_BIT);
     memcpy(task->kstack_base, parent->kstack_base, KERNEL_STACK_SIZE);
 
     memcpy(task->context, parent->context, sizeof(context_t));
@@ -217,8 +215,7 @@ process_t * duplicate_process(process_t * parent) {
 
     task->pid = get_next_pid();
     task->ppid = parent->pid;
-    task->context->cr3 = duplicate_pd(parent->context->cr3, 0, 0);
-    task->heap = parent->heap;
+    task->context->cr3 = duplicate_pd(parent->context->cr3, 0, 0, 0);
 
     return task;
 }
@@ -230,7 +227,6 @@ void returnoexit() {
 void init_process(uint64_t address, uint64_t size) {
     kprintf("Hello there techzynth!\n");
     process_t * idle_proc = create_user_process(_idle);
-    idle_proc->heap = init_heap(idle_proc->context->cr3, 1, 0xffffffff80000000, 0xffffffff8ffff000, 0xffffffff90000000, 0xffffffff9ffff000);
     idle_proc->pid = 0;
     
     current_process = &process_list[0];

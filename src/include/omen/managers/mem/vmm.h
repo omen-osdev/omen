@@ -14,7 +14,7 @@
 //Used multiple times
 struct page_directory* get_pml4();
 uint8_t remap_allocate_cow(struct page_directory * pml4, void * address_raw);
-struct page_directory * duplicate_pd(struct page_directory * pml4, uint8_t share_kernel, uint8_t use_cow);
+struct page_directory * duplicate_pd(struct page_directory * pml4, uint8_t share_kernel, uint8_t use_cow, uint8_t source_on_phys);
 uint8_t get_page_perms(struct page_directory *pml4, void* address);
 void map_memory(struct page_directory * pml4, void * address, void * physical, uint64_t page_size, uint8_t flags);
 void mprotect(struct page_directory *, void*, uint64_t, uint8_t);
@@ -26,8 +26,9 @@ void free_vmm_page(struct page_directory * pml4, void * address);
 void * allocate_vmm(struct page_directory * pml4, uint64_t size, uint8_t flags);
 void free_vmm(struct page_directory * pml4, void * address);
 void * allocate_current_vmm(uint64_t size, uint8_t flags);
-void * free_current_vmm(void * address);
-
+void free_current_vmm(void * address);
+void * allocate_current_vmm_uspace(uint64_t size, uint8_t flags);
+void free_vmm_uspace(void * address);
 //Only internal use
 void set_kernel_pml4(struct page_directory* pml4);
 void set_pml4(struct page_directory* pml4);

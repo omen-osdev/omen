@@ -118,7 +118,7 @@ struct bitfield *init(void *data_address, uint64_t data_size, uint16_t page_size
     bf->page_size = page_size;
     bf->bitmap = (uint8_t *)(data_address + sizeof(struct bitfield));
     bf->bitmap_size = bitmap_size;
-    bf->available_address = data_address + sizeof(struct bitfield) + bitmap_size;
+    bf->available_address = (uint64_t)(data_address + sizeof(struct bitfield) + bitmap_size + page_size) & ~(page_size - 1);
     bf->available_size = data_size - sizeof(struct bitfield) - bitmap_size;
 
     mutex_init(&bf->lock);
