@@ -4,8 +4,8 @@
 #ifndef _SERIAL_DRIVER_H
 #define _SERIAL_DRIVER_H
 
-#include "../../include/omen/hal/arch/x86/io.h"
-#include "../../include/omen/managers/dev/devices.h"
+#include <omen/hal/arch/x86/io.h>
+#include <omen/managers/dev/devices.h>
 
 
 #define DEVICE_SERIAL 0x8d

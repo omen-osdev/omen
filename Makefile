@@ -43,7 +43,14 @@ cleansetup:
 	@make -C $(BUILDENV_DIR) cleansetup
 
 clean:
-	@make -C $(BUILDENV_DIR) clean
+	@sudo make -C $(BUILDENV_DIR) clean
+
+progs:
+	@make -C "$(BUILDENV_DIR)" progs
+
+
+cprogs:
+	@make -C "$(BUILDENV_DIR)" cprogs
 
 gpt:
 	@make -C $(BUILDENV_DIR) gpt

@@ -54,6 +54,8 @@ status_t device_list();
 uint32_t get_device_count();
 uint32_t get_device_count_by_major(const uint8_t major);
 device_t* device_search(const char* name);
+struct device * get_first_device();
+struct device * get_next_device(struct device * current);
 
 //Operations on devices
 status_t device_write(const char * name, const uint64_t size,const uint64_t offset, uint8_t * buffer);

@@ -1,27 +1,42 @@
-#include <omen/managers/boot/boot.h>
-#include <omen/managers/boot/bootloaders/bootloader.h>
-#include <omen/managers/dev/devices.h>
-#include <omen/libraries/std/stddef.h>
-#include <omen/managers/cpu/process.h>
-#include <omen/libraries/std/string.h>
 #include <omen/libraries/allocators/heap_allocator.h>
-#include <omen/apps/debug/debug.h>
-#include <omen/managers/mem/pmm.h>
-#include <omen/managers/mem/vmm.h>
-#include <omen/managers/cpu/cpu.h>
+#include <omen/libraries/std/stddef.h>
+#include <omen/libraries/std/string.h>
+
+#include <omen/hal/arch/x86/getcpuid.h>
 #include <omen/hal/arch/x86/apic.h>
 #include <omen/hal/arch/x86/int.h>
 #include <omen/hal/arch/x86/gdt.h>
 #include <omen/hal/arch/x86/vm.h>
+
+#include <omen/managers/boot/bootloaders/bootloader.h>
+#include <omen/managers/dev/devices.h>
+#include <omen/managers/cpu/process.h>
+#include <omen/managers/boot/boot.h>
+#include <omen/managers/mem/pmm.h>
+#include <omen/managers/mem/vmm.h>
+#include <omen/managers/cpu/cpu.h>
+#include <omen/managers/dev/fb.h>
+#include <omen/managers/dev/pit.h>
+
+#include <omen/apps/debug/dshell.h>
+#include <omen/apps/debug/debug.h>
+#include <omen/apps/panic/panic.h>
+
 #include <emulated/dcon.h>
 #include <serial/serial.h>
 #include <acpi/acpi.h>
-#include <omen/managers/dev/fb.h>
 #include <ps2/ps2.h>
-#include <omen/hal/arch/x86/getcpuid.h>
-#include <omen/apps/debug/dshell.h>
-#include <omen/apps/panic/panic.h>
-//TODO: Delete this, we need an elf loader
+#include <pci/pci.h>
+#include <disk/disk.h>
+#include <fifo/fifo.h>
+
+#include <vfs/vfs.h>
+#include <vfs/vfs_interface.h>
+#include <vfs/generic/fifo/generic_fifo.h>
+#include <vfs/generic/ext2/generic_ext2.h>
+
+#include <fifo/fifo_interface.h>
+
 #include <dummy/dummy.h>
 
 void boot_startup() {
@@ -45,6 +60,7 @@ void boot_startup() {
     pmm_init();
     init_paging();
     create_gdt();
+    init_pit(50);
     init_interrupts();
     init_cpus();
     init_acpi();
@@ -52,10 +68,34 @@ void boot_startup() {
     if (madt != 0) {
         register_apic(madt, 0x0);
     }
-    kprintf("Secondary startup complete...\n");
+    kprintf("Secondary startup complete... starting drivers and devices\n");
+    init_drive();
+    init_fifo_dd();
     init_serial_dd();
     init_ps2_dd(fb_get_width(), fb_get_height());
+    init_pci();
+
+    kprintf("Create dummy fifo device\n");
+    char * fifo = create_fifo(1024);
+    if (fifo == NULL) {
+        panic("Failed to create FIFO device\n");
+    }
+    kprintf("FIFO device created: %s\n", fifo);
     kprintf("Device startup complete...\n");
+
+    register_filesystem(fifo_registrar);
+    register_filesystem(ext2_registrar);
+    probe_fs();
+    kprintf("VFS startup complete...\n");
+    vfs_lsdisk();
+
+    //Careful, somehow this shit crashes when you rewrite an string 
+    //Map ffffffff80000000 - ffffffff803a000 is read only! diagnose this
+    char * path = kmalloc(256);
+    strcpy(path, "hdap2");
+
+    vfs_dir_list(path);
+    device_list();
     kprintf("Booting from %s %s...\n", get_bootloader_name(), get_bootloader_version());
     kprintf("Booting kernel...\n");
     kprintf("Active subsystems: APIC, ACPI, VMM, PMM, HEAP, SERIAL\n");

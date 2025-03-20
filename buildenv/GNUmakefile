@@ -75,6 +75,11 @@ BUILDDIR := $(ABSDIR)/build/bin
 OBJDIR := $(ABSDIR)/build/lib
 ISOBUILDDIR := $(ABSDIR)/build/iso_root
 ISODIR := $(ABSDIR)/build/image
+PROGSDIR := $(ABSDIR)/progs/sources
+PROGSBUILDDIR := $(ABSDIR)/progs/export
+PROGSDATADIR := $(ABSDIR)/progs/data
+PROGS := $(wildcard $(PROGSDIR)/*)
+
 # /mnt/omen
 SYSDIR := $(MNTDIR)/system
 DATDIR := $(MNTDIR)/data
@@ -132,8 +137,8 @@ override OBJS += $(patsubst $(SRCDIR)/%.asm, $(OBJDIR)/%_asm.o, $(NASMFILES))
 override HEADER_DEPS := $(CFILES:.c=.d) $(ASFILES:.S=.d)
 
 deps:
-	@sudo apt update
-	@sudo apt install git make build-essential nasm parted dosfstools mtools tree qemu-system gdb
+	@apt update
+	@apt install git make build-essential nasm parted dosfstools mtools tree qemu-system gdb
 
 # You may comment @make run in this target if you intend
 # to use virtualbox or real hardware.
@@ -187,6 +192,7 @@ setup:
 	@mkdir -p $(BUILDDIR)
 	@mkdir -p $(OBJDIR)
 	@mkdir -p $(ISOBUILDDIR)
+	@mkdir -p $(PROGSBUILDDIR)
 	@mkdir -p $(ISODIR)
 	@dd if=/dev/zero of=$(ISODIR)/$(IMG_RAW) bs=4096 count=102400
 	@git clone $(LMNREPO) --branch=$(LMNBRCH) --depth=1
@@ -201,48 +207,99 @@ cleansetup:
 	@rm -rf $(BUILDHOME)
 	@rm -f $(ABSDIR)/$(GDBCFG)
 	@rm -rf $(LMNDIR)
+	@rm -rf $(PROGSBUILDDIR)
 
 cleanup:
 	@echo "Cleaning up..."
-	@make clean
+# Iterate all loop devices and detach them, find the mounted ones and unmount them
+	@losetup | grep $(IMG) | awk '{print $$1}' | xargs -I {} losetup -d {}
+	@mount | grep $(MNTDIR) | awk '{print $$3}' | xargs -I {} umount {}
+	@rm -f $(BUILDDIR)/$(LOCKFILE)
 	@make cleansetup
 	@make setup
 
 buildimggpt_second_phase:
-	echo "1" > $(BUILDDIR)/$(LOCKFILE)
-	echo "Building GPT..."
-	echo $(shell gcc -v)
+	@echo "1" > $(BUILDDIR)/$(LOCKFILE)
+	@echo "Building GPT phase 2..."
+	$(eval LOOP_DEV_PATH := $(shell losetup -a | grep $(IMG) | cut -d: -f1))
+	@echo $(LOOP_DEV_PATH)
+	@echo "Partitioning disk..."
+	@echo $(shell gcc -v)
+	@losetup -l
 	
-	truncate -s 100M $(ISODIR)/$(IMG)
-	rm -rf .mtoolsrc
-	echo "drive i: file=\"$(ISODIR)/$(IMG)\"" >> .mtoolsrc
-	mformat -F -i $(ISODIR)/$(IMG) ::
-	mdir -i $(ISODIR)/$(IMG)
+	@echo "Sgdisk step"
+	@sgdisk --new 1:0:+50M --typecode 1:ef00 $(LOOP_DEV_PATH)
+	@sgdisk --new 2:0:+100M -t 2:8300 $(LOOP_DEV_PATH)
+	@sgdisk --new 3:0:0  -t 3:8300 $(LOOP_DEV_PATH)
+	@sgdisk -p $(LOOP_DEV_PATH)
+	@fdisk -l $(LOOP_DEV_PATH)
 
-	mmd -i $(ISODIR)/$(IMG) ::/efi
-	mmd -i $(ISODIR)/$(IMG) ::/efi/boot
+	@echo "Partprobe step"
+	@partprobe
+	@echo "Mkfs step"
+	@mkfs.fat -n PATATA -F32 $(LOOP_DEV_PATH)p1
+	@mkfs.fat -n FDATA -F32 $(LOOP_DEV_PATH)p2
+	@mkfs.ext2 -L FDATA2 $(LOOP_DEV_PATH)p3 -b $(BLOCKSIZE)
+	@dumpe2fs $(LOOP_DEV_PATH)p3 | grep -i superblock
 
-	mcopy -i $(ISODIR)/$(IMG) $(BOOTEFI) ::/efi/boot
-	mcopy -i $(ISODIR)/$(IMG) ./startup.nsh ::
-	mcopy -i $(ISODIR)/$(IMG) $(BUILDDIR)/$(KERNEL) ::
-	mcopy -i $(ISODIR)/$(IMG) ./limine.conf ::
+	@echo "Creating mount points"
+	@rm -rf $(MNTDIR)
+	@mkdir $(MNTDIR)
+	@mkdir $(SYSDIR)
+	@mkdir $(DATDIR)
 
-	echo Disk mounted, creating system files
-	rm -f $(BUILDDIR)/$(LOCKFILE)
+	@mount $(LOOP_DEV_PATH)p1 $(SYSDIR)
+
+	@echo Disk mounted, creating system files
+	@mkdir -p $(SYSDIR)/efi/boot
+	@mkdir -p $(SYSDIR)/test
+
+	@cp $(BOOTEFI) $(SYSDIR)/efi/boot
+	@cp ./startup.nsh $(SYSDIR)
+	@cp $(BUILDDIR)/$(KERNEL) $(SYSDIR)
+	@cp ./limine.conf $(SYSDIR)
+	@umount $(SYSDIR)
+
+	@echo System files created, creating f32 data files
+	@mount $(LOOP_DEV_PATH)p2 $(DATDIR)
+	@cp -r $(PROGSBUILDDIR) $(DATDIR)
+	@cp -r $(PROGSDATADIR) $(DATDIR)
+	@tree $(DATDIR)
+	@umount $(DATDIR)
+
+	@echo F32 data files created, creating ext2 data files
+	@mount $(LOOP_DEV_PATH)p3 $(DATDIR)
+	@cp -r $(PROGSBUILDDIR) $(DATDIR)
+	@cp -r $(PROGSDATADIR) $(DATDIR)
+	@tree $(DATDIR)
+	@umount $(DATDIR)
+
+	@rm -rf $(MNTDIR)
+	@losetup -d $(LOOP_DEV_PATH)
+
+	@echo Disk mounted, creating system files
+	@rm -f $(BUILDDIR)/$(LOCKFILE)
 
 buildimggpt:
-#if process.txt exists, call cleanup, else call buildimggpt_second_phase
-	if [ -f $(BUILDDIR)/$(LOCKFILE) ]; then \
+#if $(BUILDDIR)/$(LOCKFILE), call cleanup
+	@if [ -f $(BUILDDIR)/$(LOCKFILE) ]; then \
 		echo "Lockfile exists, cleaning up..."; \
 		make cleanup; \
 	fi
+	rm -f $(BUILDDIR)/$(LOCKFILE)
+	@echo "Building GPT..."
 	
-	make clean
-	make kernel
-	echo "Building GPT..."
+	@make clean
+	@make kernel
+	@echo "Building GPT..."
 
-	cp $(ISODIR)/$(IMG_RAW) $(ISODIR)/$(IMG)
-	make buildimggpt_second_phase;
+	@cp $(ISODIR)/$(IMG_RAW) $(ISODIR)/$(IMG)
+	@echo "Creating disk..."
+	@losetup -l
+	@echo "Partitioning disk..."
+	@losetup -fP $(ISODIR)/$(IMG)
+	@make buildimggpt_second_phase
+	@chmod 666 $(ISODIR)/$(IMG)
 
 run:
 	$(QEMU) $(QFLAGSEXP)$(ISODIR)/$(IMG)
@@ -259,16 +316,27 @@ debugpt:
 	tmux split-window -h '$(GDB) $(GDBFLAGS)' & $(QEMU) -S -s $(QFLAGSEXP)$(ISODIR)/$(IMG)
 
 debugpt-wsl:
-	@make clean
+	@sudo make clean
 	@make kernel
 	@echo "Building GPT..."
 #This is required to be before buildimggpt!
 # Due to eval weird behaviour
-	@make buildimggpt
+	@sudo make buildimggpt
 	@echo "Running GPT QEMU..."
 	cmd.exe /c start cmd /c wsl -e $(GDB) $(GDBFLAGS) & $(QEMU) -S -s $(QFLAGSEXP)$(ISODIR)/$(IMG)
 
 debugsetup:
-	@sudo losetup -l
-	@sudo mount
-	@sudo ls -slart /mnt
+	@losetup -l
+	@mount
+	@ls -slart /mnt
+
+
+progs:
+	$(foreach prog,$(PROGS),$(MAKE) -C $(prog); rsync -a $(prog)/build/bin/ $(PROGSBUILDDIR);)
+
+
+cprogs:
+	$(foreach prog,$(PROGS),$(MAKE) -C $(prog) clean;)
+	@rm -rf $(PROGSBUILDDIR)/*
+
+.PHONY: progs

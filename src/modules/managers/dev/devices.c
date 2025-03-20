@@ -202,11 +202,13 @@ device_t* device_search(const char* name) {
     return NULL;
 }
 
-driver_t* driver_get(const uint8_t major) {
-    if (major < CHAR_MIN_MAJOR) {
+driver_t* driver_get(const uint8_t bc, const uint8_t major) {
+    if (bc == DEVICE_BLOCK) {
+        return &block_device_drivers[major];
+    } else if (bc == DEVICE_CHAR) {
         return &char_device_drivers[major];
     } else {
-        return &block_device_drivers[major];
+        return &net_device_drivers[major];
     }
 }
 
@@ -217,7 +219,7 @@ status_t device_write(const char * name, const uint64_t size,const uint64_t offs
         RECOVERABLE_ERROR(INVALID_ARGUMENT, "Device not found for name %s", name);
     }
 
-    driver_t * driver = driver_get(device->major);
+    driver_t * driver = driver_get(device->bc, device->major);
     if (driver == NULL || !driver->registered) {
         RECOVERABLE_ERROR(INVALID_ARGUMENT, "Driver not found for major number %d", device->major);
     }
@@ -235,7 +237,7 @@ status_t device_read(const char * name, const uint64_t size, const uint64_t offs
         RECOVERABLE_ERROR(INVALID_ARGUMENT, "Device not found for name %s", name);
     }
 
-    driver_t * driver = driver_get(device->major);
+    driver_t * driver = driver_get(device->bc, device->major);
     if (driver == NULL || !driver->registered) {
         RECOVERABLE_ERROR(INVALID_ARGUMENT, "Driver not found for major number %d", device->major);
     }
@@ -253,7 +255,7 @@ status_t device_ioctl(const char * name, const uint64_t request, void* data) {
         RECOVERABLE_ERROR(INVALID_ARGUMENT, "Device not found for name %s", name);
     }
 
-    driver_t * driver = driver_get(device->major);
+    driver_t * driver = driver_get(device->bc, device->major);
     if (driver == NULL || !driver->registered) {
         RECOVERABLE_ERROR(INVALID_ARGUMENT, "Driver not found for major number %d", device->major);
     }
@@ -271,7 +273,7 @@ status_t device_identify(const char* device_name, const char* driver_name) {
         RECOVERABLE_ERROR(INVALID_ARGUMENT, "Device not found for name %s", device_name);
     }
 
-    driver_t * driver = driver_get(device->major);
+    driver_t * driver = driver_get(device->bc, device->major);
     if (driver == NULL || !driver->registered) {
         RECOVERABLE_ERROR(INVALID_ARGUMENT, "Driver not found for major number %d", device->major);
     }
@@ -281,6 +283,24 @@ status_t device_identify(const char* device_name, const char* driver_name) {
     }
 
     return SUCCESS;
+}
+
+struct device * get_first_device() {
+    for (uint32_t i = 0; i < MAX_DEVICES; i++) {
+        if (devices[i].valid) {
+            return &devices[i];
+        }
+    }
+    return NULL;
+}
+
+struct device * get_next_device(struct device * current) {
+    for (uint32_t i = 0; i < MAX_DEVICES; i++) {
+        if (devices[i].valid && &devices[i] > current) {
+            return &devices[i];
+        }
+    }
+    return NULL;
 }
 
 //Generic functions
@@ -296,6 +316,6 @@ void init_devices() {
     char_device_count = 0;
     block_device_count = 0;
 
-    kprintf("Initialized devices\n");
+    kprintf("Initialized device subsystem\n");
     
 }

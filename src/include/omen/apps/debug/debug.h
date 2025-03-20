@@ -6,6 +6,7 @@
 
 #include <stdarg.h>
 #include <omen/libraries/std/stddef.h>
+#include <omen/libraries/std/stdint.h>
 
 #define ERROR(code, str, ...) { kdebug("[ERROR] %s:%d: " str, __FILE__, __LINE__, ##__VA_ARGS__); return code; }
 
@@ -18,6 +19,10 @@
 //Setup the debugger over a device
 //TODO: Use an abstract device, not a callback!
 void init_debugger(const char * device_name);
+
+int64_t atoi(const char * str);
+
+char* itoa(int64_t value, int base);
 
 //Print right away to the debugger
 void kprintf(const char * str, ...);

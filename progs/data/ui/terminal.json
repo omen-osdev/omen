@@ -1,0 +1,21 @@
+{
+    "type": 11,
+    "text": "Test",
+    "resizable": false,
+    "x": 100,
+    "y": 100,
+    "width": 800,
+    "height": 800,
+    "color": "#AA0000",
+    
+    "output": {
+        "type": 1,
+        "text": "",
+        "x": 100,
+        "y": 150,
+        "width": 800,
+        "height": 750,
+        "coord_type": 0,
+        "color": "#00AA00"
+    }
+}

@@ -30,6 +30,7 @@ void _idle() {
         }
 
         sys_write(1, text, 32);
+        sys_exit(0);
     }
 
     while(1) {

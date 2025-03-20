@@ -14,7 +14,7 @@
 
 #define PHYSICAL_MEMORY_OFFSET 0xffffA00000000000
 uint64_t physical_memory_offset = 0;
-#define PHYSICAL_MEMORY_SIZE   0x0000004000000000
+#define PHYSICAL_MEMORY_SIZE   0x000000F000000000
 
 #define TO_IDENTITY_MAP(addr) (uint64_t)(((uint64_t)addr) + (uint64_t)physical_memory_offset)
 #define FROM_IDENTITY_MAP(addr) (uint64_t)(((uint64_t)addr) - (uint64_t)physical_memory_offset)
@@ -584,6 +584,26 @@ void map_memory(struct page_directory * pml4, void * address, void * physical, u
     map_address(pml4, address, physical, page_size);
 }
 
+void mprotect_current(void* address, uint64_t size, uint8_t flags) {
+    mprotect(get_current_cr3(), address, size, flags);
+}
+
+void map_current_memory(void * address, void * physical, uint64_t page_size, uint8_t flags) {
+    map_memory(get_current_cr3(), address, physical, page_size, flags);
+}
+
+void * to_identity_map(void * address) {
+    return TO_IDENTITY_MAP(address);
+}
+
+void * from_identity_map(void * address) {
+    return FROM_IDENTITY_MAP(address);
+}
+
+void * get_current_physical_address(void * address) {
+    return get_physical_address(get_current_cr3(), address);
+}
+
 //Only internal use
 void set_pml4(struct page_directory* pml4) {
     switch_cr3(FROM_IDENTITY_MAP(pml4));
@@ -591,6 +611,7 @@ void set_pml4(struct page_directory* pml4) {
 void * virtual_to_physical(struct page_directory * pml4, void * address) {
     return get_physical_address(pml4, address);
 }
+
 void unmap_memory(struct page_directory * pml4, void * address) {
     unmap_address(pml4, address);
 }
@@ -932,6 +953,11 @@ void debug_address(struct page_directory * pml4, void * address)
 
     kprintf("PT entry is a 4KiB page\n");
     print_entry(ptentry, PAGE_SIZE_4KIB);
+}
+
+void debug_current_address(void * address)
+{
+    debug_address(get_current_cr3(), address);
 }
 
 void * allocate_current_vmm_uspace(uint64_t size, uint8_t flags) 

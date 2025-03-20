@@ -14,7 +14,7 @@ void * kmalloc(uint64_t size) {
 }
 
 void kfree(void* address) {
-    free_current_vmm(address);
+    //free_current_vmm(address);
 }
 
 void * kstackalloc(uint64_t length) {
