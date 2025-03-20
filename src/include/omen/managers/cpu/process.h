@@ -36,8 +36,6 @@ typedef struct process {
     cpu_context_t *cpu;
     void * ustack;
     void * ustack_base;
-    void * kstack;
-    void * kstack_base;
     struct vm_area *vm_areas;
     process_status_t status;
 

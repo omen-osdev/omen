@@ -12,6 +12,7 @@ struct pmm_block {
     uint64_t type;
 };
 
+void remap_bitfield(uint64_t offset);
 void pmm_init();
 void pmm_list_map();
 struct pmm_block * get_main_memory();

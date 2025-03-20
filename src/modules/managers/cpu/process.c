@@ -75,16 +75,9 @@ void init_user_context(struct page_directory* pml4, process_t * task, void * ini
     task->ustack = task->ustack_base + PROCESS_STACK_SIZE;
     mprotect(pml4, task->ustack_base, PROCESS_STACK_SIZE, VMM_USER_BIT | VMM_WRITE_BIT);
 
-    task->kstack_base = kmalloc(KERNEL_STACK_SIZE);
-    memset(task->kstack_base, 0, KERNEL_STACK_SIZE);
-    task->kstack = task->kstack_base + KERNEL_STACK_SIZE;
-
     kprintf("Stack permissions after creating: %d\n", get_page_perms(pml4, task->ustack_base));
     kprintf("Is stack user access after creating: %d\n", is_user_access(pml4, task->ustack_base));
-    kprintf("Kstack permissions after creating: %d\n", get_page_perms(pml4, task->kstack_base));
-    kprintf("Is kstack user access after creating: %d\n", is_user_access(pml4, task->kstack_base));
     create_vmarea(task, task->ustack_base, task->ustack, VMM_USER_BIT | VMM_WRITE_BIT);
-    create_vmarea(task, task->kstack_base, task->kstack, VMM_WRITE_BIT);
 
     //TODO: Initialize the stack
     newuctxcreat((uint64_t)&(task->ustack), (uint64_t)init);
@@ -184,7 +177,9 @@ process_t * create_user_process(void * init) {
     struct page_directory * pd = get_pml4();
     init_user_context(pd, task, init);
     mprotect(pd, task->entry_address, 0x1000, VMM_USER_BIT); //TODO: change this for the elf loader
-    task->context->cr3 = duplicate_current_pml4();
+    task->context->cr3 = vmm_copy_kernel(pd);
+    map_range(task->context->cr3, (void*)task->ustack_base, (void*)task->ustack_base, 0x1000, PROCESS_STACK_SIZE);
+    mprotect(task->context->cr3, task->ustack_base, PROCESS_STACK_SIZE, VMM_WRITE_BIT | VMM_USER_BIT);
     kprintf("Process %d created\n", task->pid);
     kprintf("Stack permissions: %d\n", get_page_perms(task->context->cr3, task->ustack));
     kprintf("Is stack user access: %d\n", is_user_access(task->context->cr3, task->ustack));
@@ -196,27 +191,18 @@ process_t * duplicate_process(process_t * parent) {
     memcpy(task, parent, sizeof(process_t));
 
     task->context = kmalloc(sizeof(context_t));
-    task->context->info = kmalloc(sizeof(struct cpu_context_info));
-    
-    task->ustack_base = kmalloc(PROCESS_STACK_SIZE);
-    memset(task->ustack_base, 0, PROCESS_STACK_SIZE);
-    task->ustack = (parent->ustack - parent->ustack_base) + task->ustack_base;
-    mprotect(parent->context->cr3, task->ustack_base, PROCESS_STACK_SIZE, VMM_WRITE_BIT | VMM_USER_BIT);
-    memcpy(task->ustack_base, parent->ustack_base, PROCESS_STACK_SIZE);
-
-    task->kstack_base = kmalloc(KERNEL_STACK_SIZE);
-    memset(task->kstack_base, 0, KERNEL_STACK_SIZE);
-    task->kstack = (parent->kstack - parent->kstack_base) + task->kstack_base;
-    memcpy(task->kstack_base, parent->kstack_base, KERNEL_STACK_SIZE);
-
     memcpy(task->context, parent->context, sizeof(context_t));
+    task->context->info = kmalloc(sizeof(struct cpu_context_info));
     memcpy(task->context->info, parent->context->info, sizeof(struct cpu_context_info));
+    task->cpu = arch_get_bsp_cpu(); //TODO: Change this for SMP
     memcpy(task->fxsave_region, parent->fxsave_region, 512);
 
+    task->context->rsp = (uint64_t)task->ustack;
     task->pid = get_next_pid();
     task->ppid = parent->pid;
-    task->context->cr3 = duplicate_pd(parent->context->cr3, 0, 0, 0);
-
+    task->context->cr3 = vmm_copy(parent->context->cr3);
+    vmm_copy_stack(task->context->cr3, parent->ustack_base, PROCESS_STACK_SIZE, VMM_USER_BIT | VMM_WRITE_BIT);
+    kprintf("Process %d duplicated\n", task->pid);
     return task;
 }
 
@@ -233,14 +219,14 @@ void init_process(uint64_t address, uint64_t size) {
     current_process_index = 0;
     current_process->status = PROCESS_STATUS_RUNNING;
 
-    current_process->cpu->cinfo->stack = current_process->kstack;
     current_process->cpu->ustack = current_process->ustack;
-    tss_set_stack(current_process->cpu->tss, current_process->kstack, 0);
+    tss_set_stack(current_process->cpu->tss, current_process->cpu->cinfo->stack, 0);
     tss_set_stack(current_process->cpu->tss, current_process->ustack, 3);
+    void * cr3 = get_physical_address(current_process->context->cr3, current_process->context->cr3);
     __asm__("mov %0, %%rsp\n"
             "mov %1, %%cr3\n"
             "fxrstor %2\n"
-            "ret\n" : : "r" (current_process->cpu->ustack), "r" (current_process->context->cr3), "m" (current_process->fxsave_region));
+            "ret\n" : : "r" (current_process->cpu->ustack), "r" (cr3), "m" (current_process->fxsave_region));
 }
 
 process_t * sched() {

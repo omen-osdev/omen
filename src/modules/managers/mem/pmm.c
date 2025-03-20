@@ -53,6 +53,15 @@ struct pmm_block * get_main_memory() {
     return &main_memory;
 }
 
+void remap_bitfield(uint64_t offset) {
+    if (!ready) {
+        return;
+    }
+
+    bf = (void*)((uint64_t)bf + offset);
+    bf->bitmap = (uint8_t*)((uint64_t)bf->bitmap + offset);
+}
+
 void pmm_list_map() {
     if (!ready) {
         return;
@@ -69,9 +78,6 @@ void * pmm_alloc(uint64_t size) {
         return NULL;
     }
     void * ptr = allocate(bf, size);
-    if (ptr) {
-        memset(ptr, 0, size);
-    }
     return ptr;
 }
 

@@ -34,6 +34,7 @@ void _idle() {
 
     while(1) {
         //syscall yield, do not optimize this
+        sys_write(1, text, 32);
         sys_sched_yield();
     }
 }

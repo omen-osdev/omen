@@ -31,6 +31,24 @@ void * malloc(uint64_t size) {
     return ptr;
 }
 
+void * pmalloc(struct page_directory* root, uint64_t size) {
+    void * ptr = allocate_vmm(root, size, PAGE_WRITE_BIT);
+    memset(ptr, 0, size);
+    return ptr;
+}
+
+void * pstackalloc(struct page_directory* root, uint64_t length) {
+    return pmalloc(root, length);
+}
+
+void pfree(struct page_directory* root, void * address) {
+    free_vmm(root, address);
+}
+
+void pstackfree(struct page_directory* root, void * address) {
+    pfree(root, address);
+}
+
 void free(void * address) {
     free_vmm_uspace(address);
 }

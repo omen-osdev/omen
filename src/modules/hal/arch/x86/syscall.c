@@ -157,9 +157,11 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
 void global_syscall_handler(context_t* ctx) {
 
     process_t * current_task = get_current_process();
+    ctx->cr3 = get_pml4();
 
-    current_task->ustack = current_task->cpu->ustack;
-    current_task->kstack = current_task->cpu->cinfo->stack;
+    //struct page_directory * father_cr3 = ctx->cr3;
+
+    current_task->cpu->ustack = ctx->rsp;
 
     memcpy(current_task->context, ctx, sizeof(context_t));
     __asm__("fxsave %0" : : "m" (current_task->fxsave_region));
@@ -174,14 +176,30 @@ void global_syscall_handler(context_t* ctx) {
     }
 
     current_task = get_current_process();
-    kprintf("Returning to process %d\n", current_task->pid);
     __asm__("fxrstor %0" : "=m" (current_task->fxsave_region));
     memcpy(ctx, current_task->context, sizeof(context_t));
 
-    current_task->cpu->ustack = current_task->ustack;
-    current_task->cpu->cinfo->stack = current_task->kstack;
-
-    tss_set_stack(current_task->cpu->tss, current_task->kstack, 0);
+    tss_set_stack(current_task->cpu->tss, current_task->cpu->cinfo->stack, 0);
     tss_set_stack(current_task->cpu->tss, current_task->ustack, 3);
+    current_task->cpu->ustack = current_task->ustack;
+    ctx->cr3 = get_physical_address(current_task->context->cr3, current_task->context->cr3);
+
+    //if ((uint64_t)father_cr3 != current_task->context->cr3) {
+    //    kprintf("Switch detected, performing test\n");
+    //    uint64_t * address = ctx->rsp;
+    //    switch_cr3(get_physical_address(father_cr3, father_cr3));
+    //    *address = 0x42;
+    //    kprintf("Value for address V:%llx P:%llx with cr3: %llx: %llx\n", address, get_physical_address(father_cr3, address), father_cr3, *address);
+    //    switch_cr3(ctx->cr3);
+    //    *address = 0x55;
+    //    kprintf("Value for address V:%llx P:%llx with cr3: %llx: %llx\n", address, get_physical_address(current_task->context->cr3, address), ctx->cr3, *address);
+    //    switch_cr3(get_physical_address(father_cr3, father_cr3));
+    //    kprintf("Value for address V:%llx P:%llx with cr3: %llx: %llx\n", address, get_physical_address(father_cr3, address), father_cr3, *address);
+    //}
+
+    //kprintf("CURRENT PROCESS USTACK %llx USTACK_BASE %llx KSTACK(CPU) %llx\n", current_task->ustack, current_task->ustack_base, current_task->cpu->cinfo->stack);
+    //kprintf("DEBUG: VMM STACK: %llx OLD_TRANSLATES: %llx NEW_TRANSLATES: %llx\n", ctx->rsp, get_physical_address(father_cr3, ctx->rsp), get_physical_address(current_task->context->cr3, ctx->rsp));
+    //kprintf("Returning to process %d with stack %llx\n", current_task->pid, ctx->rsp);
+
     SYSRET(ctx, result);
 }
