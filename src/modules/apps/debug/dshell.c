@@ -2,9 +2,9 @@
 #include <omen/libraries/std/string.h>
 #include <omen/libraries/std/stdint.h>
 #include <omen/apps/debug/debug.h>
+#include <omen/apps/panic/panic.h>
 #include <omen/managers/cpu/process.h>
 #include <omen/managers/mem/vmm.h>
-#include <dummy/dummy.h>
 #include <ps2/ps2.h>
 #include <generic/config.h>
 
@@ -30,8 +30,9 @@ void test(int argc, char* argv[]) {
 }
 
 void spawn(int argc, char* argv[]) {
-    process_t * new = create_user_process(dummy_main);
-    kprintf("New process created with pid %d\n", new->pid);
+    panic("Not implemented\n");
+    //process_t * new = create_user_process(dummy_main);
+    //kprintf("New process created with pid %d\n", new->pid);
 }
 
 struct command cmdlist[] = {

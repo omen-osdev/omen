@@ -116,6 +116,13 @@ void ext2_add_error(char * error, const char* function, char* file, uint32_t lin
         ext2_make_space();
     }
 
+    //Remove any \n from error
+    char * newline = strchr(error, '\n');
+    while (newline != 0) {
+        *newline = ' ';
+        newline = strchr(error, '\n');
+    }
+
     struct error_message * message = kmalloc(sizeof(struct error_message));
     memset(message, 0, sizeof(struct error_message));
     if (message == 0) {

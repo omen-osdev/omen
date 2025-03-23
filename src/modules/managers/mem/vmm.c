@@ -955,6 +955,14 @@ void debug_address(struct page_directory * pml4, void * address)
     print_entry(ptentry, PAGE_SIZE_4KIB);
 }
 
+void vmm_unmap_userspace(struct page_directory* root)
+{
+    for (uint64_t i = 0; i < 256; i++)
+    {
+        memset(to_identity_map(root->entries[i]), 0, sizeof(vm_entry)); //TODO: Reclaim the used memory!
+    }
+}
+
 void debug_current_address(void * address)
 {
     debug_address(get_current_cr3(), address);

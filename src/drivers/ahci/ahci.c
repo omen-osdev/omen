@@ -191,13 +191,13 @@ uint8_t read_port(uint8_t port_no, uint64_t sector, uint32_t sector_count) {
         return 0;
     }
 
-    struct hba_command_header* command_header = (struct hba_command_header*)(uint64_t)(port->hba_port->command_list_base | (((uint64_t)port->hba_port->command_list_base_upper) << 32));
+    struct hba_command_header* command_header = (struct hba_command_header*)to_identity_map((uint64_t)(port->hba_port->command_list_base | (((uint64_t)port->hba_port->command_list_base_upper) << 32)));
     command_header += slot;
     command_header->command_fis_length = sizeof(struct hba_command_fis) / sizeof(uint32_t);
     command_header->write = 0;
     command_header->prdt_length = (uint16_t)((sector_count - 1) >> 4) + 1;
 
-    struct hba_command_table* command_table = (struct hba_command_table*)(uint64_t)(command_header->command_table_base_address | ((uint64_t)command_header->command_table_base_address_upper << 32));
+    struct hba_command_table* command_table = (struct hba_command_table*)to_identity_map((uint64_t)(command_header->command_table_base_address | ((uint64_t)command_header->command_table_base_address_upper << 32)));
     memset(command_table, 0, sizeof(struct hba_command_table) + (command_header->prdt_length - 1) * sizeof(struct hba_prdt_entry));
     void* buffer = port->buffer;
     int i;
@@ -274,13 +274,13 @@ uint8_t write_port(uint8_t port_no, uint64_t sector, uint32_t sector_count) {
         return 0;
     }
 
-    struct hba_command_header* command_header = (struct hba_command_header*)(uint64_t)(port->hba_port->command_list_base | (((uint64_t)port->hba_port->command_list_base_upper) << 32));
+    struct hba_command_header* command_header = (struct hba_command_header*)to_identity_map((uint64_t)(port->hba_port->command_list_base | (((uint64_t)port->hba_port->command_list_base_upper) << 32)));
     command_header += slot;
     command_header->command_fis_length = sizeof(struct hba_command_fis) / sizeof(uint32_t);
     command_header->write = 1;
     command_header->prdt_length = (uint16_t)((sector_count - 1) >> 4) + 1;
 
-    struct hba_command_table* command_table = (struct hba_command_table*)(uint64_t)(command_header->command_table_base_address | ((uint64_t)command_header->command_table_base_address_upper << 32));
+    struct hba_command_table* command_table = (struct hba_command_table*)to_identity_map((uint64_t)(command_header->command_table_base_address | ((uint64_t)command_header->command_table_base_address_upper << 32)));
     memset(command_table, 0, sizeof(struct hba_command_table) + (command_header->prdt_length - 1) * sizeof(struct hba_prdt_entry));
     void* buffer = port->buffer;
     int i;
@@ -379,8 +379,8 @@ void configure_port(struct ahci_port* port) {
     port->hba_port->fis_base_address_upper = (uint32_t)((uint64_t)new_fis_base_phys >> 32);
     memset(new_fis_base, 0, 256);
 
-    struct hba_command_header* command_header = (struct hba_command_header*)((uint64_t)port->hba_port->command_list_base | ((uint64_t)port->hba_port->command_list_base_upper << 32));
-;    for (int i = 0; i < 32; i++) {
+    struct hba_command_header* command_header = (struct hba_command_header*)to_identity_map(((uint64_t)port->hba_port->command_list_base | ((uint64_t)port->hba_port->command_list_base_upper << 32)));
+    for (int i = 0; i < 32; i++) {
         command_header[i].prdt_length = 8;
 
         void * cmd_table_address = kmalloc(256);
@@ -454,5 +454,4 @@ void init_ahci(uint32_t bar5) {
         mprotect_current(to_identity_map(port->buffer), 4096,  PAGE_WRITE_BIT | PAGE_NX_BIT);
         memset(to_identity_map(port->buffer), 0, 4096);
     }
-
 }

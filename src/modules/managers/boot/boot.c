@@ -1,4 +1,6 @@
 #include <omen/libraries/allocators/heap_allocator.h>
+#include <omen/libraries/executables/loader.h>
+#include <omen/libraries/crypto/md5.h>
 #include <omen/libraries/std/stddef.h>
 #include <omen/libraries/std/string.h>
 
@@ -37,7 +39,7 @@
 
 #include <fifo/fifo_interface.h>
 
-#include <dummy/dummy.h>
+#define INIT_FILE "hdap2/export/init.elf"
 
 void boot_startup() {
     init_bootloader();
@@ -91,10 +93,6 @@ void boot_startup() {
 
     //Careful, somehow this shit crashes when you rewrite an string 
     //Map ffffffff80000000 - ffffffff803a000 is read only! diagnose this
-    char * path = kmalloc(256);
-    strcpy(path, "hdap2");
-
-    vfs_dir_list(path);
     device_list();
     kprintf("Booting from %s %s...\n", get_bootloader_name(), get_bootloader_version());
     kprintf("Booting kernel...\n");
@@ -102,6 +100,9 @@ void boot_startup() {
     kprintf("Enabling interrupts...\n");
     mask_interrupt(PIT_IRQ);
     __asm__ volatile("sti");
-    init_process(dummy_main, 0x1000);
+
+    kprintf("Entering uspace...\n");
+    init_process("hdap2/export/init.elf");
+    
     panic("¡Returned from the scheduler!\n");
 }

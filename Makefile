@@ -48,6 +48,8 @@ clean:
 progs:
 	@make -C "$(BUILDENV_DIR)" progs
 
+.PHONY: cprogs progs
+
 
 cprogs:
 	@make -C "$(BUILDENV_DIR)" cprogs

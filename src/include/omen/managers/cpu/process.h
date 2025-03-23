@@ -80,7 +80,7 @@ typedef struct process {
 
 } process_t;
 
-void init_process(uint64_t addr, uint64_t size);
+void init_process(const char * init_path);
 uint8_t is_in_vmarea(process_t* process, void * address);
 void returnoexit();
 int16_t fork();

@@ -1,4 +1,4 @@
-override PROGRAM := hw.elf
+override PROGRAM := init.elf
 
 CC := /usr/bin/cc
 LD := /usr/bin/ld
@@ -13,6 +13,7 @@ SRCDIR := src
 BUILDHOME := build
 BUILDDIR := build/bin
 OBJDIR := build/lib
+LIBCDIR := $(ABSDIR)/../../minilibc
 
 DIRS := $(wildcard $(SRCDIR)/*)
 
@@ -33,6 +34,7 @@ __check_defined = \
 
 override CFLAGS +=       \
     -I.                  \
+    -I$(LIBCDIR)         \
     -std=c11             \
     -ffreestanding       \
     -fno-stack-protector \
@@ -54,6 +56,10 @@ override LDFLAGS +=         \
     -z max-page-size=0x1000 \
     -T linker.ld
 
+override LIBCFILES :=$(call rwildcard,$(LIBCDIR),*.c)
+override LIBCOBJS := $(patsubst $(LIBCDIR)/%.c, $(OBJDIR)/%.o, $(LIBCFILES))
+override LIBCHEADER_DEPS := $(LIBCFILES:.c=.d)
+
 override CFILES :=$(call rwildcard,$(SRCDIR),*.c)        
 override OBJS := $(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o, $(CFILES))
 override HEADER_DEPS := $(CFILES:.c=.d)
@@ -62,9 +68,15 @@ override HEADER_DEPS := $(CFILES:.c=.d)
 # to use virtualbox or real hardware.
 all:
 	@echo "Building program..."
+	@echo "Absdir: $(ABSDIR)"
 	@make program
-program: $(OBJS) link
 
+program: $(LIBCOBJS) $(OBJS) link
+
+$(OBJDIR)/%.o: $(LIBCDIR)/%.c
+#	@ echo !==== COMPILING $^
+	@ mkdir -p $(@D)
+	@$(CC) $(CFLAGS) -c $^ -o $@
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
 #	@ echo !==== COMPILING $^
@@ -74,7 +86,7 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.c
 link: 
 #	@ echo !==== LINKING $^
 	@ mkdir -p $(BUILDDIR)
-	@$(LD) $(LDFLAGS) -o $(BUILDDIR)/$(PROGRAM) $(OBJS)
+	@$(LD) $(LDFLAGS) -o $(BUILDDIR)/$(PROGRAM) $(OBJS) $(LIBCOBJS)
 
 clean:
 	@rm -rf $(OBJDIR)/*
