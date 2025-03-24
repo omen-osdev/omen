@@ -16,6 +16,8 @@
 #define PROCESS_STATUS_STOPPED 5
 #define PROCESS_STATUS_DEAD 6
 
+#define MAX_OPEN_FILES 32
+
 struct descriptors {
     uint8_t stdin;
     uint8_t stdout;
@@ -72,6 +74,7 @@ typedef struct process {
     unsigned int locks;
 
     int * open_files;
+    int open_files_count;
 
     char fxsave_region[512] __attribute__((aligned(16)));
 

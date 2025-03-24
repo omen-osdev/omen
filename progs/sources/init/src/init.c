@@ -7,8 +7,7 @@ int main(int argc, char* argv[]) {
         j++;
     }
     
-    //volatile short pid = sys_fork();
-    short pid = 1;
+    volatile short pid = sys_fork();
     if (pid == 0) {
         const char child[] = "child\n";
         
@@ -30,6 +29,7 @@ int main(int argc, char* argv[]) {
         }
 
         sys_write(1, text, 32);
+        sys_exit(0);
     }
 
     while(1) {

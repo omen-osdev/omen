@@ -13,7 +13,7 @@
 #define PAGE_SIZE_DIR       0x1
 
 #define STACK_MEMORY_OFFSET    0xffffB00000000000
-#define STACK_MEMORY_SIZE      0x0000001000000000
+#define STACK_MEMORY_SIZE      0x00000000F0000000
 #define PHYSICAL_MEMORY_OFFSET 0xffffA00000000000
 uint64_t physical_memory_offset = 0;
 #define PHYSICAL_MEMORY_SIZE   0x000000F000000000
@@ -546,19 +546,22 @@ void init_vmm()
 
 }
 
-void * vmm_create_kernel_stack(struct page_directory* stack_root, uint64_t stack_size, uint8_t flags, void * last_kstack_end) {
-    //align last_kstack_end to the next page
-    if (last_kstack_end == 0)
-        last_kstack_end = (void*)STACK_MEMORY_OFFSET;
-    else
-        last_kstack_end = ((uint64_t)last_kstack_end+0xfff) & ~0xfff;
-
-    stack_size = (stack_size + 0xfff) & ~0xfff;
+void * vmm_create_kernel_stack(struct page_directory* stack_root, uint64_t stack_pages, uint8_t flags, uint64_t * stack_base) {
+        
+    void * new_stack_phys = pmm_alloc(stack_pages*0x1000);
+    void * base_address = (void*)((uint64_t)STACK_MEMORY_OFFSET+(uint64_t)new_stack_phys);
+    map_range(stack_root, base_address, new_stack_phys, PAGE_SIZE_4KIB, stack_pages*PAGE_SIZE_4KIB);
+    mprotect(stack_root, base_address, stack_pages*PAGE_SIZE_4KIB, flags);
     
-    void * new_stack_phys = pmm_alloc(stack_size);
-    map_range(stack_root, last_kstack_end, new_stack_phys, PAGE_SIZE_4KIB, stack_size);
-    mprotect(stack_root, last_kstack_end, stack_size, flags);
-    return last_kstack_end;
+    uint64_t stack_top_address = base_address+stack_pages*PAGE_SIZE_4KIB-0x10;
+    //If address is not 16-byte aligned, align it by subtracting the difference
+    if (stack_top_address % 0x10)
+    {
+        stack_top_address -= stack_top_address % 0x10;
+    }
+
+    *(uint64_t*)stack_base = base_address;
+    return (void*)stack_top_address;
 }
 
 void * vmm_copy_stack(struct page_directory* stack_root, void * stack_base, uint64_t stack_size, uint8_t flags)

@@ -7,8 +7,6 @@
 #include <omen/apps/panic/panic.h>
 #include <omen/libraries/concurrency/mutex.h>
 
-void * last_kstack = 0;
-
 void * kmalloc(uint64_t size) {
     void * ptr = allocate_current_vmm(size, PAGE_WRITE_BIT);
     memset(ptr, 0, size);
@@ -19,13 +17,22 @@ void kfree(void* address) {
     //free_current_vmm(address);
 }
 
-void * kstackalloc(uint64_t length) {
-    last_kstack = vmm_create_kernel_stack(get_pml4(), length, PAGE_WRITE_BIT, last_kstack) + length;
-    return last_kstack - length;
+void kstackalloc(struct stack * stack, uint64_t length) {
+
+    uint64_t pages = length / 0x1000;
+    if (length % 0x1000) {
+        pages++;
+    }
+
+    uint64_t stack_base;
+    uint64_t stack_top = vmm_create_kernel_stack(get_pml4(), pages, PAGE_WRITE_BIT, &stack_base);
+
+    stack->base = (void*)stack_base;
+    stack->top = (void*)stack_top;
 }
 
-void kstackfree(void* address) {
-    kfree(address);
+void kstackfree(struct stack * stack) {
+    kfree(stack->base);
 }
 
 void * malloc(uint64_t size) {
@@ -56,16 +63,24 @@ void free(void * address) {
     free_vmm_uspace(address);
 }
 
-void * stackalloc(uint64_t length) {
+void * stackalloc(struct stack * stack, uint64_t length) {
+    uint64_t pages = length / 0x1000;
+
     if (length % 0x1000) {
-        length = (length + 0x1000) & ~0xfff;
+        pages++;
     }
-    //Return aligned to 0x1000
-    void * unaligned_alloc = malloc(length);
-    void * aligned = (void*)(((uint64_t)unaligned_alloc + 0xfff) & ~0xfff);
-    return aligned;
+
+    uint64_t base = (uint64_t)malloc(pages*0x1000);
+    uint64_t top = (uint64_t)(base+pages*0x1000)-0x10;
+    //if unaligned_alloc is not 16-byte aligned, align it by subtracting the difference
+    if (top % 0x10) {
+        top -= top % 0x10;
+    }
+    
+    stack->base = (void*)(base);
+    stack->top = (void*)(top);
 }
 
-void stackfree(void * address) {
-    free(address);
+void stackfree(struct stack * stack) {
+    free(stack->base);
 }

@@ -77,16 +77,19 @@ void init_stack(struct page_directory* pd, process_t * task, uint64_t size, uint
         size = (size + 0x1000) & ~0xfff;
     }
 
+    struct stack stack;
     if (is_userland_stack) {
-        task->ustack_base = stackalloc(size);
-        task->ustack = task->ustack_base + size - 0x8; //align the stack for xmm registers
+        stackalloc(&stack, size);
+        task->ustack = stack.top;
+        task->ustack_base = stack.base;
         memset(to_identity_map(task->ustack_base), 0, size);
         map_range(pd, task->ustack_base, task->ustack_base, 0x1000, size);
         mprotect(pd, task->ustack_base, size, VMM_USER_BIT | VMM_WRITE_BIT);
         create_vmarea(task, task->ustack_base, task->ustack, VMM_USER_BIT | VMM_WRITE_BIT);
     } else {
-        task->kstack_base = kstackalloc(size);
-        task->kstack = task->kstack_base + size - 0x8; //align the stack for xmm registers
+        kstackalloc(&stack, size);
+        task->kstack_base = stack.base;
+        task->kstack = stack.top;
         memset(task->kstack_base, 0, size);
         map_range(pd, task->kstack_base, task->kstack_base, 0x1000, size);
         mprotect(pd, task->kstack_base, size, VMM_WRITE_BIT);
@@ -186,7 +189,9 @@ process_t * create_user_process(void * init) {
         panic("No more processes available\n");
     }
     task->locks = 0;
-    task->open_files = 0;
+    task->open_files = kmalloc(sizeof(int)*MAX_OPEN_FILES);
+    memset(task->open_files, 0, sizeof(int)*MAX_OPEN_FILES);
+    task->open_files_count = 0;
     task->entry_address = init;
     task->tty = 0;
     task->descriptors = 0;
@@ -220,7 +225,6 @@ process_t * duplicate_process(process_t * parent) {
     memcpy(task->context->info, parent->context->info, sizeof(struct cpu_context_info));
     memcpy(task->fxsave_region, parent->fxsave_region, 512);
 
-    task->context->rsp = (uint64_t)task->ustack;
     task->pid = get_next_pid();
     task->ppid = parent->pid;
     task->context->cr3 = vmm_copy(parent->context->cr3);
@@ -336,6 +340,7 @@ void alter_process_on_exec(process_t * task, void * init) {
     }
     task->locks = 0;
     task->open_files = saved_task.open_files;
+    task->open_files_count = saved_task.open_files_count;
     task->entry_address = init;
     task->tty = saved_task.tty;
     task->descriptors = saved_task.descriptors;

@@ -4,6 +4,9 @@
 #include <omen/managers/cpu/process.h>
 #include <omen/libraries/std/string.h>
 #include <omen/apps/debug/debug.h>
+#include <omen/apps/panic/panic.h>
+#include <vfs/vfs.h>
+#include <vfs/vfs_interface.h>
 
 #define SYSRET(ctx, val) ctx->rax = val; return;
 #define SYSCALL_ARG0(ctx) ctx->rdi
@@ -55,20 +58,34 @@ uint64_t write_syscall_handler(process_t*task, cpu_context_t* ctx) {
 
 uint64_t open_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)task;
-    uint64_t path = SYSCALL_ARG0(ctx);
-    uint64_t flags = SYSCALL_ARG1(ctx);
-    (void)path;
-    (void)flags;
-    kprintf("[PID: %d] OPEN_SYSCALL(%d,%d)\n", task->pid, path, flags);
-    return SYSCALL_SUCCESS;
+    char* path = SYSCALL_ARG0(ctx);
+    int flags = SYSCALL_ARG1(ctx);
+    int mode = SYSCALL_ARG2(ctx);
+    kprintf("[PID: %d] OPEN_SYSCALL(%s,%d,%d)\n", task->pid, path, flags, mode);
+    int fd = vfs_file_open(path, flags, mode);
+    if (fd < 0) {
+        return SYSCALL_ERROR;
+    }
+    
+    task->open_files[task->open_files_count++] = fd;
+    return fd;
 }
 
 uint64_t close_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)task;
-    uint64_t fd = SYSCALL_ARG0(ctx);
+    int fd = SYSCALL_ARG0(ctx);
     (void)fd;
     kprintf("[PID: %d] CLOSE_SYSCALL(%d)\n", task->pid, fd);
-    return SYSCALL_SUCCESS;
+    
+    for (int i = 0; i < task->open_files_count; i++) {
+        if (task->open_files[i] == fd) {
+            vfs_file_close(fd);
+            task->open_files[i] = task->open_files[task->open_files_count - 1];
+            task->open_files_count--;
+            return SYSCALL_SUCCESS;
+        }
+    }
+    return SYSCALL_ERROR;
 }
 
 uint64_t stat_syscall_handler(process_t*task, cpu_context_t* ctx) {
@@ -78,6 +95,7 @@ uint64_t stat_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)path;
     (void)stat;
     kprintf("[PID: %d] STAT_SYSCALL(%d,%d)\n", task->pid, path, stat);
+    panic("Not implemented\n");
     return SYSCALL_SUCCESS;
 }
 
@@ -90,6 +108,7 @@ uint64_t ioctl_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)request;
     (void)arg;
     kprintf("[PID: %d] IOCTL_SYSCALL(%d,%d,%d)\n", task->pid, fd, request, arg);
+    panic("Not implemented\n");
     return SYSCALL_SUCCESS;
 }
 
@@ -178,6 +197,6 @@ void global_syscall_handler(cpu_context_t* ctx) {
     struct tss * tss = arch_get_cpu(current_task->core_id)->tss;
     tss_set_stack(tss, ctx->info->kstack, 0);
     tss_set_stack(tss, ctx->rsp, 3);
-
+    ctx->interrupt_number = 0x69;
     SYSRET(ctx, result);
 }

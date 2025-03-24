@@ -38,26 +38,31 @@ void callback(boot_smp_info_t *lcpu) {
 
 void startup_tss(struct tss ** tss, uint8_t cpuid, void * kstack) {
     *tss = get_tss(cpuid);
-    void * ist0 = kstackalloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
-    memset(ist0 - KERNEL_STACK_SIZE, 0, KERNEL_STACK_SIZE);
-    void * ist1 = kstackalloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
-    memset(ist1 - KERNEL_STACK_SIZE, 0, KERNEL_STACK_SIZE);
+    struct stack ist0_stack, ist1_stack;
+    kstackalloc(&ist0_stack, KERNEL_STACK_SIZE);
+    kstackalloc(&ist1_stack, KERNEL_STACK_SIZE);
+
+    memset(ist0_stack.base, 0, KERNEL_STACK_SIZE);
+    memset(ist1_stack.base, 0, KERNEL_STACK_SIZE);
 
     tss_set_stack(*tss, kstack, 0);
-    tss_set_ist(*tss, 0, (uint64_t)ist0);
-    tss_set_ist(*tss, 1, (uint64_t)ist1);
+    tss_set_ist(*tss, 0, (uint64_t)ist0_stack.top);
+    tss_set_ist(*tss, 1, (uint64_t)ist1_stack.top);
 }
 
 void startup_cpu(uint8_t cpuid) {
     core_context_t * ctx = &cpu[cpuid];
+    struct stack kernel_stack;
+    kstackalloc(&kernel_stack, KERNEL_STACK_SIZE);
+
     kprintf("Starting CPU %d\n", ctx->core_id);
     ctx->ustack = 0;
     ctx->cinfo = kmalloc(sizeof(struct cpu_context_info));
     memset(ctx->cinfo, 0, sizeof(struct cpu_context_info));
     ctx->cinfo->cs = GDT_KERNEL_CODE_ENTRY * sizeof(gdt_entry_t);
     ctx->cinfo->ss = GDT_KERNEL_DATA_ENTRY * sizeof(gdt_entry_t);
-    ctx->cinfo->kstack = (uint64_t)kstackalloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
-    memset(ctx->cinfo->kstack - KERNEL_STACK_SIZE, 0, KERNEL_STACK_SIZE);
+    ctx->cinfo->kstack = (uint64_t)kernel_stack.top;
+    memset(kernel_stack.base, 0, KERNEL_STACK_SIZE);
     ctx->cinfo->thread = 0;
 
     startup_tss(&(ctx->tss), cpuid, ctx->cinfo->kstack);
