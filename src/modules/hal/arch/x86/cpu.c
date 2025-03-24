@@ -27,7 +27,7 @@ extern void _swapgs();
 boot_smp_info_t ** cpus;
 uint64_t cpu_count;
 uint32_t bsp_lapic_id;
-cpu_context_t cpu[MAX_CPUS];
+core_context_t cpu[MAX_CPUS];
 
 void callback(boot_smp_info_t *lcpu) {
     (void)lcpu;
@@ -49,18 +49,18 @@ void startup_tss(struct tss ** tss, uint8_t cpuid, void * kstack) {
 }
 
 void startup_cpu(uint8_t cpuid) {
-    cpu_context_t * ctx = &cpu[cpuid];
-    kprintf("Starting CPU %d\n", ctx->cid);
+    core_context_t * ctx = &cpu[cpuid];
+    kprintf("Starting CPU %d\n", ctx->core_id);
     ctx->ustack = 0;
     ctx->cinfo = kmalloc(sizeof(struct cpu_context_info));
     memset(ctx->cinfo, 0, sizeof(struct cpu_context_info));
     ctx->cinfo->cs = GDT_KERNEL_CODE_ENTRY * sizeof(gdt_entry_t);
     ctx->cinfo->ss = GDT_KERNEL_DATA_ENTRY * sizeof(gdt_entry_t);
-    ctx->cinfo->stack = (uint64_t)kstackalloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
-    memset(ctx->cinfo->stack - KERNEL_STACK_SIZE, 0, KERNEL_STACK_SIZE);
+    ctx->cinfo->kstack = (uint64_t)kstackalloc(KERNEL_STACK_SIZE) + KERNEL_STACK_SIZE;
+    memset(ctx->cinfo->kstack - KERNEL_STACK_SIZE, 0, KERNEL_STACK_SIZE);
     ctx->cinfo->thread = 0;
 
-    startup_tss(&(ctx->tss), cpuid, ctx->cinfo->stack);
+    startup_tss(&(ctx->tss), cpuid, ctx->cinfo->kstack);
 
     load_gdt(cpuid);
     reloadGsFs();
@@ -71,11 +71,11 @@ void startup_cpu(uint8_t cpuid) {
     load_interrupts_for_local_cpu();
 }
 
-cpu_context_t * arch_get_cpu(uint8_t cpuid) {
+core_context_t * arch_get_cpu(uint8_t cpuid) {
     return &cpu[cpuid];
 }
 
-cpu_context_t * arch_get_bsp_cpu() {
+core_context_t * arch_get_bsp_cpu() {
     return &cpu[bsp_lapic_id];
 }
 
@@ -90,8 +90,8 @@ void arch_init_cpu() {
     cpus = get_smp_cpus();
 
     for (uint64_t i = 0; i < cpu_count; i++) {
-        cpu[i].cid = cpus[i]->lapic_id;
-        if (cpu[i].cid != bsp_lapic_id)
+        cpu[i].core_id = cpus[i]->lapic_id;
+        if (cpu[i].core_id != bsp_lapic_id)
             cpus[i]->goto_address = callback;
     }
 

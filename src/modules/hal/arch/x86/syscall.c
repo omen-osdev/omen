@@ -12,13 +12,13 @@
 #define SYSCALL_ARG3(ctx) ctx->rcx
 
 extern void syscall_entry();
-uint64_t dummy_syscall_handler(process_t*task, context_t* ctx) {
+uint64_t dummy_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)task;
     kprintf("[PID: %d] DUMMY_SYSCALL(%d)\n", task->pid, ctx->rax);
     return SYSCALL_SUCCESS;
 }
 
-uint64_t read_syscall_handler(process_t*task, context_t* ctx) {
+uint64_t read_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)task;
     uint64_t fd = SYSCALL_ARG0(ctx);
     uint64_t buffer = SYSCALL_ARG1(ctx);
@@ -35,7 +35,7 @@ uint64_t read_syscall_handler(process_t*task, context_t* ctx) {
     return SYSCALL_SUCCESS;
 }
 
-uint64_t write_syscall_handler(process_t*task, context_t* ctx) {
+uint64_t write_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)task;
     uint64_t fd = SYSCALL_ARG0(ctx);
     uint64_t buffer = SYSCALL_ARG1(ctx);
@@ -53,7 +53,7 @@ uint64_t write_syscall_handler(process_t*task, context_t* ctx) {
     return SYSCALL_SUCCESS;
 }
 
-uint64_t open_syscall_handler(process_t*task, context_t* ctx) {
+uint64_t open_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)task;
     uint64_t path = SYSCALL_ARG0(ctx);
     uint64_t flags = SYSCALL_ARG1(ctx);
@@ -63,7 +63,7 @@ uint64_t open_syscall_handler(process_t*task, context_t* ctx) {
     return SYSCALL_SUCCESS;
 }
 
-uint64_t close_syscall_handler(process_t*task, context_t* ctx) {
+uint64_t close_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)task;
     uint64_t fd = SYSCALL_ARG0(ctx);
     (void)fd;
@@ -71,7 +71,7 @@ uint64_t close_syscall_handler(process_t*task, context_t* ctx) {
     return SYSCALL_SUCCESS;
 }
 
-uint64_t stat_syscall_handler(process_t*task, context_t* ctx) {
+uint64_t stat_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)task;
     uint64_t path = SYSCALL_ARG0(ctx);
     uint64_t stat = SYSCALL_ARG1(ctx);
@@ -81,7 +81,7 @@ uint64_t stat_syscall_handler(process_t*task, context_t* ctx) {
     return SYSCALL_SUCCESS;
 }
 
-uint64_t ioctl_syscall_handler(process_t*task, context_t* ctx) {
+uint64_t ioctl_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)task;
     uint64_t fd = SYSCALL_ARG0(ctx);
     uint64_t request = SYSCALL_ARG1(ctx);
@@ -93,7 +93,7 @@ uint64_t ioctl_syscall_handler(process_t*task, context_t* ctx) {
     return SYSCALL_SUCCESS;
 }
 
-uint64_t sched_yield_syscall_handler(process_t*task, context_t* ctx) {
+uint64_t sched_yield_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)task;
     (void)ctx;
     kprintf("[PID: %d] SCHED_YIELD_SYSCALL()\n", task->pid);
@@ -101,7 +101,7 @@ uint64_t sched_yield_syscall_handler(process_t*task, context_t* ctx) {
     return SYSCALL_SUCCESS;
 }
 
-uint64_t fork_syscall_handler(process_t*task, context_t* ctx) {
+uint64_t fork_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)task;
     (void)ctx;
     kprintf("[PID: %d] FORK_SYSCALL()\n", task->pid);
@@ -110,7 +110,7 @@ uint64_t fork_syscall_handler(process_t*task, context_t* ctx) {
     return child_pid;
 }
 
-uint64_t execve_syscall_handler(process_t*task, context_t* ctx) {
+uint64_t execve_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)task;
     (void)ctx;
     const char * path = (const char *)SYSCALL_ARG0(ctx);
@@ -121,7 +121,7 @@ uint64_t execve_syscall_handler(process_t*task, context_t* ctx) {
     return SYSCALL_SUCCESS;
 }
 
-uint64_t exit_syscall_handler(process_t*task, context_t* ctx) {
+uint64_t exit_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)task;
     (void)ctx;
     int error_code = SYSCALL_ARG0(ctx);
@@ -130,7 +130,7 @@ uint64_t exit_syscall_handler(process_t*task, context_t* ctx) {
     return SYSCALL_SUCCESS;
 }
 
-uint64_t undefined_syscall_handler(process_t*task, context_t* ctx) {
+uint64_t undefined_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)task;
     kprintf("[PID: %d] UNDEFINED_SYSCALL(%d)\n", task->pid, ctx->rax);
     return SYSCALL_UNDEFINED;
@@ -154,18 +154,13 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [61 ... 255] = undefined_syscall_handler
 };
 
-void global_syscall_handler(context_t* ctx) {
+void global_syscall_handler(cpu_context_t* ctx) {
 
     process_t * current_task = get_current_process();
-    ctx->cr3 = get_pml4();
-
-    //struct page_directory * father_cr3 = ctx->cr3;
-
-    current_task->cpu->ustack = ctx->rsp;
-
-    memcpy(current_task->context, ctx, sizeof(context_t));
+    memcpy(current_task->context, ctx, sizeof(cpu_context_t));
     __asm__("fxsave %0" : : "m" (current_task->fxsave_region));
-    
+    current_task->context->cr3 = to_identity_map(current_task->context->cr3);
+
     uint64_t result = SYSCALL_SUCCESS;
 
     if (ctx->rax < SYSCALL_HANDLER_COUNT) {
@@ -176,30 +171,13 @@ void global_syscall_handler(context_t* ctx) {
     }
 
     current_task = get_current_process();
+    current_task->context->cr3 = from_identity_map(current_task->context->cr3);
     __asm__("fxrstor %0" : "=m" (current_task->fxsave_region));
-    memcpy(ctx, current_task->context, sizeof(context_t));
+    memcpy(ctx, current_task->context, sizeof(cpu_context_t));
 
-    tss_set_stack(current_task->cpu->tss, current_task->cpu->cinfo->stack, 0);
-    tss_set_stack(current_task->cpu->tss, current_task->ustack, 3);
-    current_task->cpu->ustack = current_task->ustack;
-    ctx->cr3 = get_physical_address(current_task->context->cr3, current_task->context->cr3);
-
-    //if ((uint64_t)father_cr3 != current_task->context->cr3) {
-    //    kprintf("Switch detected, performing test\n");
-    //    uint64_t * address = ctx->rsp;
-    //    switch_cr3(get_physical_address(father_cr3, father_cr3));
-    //    *address = 0x42;
-    //    kprintf("Value for address V:%llx P:%llx with cr3: %llx: %llx\n", address, get_physical_address(father_cr3, address), father_cr3, *address);
-    //    switch_cr3(ctx->cr3);
-    //    *address = 0x55;
-    //    kprintf("Value for address V:%llx P:%llx with cr3: %llx: %llx\n", address, get_physical_address(current_task->context->cr3, address), ctx->cr3, *address);
-    //    switch_cr3(get_physical_address(father_cr3, father_cr3));
-    //    kprintf("Value for address V:%llx P:%llx with cr3: %llx: %llx\n", address, get_physical_address(father_cr3, address), father_cr3, *address);
-    //}
-
-    //kprintf("CURRENT PROCESS USTACK %llx USTACK_BASE %llx KSTACK(CPU) %llx\n", current_task->ustack, current_task->ustack_base, current_task->cpu->cinfo->stack);
-    //kprintf("DEBUG: VMM STACK: %llx OLD_TRANSLATES: %llx NEW_TRANSLATES: %llx\n", ctx->rsp, get_physical_address(father_cr3, ctx->rsp), get_physical_address(current_task->context->cr3, ctx->rsp));
-    //kprintf("Returning to process %d with stack %llx\n", current_task->pid, ctx->rsp);
+    struct tss * tss = arch_get_cpu(current_task->core_id)->tss;
+    tss_set_stack(tss, ctx->info->kstack, 0);
+    tss_set_stack(tss, ctx->rsp, 3);
 
     SYSRET(ctx, result);
 }

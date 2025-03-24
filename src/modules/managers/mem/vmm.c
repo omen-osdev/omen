@@ -12,6 +12,8 @@
 #define PAGE_SIZE_4KIB      0x1000
 #define PAGE_SIZE_DIR       0x1
 
+#define STACK_MEMORY_OFFSET    0xffffB00000000000
+#define STACK_MEMORY_SIZE      0x0000001000000000
 #define PHYSICAL_MEMORY_OFFSET 0xffffA00000000000
 uint64_t physical_memory_offset = 0;
 #define PHYSICAL_MEMORY_SIZE   0x000000F000000000
@@ -544,12 +546,28 @@ void init_vmm()
 
 }
 
+void * vmm_create_kernel_stack(struct page_directory* stack_root, uint64_t stack_size, uint8_t flags, void * last_kstack_end) {
+    //align last_kstack_end to the next page
+    if (last_kstack_end == 0)
+        last_kstack_end = (void*)STACK_MEMORY_OFFSET;
+    else
+        last_kstack_end = ((uint64_t)last_kstack_end+0xfff) & ~0xfff;
+
+    stack_size = (stack_size + 0xfff) & ~0xfff;
+    
+    void * new_stack_phys = pmm_alloc(stack_size);
+    map_range(stack_root, last_kstack_end, new_stack_phys, PAGE_SIZE_4KIB, stack_size);
+    mprotect(stack_root, last_kstack_end, stack_size, flags);
+    return last_kstack_end;
+}
+
 void * vmm_copy_stack(struct page_directory* stack_root, void * stack_base, uint64_t stack_size, uint8_t flags)
 {
+    stack_size = (stack_size + 0xfff) & ~0xfff;
     void * new_stack_phys = pmm_alloc(stack_size);
-    map_address(stack_root, stack_base, new_stack_phys, stack_size);
-    mprotect(stack_root, stack_base, stack_size, flags);
     memcpy(TO_IDENTITY_MAP(new_stack_phys), stack_base, stack_size);
+    map_range(stack_root, stack_base, new_stack_phys, PAGE_SIZE_4KIB, stack_size);
+    mprotect(stack_root, stack_base, stack_size, flags);
     return stack_base;
 }
 
@@ -959,7 +977,7 @@ void vmm_unmap_userspace(struct page_directory* root)
 {
     for (uint64_t i = 0; i < 256; i++)
     {
-        memset(to_identity_map(root->entries[i]), 0, sizeof(vm_entry)); //TODO: Reclaim the used memory!
+        memset(GET_ENTRY(root, i), 0, sizeof(vm_entry)); //TODO: Reclaim the used memory!
     }
 }
 

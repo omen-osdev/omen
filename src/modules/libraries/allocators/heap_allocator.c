@@ -7,6 +7,8 @@
 #include <omen/apps/panic/panic.h>
 #include <omen/libraries/concurrency/mutex.h>
 
+void * last_kstack = 0;
+
 void * kmalloc(uint64_t size) {
     void * ptr = allocate_current_vmm(size, PAGE_WRITE_BIT);
     memset(ptr, 0, size);
@@ -18,7 +20,8 @@ void kfree(void* address) {
 }
 
 void * kstackalloc(uint64_t length) {
-    return kmalloc(length);
+    last_kstack = vmm_create_kernel_stack(get_pml4(), length, PAGE_WRITE_BIT, last_kstack) + length;
+    return last_kstack - length;
 }
 
 void kstackfree(void* address) {
@@ -54,7 +57,13 @@ void free(void * address) {
 }
 
 void * stackalloc(uint64_t length) {
-    return malloc(length);
+    if (length % 0x1000) {
+        length = (length + 0x1000) & ~0xfff;
+    }
+    //Return aligned to 0x1000
+    void * unaligned_alloc = malloc(length);
+    void * aligned = (void*)(((uint64_t)unaligned_alloc + 0xfff) & ~0xfff);
+    return aligned;
 }
 
 void stackfree(void * address) {

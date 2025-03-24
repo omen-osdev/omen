@@ -31,6 +31,7 @@ process_t *current_process = process_list;
 uint32_t current_process_index = 0;
 uint32_t process_count = 0;
 char init_path[0x1000] __attribute__((aligned(0x1000)));
+char idle_path[0x1000] __attribute__((aligned(0x1000)));
 
 uint8_t is_in_vmarea(process_t* process, void * address) {
     struct vm_area * current = process->vm_areas;
@@ -71,17 +72,66 @@ void remove_vmarea(process_t* process, void * start) {
     }
 }
 
-void init_user_context(struct page_directory* pml4, process_t * task, void * init, uint8_t trampoline) {
-    context_t * context = task->context;
+void init_stack(struct page_directory* pd, process_t * task, uint64_t size, uint8_t is_userland_stack) {
+    if (size % 0x1000) {
+        size = (size + 0x1000) & ~0xfff;
+    }
 
-    task->ustack_base = malloc(PROCESS_STACK_SIZE);
-    memset(task->ustack_base, 0, PROCESS_STACK_SIZE);
-    task->ustack = task->ustack_base + PROCESS_STACK_SIZE;
-    mprotect(pml4, task->ustack_base, PROCESS_STACK_SIZE, VMM_USER_BIT | VMM_WRITE_BIT);
+    if (is_userland_stack) {
+        task->ustack_base = stackalloc(size);
+        task->ustack = task->ustack_base + size - 0x8; //align the stack for xmm registers
+        memset(to_identity_map(task->ustack_base), 0, size);
+        map_range(pd, task->ustack_base, task->ustack_base, 0x1000, size);
+        mprotect(pd, task->ustack_base, size, VMM_USER_BIT | VMM_WRITE_BIT);
+        create_vmarea(task, task->ustack_base, task->ustack, VMM_USER_BIT | VMM_WRITE_BIT);
+    } else {
+        task->kstack_base = kstackalloc(size);
+        task->kstack = task->kstack_base + size - 0x8; //align the stack for xmm registers
+        memset(task->kstack_base, 0, size);
+        map_range(pd, task->kstack_base, task->kstack_base, 0x1000, size);
+        mprotect(pd, task->kstack_base, size, VMM_WRITE_BIT);
+        create_vmarea(task, task->kstack_base, task->kstack, VMM_WRITE_BIT);
+    }
+}
 
-    kprintf("Stack permissions after creating: %d\n", get_page_perms(pml4, task->ustack_base));
-    kprintf("Is stack user access after creating: %d\n", is_user_access(pml4, task->ustack_base));
-    create_vmarea(task, task->ustack_base, task->ustack, VMM_USER_BIT | VMM_WRITE_BIT);
+void create_context(process_t * task, struct page_directory* pd, void * ustack, void * kstack, void * init) {
+    task->context = kmalloc(sizeof(cpu_context_t));
+    memset(task->context, 0, sizeof(cpu_context_t));
+    task->context->info = kmalloc(sizeof(struct cpu_context_info));
+    memset(task->context->info, 0, sizeof(struct cpu_context_info));
+    task->context->cr3 = pd;
+    task->context->info->kstack = (uint64_t) kstack;
+    task->context->info->cs = get_user_code_selector();
+    task->context->info->ss = get_user_data_selector();
+    task->context->info->thread = 0;
+    task->context->rax = 1;
+    task->context->rbx = 2;
+    task->context->rcx = 3;
+    task->context->rdx = 4;
+    task->context->rsi = 5;
+    task->context->rdi = 6;
+    task->context->rbp = 7;
+    task->context->r8 = 8;
+    task->context->r9 = 9;
+    task->context->r10 = 10;
+    task->context->r11 = 11;
+    task->context->r12 = 12;
+    task->context->r13 = 13;
+    task->context->r14 = 14;
+    task->context->r15 = 15;
+    task->context->interrupt_number = 0;
+    task->context->error_code = 0;    
+    task->context->rip = (uint64_t)init;
+    task->context->rflags = PROCESS_STARTUP_RFLAGS;
+    task->context->cs = get_user_code_selector();
+    task->context->ss = get_user_data_selector();
+    task->context->rsp = (uint64_t)ustack;
+}
+
+void init_user_context(struct page_directory* pd, process_t * task, void * init, uint8_t trampoline) {
+
+    init_stack(pd, task, PROCESS_STACK_SIZE, 1);
+    init_stack(pd, task, PROCESS_STACK_SIZE, 0);
 
     //TODO: Initialize the stack
     if (trampoline)
@@ -89,34 +139,7 @@ void init_user_context(struct page_directory* pml4, process_t * task, void * ini
     else
         newctxcreat((uint64_t)&(task->ustack), (uint64_t)init);
 
-    context->info = kmalloc(sizeof(struct cpu_context_info));
-    memset(context->info, 0, sizeof(struct cpu_context_info));
-    context->info->stack = (uint64_t) task->ustack;
-    context->info->cs = get_user_code_selector();
-    context->info->ss = get_user_data_selector();
-    context->info->thread = 0;
-    context->rax = 1;
-    context->rbx = 2;
-    context->rcx = 3;
-    context->rdx = 4;
-    context->rsi = 5;
-    context->rdi = 6;
-    context->rbp = 7;
-    context->r8 = 8;
-    context->r9 = 9;
-    context->r10 = 10;
-    context->r11 = 11;
-    context->r12 = 12;
-    context->r13 = 13;
-    context->r14 = 14;
-    context->r15 = 15;
-    context->interrupt_number = 0;
-    context->error_code = 0;
-    context->rip = (uint64_t)init;
-    context->rflags = PROCESS_STARTUP_RFLAGS;
-    context->cs = get_user_code_selector();
-    context->ss = get_user_data_selector();
-    context->rsp = (uint64_t)task->ustack;
+    create_context(task, pd, task->ustack, task->kstack, init);
     
     __asm__ volatile("fxsave %0" : "=m" (task->fxsave_region));
 
@@ -151,7 +174,7 @@ process_t * create_user_process(void * init) {
     task->signal_pending = 0;
     task->nice = 0;
     task->privilege = 0;
-    task->cpu = arch_get_bsp_cpu(); //TODO: Change this for SMP
+    task->core_id = arch_get_bsp_cpu()->core_id;
     task->cpu_time = 0;
     task->last_scheduled = 0;
     task->sleep_time = 0;
@@ -179,19 +202,11 @@ process_t * create_user_process(void * init) {
         task->ppid = 0;
     }
 
-    task->context = kmalloc(sizeof(context_t)); 
-    memset(task->context, 0, sizeof(context_t));
-    struct page_directory * pd = get_pml4();
+    struct page_directory * pd = vmm_copy_kernel(get_pml4());
+
     init_user_context(pd, task, init, 1);
-    if ((uint64_t)task->entry_address > 0x80000000) {
-        mprotect(pd, task->entry_address, 0x1000, VMM_USER_BIT);
-    }
-    task->context->cr3 = vmm_copy_kernel(pd);
-    map_range(task->context->cr3, (void*)task->ustack_base, (void*)task->ustack_base, 0x1000, PROCESS_STACK_SIZE);
-    mprotect(task->context->cr3, task->ustack_base, PROCESS_STACK_SIZE, VMM_WRITE_BIT | VMM_USER_BIT);
+
     kprintf("Process %d created\n", task->pid);
-    kprintf("Stack permissions: %d\n", get_page_perms(task->context->cr3, task->ustack));
-    kprintf("Is stack user access: %d\n", is_user_access(task->context->cr3, task->ustack));
     return task;
 }
 
@@ -199,11 +214,10 @@ process_t * duplicate_process(process_t * parent) {
     process_t * task = &(process_list[process_count++]);
     memcpy(task, parent, sizeof(process_t));
 
-    task->context = kmalloc(sizeof(context_t));
-    memcpy(task->context, parent->context, sizeof(context_t));
+    task->context = kmalloc(sizeof(cpu_context_t));
+    memcpy(task->context, parent->context, sizeof(cpu_context_t));
     task->context->info = kmalloc(sizeof(struct cpu_context_info));
     memcpy(task->context->info, parent->context->info, sizeof(struct cpu_context_info));
-    task->cpu = arch_get_bsp_cpu(); //TODO: Change this for SMP
     memcpy(task->fxsave_region, parent->fxsave_region, 512);
 
     task->context->rsp = (uint64_t)task->ustack;
@@ -211,6 +225,7 @@ process_t * duplicate_process(process_t * parent) {
     task->ppid = parent->pid;
     task->context->cr3 = vmm_copy(parent->context->cr3);
     vmm_copy_stack(task->context->cr3, parent->ustack_base, PROCESS_STACK_SIZE, VMM_USER_BIT | VMM_WRITE_BIT);
+    vmm_copy_stack(task->context->cr3, parent->kstack_base, PROCESS_STACK_SIZE, VMM_WRITE_BIT);
     kprintf("Process %d duplicated\n", task->pid);
     return task;
 }
@@ -226,37 +241,42 @@ uint64_t _internal_syscall(uint64_t syscall_number, uint64_t arg1, uint64_t arg2
 }
 
 void _idle() {
-    while (1) {
-        _internal_syscall(24, 0, 0, 0, 0, 0, 0);
-    }
+    panic("Stub running, exec failed!\n");
 }
 
-void _init() {
-    _internal_syscall(59, init_path, "", "", 0, 0, 0);
-}
-
-void init_process(const char * path) {
+void init_process(const char * _init_path, const char * _idle_path) {
     mprotect_current(init_path, 0x1000, VMM_USER_BIT | VMM_WRITE_BIT);
     memset(init_path, 0, 0x1000);
-    strcpy(init_path, path);
+    strcpy(init_path, _init_path);
+    mprotect_current(idle_path, 0x1000, VMM_USER_BIT | VMM_WRITE_BIT);
+    memset(idle_path, 0, 0x1000);
+    strcpy(idle_path, _idle_path);
 
-    process_t * idle_proc = create_user_process(_idle);
+    process_t * idle_proc = create_user_process((void*)_idle);
     idle_proc->pid = 0;
-    process_t * init_proc = create_user_process((void*)_init);
+    current_process = idle_proc;
+    current_process_index = 0;
+    exec(idle_path);
+
+    process_t * init_proc = create_user_process((void*)_idle);
     init_proc->pid = 1;
+    current_process = init_proc;
+    current_process_index = 1;
+    exec(init_path);
 
     current_process = &process_list[1];
     current_process_index = 1;
-
     current_process->status = PROCESS_STATUS_RUNNING;
-    current_process->cpu->ustack = current_process->ustack;
-    tss_set_stack(current_process->cpu->tss, current_process->cpu->cinfo->stack, 0);
-    tss_set_stack(current_process->cpu->tss, current_process->ustack, 3);
+
+    struct tss * tss = arch_get_cpu(current_process->core_id)->tss;
+    tss_set_stack(tss, current_process->kstack, 0);
+    tss_set_stack(tss, current_process->ustack, 3);
     void * cr3 = get_physical_address(current_process->context->cr3, current_process->context->cr3);
     __asm__("mov %0, %%rsp\n"
             "mov %1, %%cr3\n"
             "fxrstor %2\n"
-            "ret\n" : : "r" (current_process->cpu->ustack), "r" (cr3), "m" (current_process->fxsave_region));
+            "ret\n" : : "r" (current_process->ustack), "r" (cr3), "m" (current_process->fxsave_region));
+    panic("Returned from init process\n");
 }
 
 process_t * sched() {
@@ -303,7 +323,7 @@ void alter_process_on_exec(process_t * task, void * init) {
     task->signal_pending = 0;
     task->nice = 0;
     task->privilege = 0;
-    task->cpu = saved_task.cpu; //TODO: Change this for SMP
+    task->core_id = arch_get_bsp_cpu()->core_id;
     task->cpu_time = 0;
     task->last_scheduled = 0;
     task->sleep_time = 0;
@@ -325,27 +345,12 @@ void alter_process_on_exec(process_t * task, void * init) {
     task->gid = saved_task.gid;
     task->ppid = saved_task.ppid;
 
-    task->context = kmalloc(sizeof(context_t)); 
-    memset(task->context, 0, sizeof(context_t));
-    struct page_directory * pd = saved_task.context->cr3;
-    init_user_context(pd, task, init, 1);
-    if ((uint64_t)task->entry_address > 0x80000000) {
-        mprotect(pd, task->entry_address, 0x1000, VMM_USER_BIT);
-    }
-    task->context->cr3 = pd;
-    vmm_unmap_userspace(task->context->cr3);
-    map_range(task->context->cr3, (void*)task->ustack_base, (void*)task->ustack_base, 0x1000, PROCESS_STACK_SIZE);
-    mprotect(task->context->cr3, task->ustack_base, PROCESS_STACK_SIZE, VMM_WRITE_BIT | VMM_USER_BIT);
-    kprintf("Process %d created\n", task->pid);
-    kprintf("Stack permissions: %d\n", get_page_perms(task->context->cr3, task->ustack));
-    kprintf("Is stack user access: %d\n", is_user_access(task->context->cr3, task->ustack));
+    init_user_context(saved_task.context->cr3, task, init, 1);
+    kprintf("Exec: Process %d created\n", task->pid);
 }
 
 int exec(char const *path) {
     process_t * task = get_current_process();
-    if (task->pid == 0) {
-        panic("Cannot exec from idle process\n");
-    }
 
     char * dynpath = kmalloc(256);
     strcpy(dynpath, path);

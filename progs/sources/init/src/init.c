@@ -1,17 +1,40 @@
 #include <minilibc.h>
 
 int main(int argc, char* argv[]) {
-    const char text[] = "Hello, World!\n";
-    unsigned long long ret = 0;
-    unsigned long long arg1 = 1;
-    unsigned long long arg2 = (unsigned long long)text;
-    unsigned long long arg3 = sizeof(text);
-    unsigned long long arg4 = 0;
-    unsigned long long arg5 = 0;
-    unsigned long long arg6 = 0;
-    unsigned long long syscall_number = 1;
-    __asm__ volatile ("syscall" : "=a" (ret) : "a" (syscall_number), "D" (arg1), "S" (arg2), "d" (arg3), "r" (arg4), "r" (arg5), "r" (arg6) : "memory");
-    while (1) {
+    char text[32] = "I am the ";
+    int j = 0;
+    while (text[j] != 0) {
+        j++;
+    }
     
+    //volatile short pid = sys_fork();
+    short pid = 1;
+    if (pid == 0) {
+        const char child[] = "child\n";
+        
+        int i = 0;
+        while (child[i] != 0) {
+            text[j + i] = child[i];
+            i++;
+        }
+
+        sys_write(1, text, 32);
+
+    } else {
+        const char parent[] = "parent\n";
+
+        int i = 0;
+        while (parent[i] != 0) {
+            text[j + i] = parent[i];
+            i++;
+        }
+
+        sys_write(1, text, 32);
+    }
+
+    while(1) {
+        //syscall yield, do not optimize this
+        sys_write(1, text, 32);
+        sys_sched_yield();
     }
 }

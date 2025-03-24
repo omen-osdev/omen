@@ -102,7 +102,7 @@ void boot_startup() {
     __asm__ volatile("sti");
 
     kprintf("Entering uspace...\n");
-    init_process("hdap2/export/init.elf");
+    init_process("hdap2/export/init.elf", "hdap2/export/idle.elf");
     
     panic("¡Returned from the scheduler!\n");
 }

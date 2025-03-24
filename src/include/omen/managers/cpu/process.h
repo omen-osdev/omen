@@ -32,13 +32,14 @@ struct vm_area {
 };
 
 typedef struct process {
-    context_t *context;
-    cpu_context_t *cpu;
+    cpu_context_t *context;
     void * ustack;
     void * ustack_base;
+    void * kstack;
+    void * kstack_base;
     struct vm_area *vm_areas;
     process_status_t status;
-
+    uint8_t core_id;
     uint8_t privilege;
     int signal_pending;
     //signal_queue_t *signal_queue;
@@ -80,12 +81,13 @@ typedef struct process {
 
 } process_t;
 
-void init_process(const char * init_path);
+void init_process(const char * init_path, const char * idle_path);
 uint8_t is_in_vmarea(process_t* process, void * address);
 void returnoexit();
 int16_t fork();
 process_t * sched();
 void execve(const char * path, const char * argv, const char * envp);
+int exec(char const *path);
 void exit(int error_code);
 process_t * create_user_process(void * init);
 process_t * get_current_process();
