@@ -61,7 +61,7 @@ void ioapic_set_redirection_entry(void* apic_ptr, uint64_t index, struct ioapic_
         (entry.destination << IOAPIC_REDIRECTION_BITS_DESTINATION)
     );
 
-    //printf("Setting up redirection entry %d\n", index);
+    //kprintf("Setting up redirection entry %d\n", index);
     //debug_redirection_entry(entry);
 
     ioapic_write_register(apic_ptr, IOAPIC_REDIRECTION_TABLE + (index * 2), low);
@@ -152,7 +152,7 @@ void enable_apic(uint8_t cpu_id) {
     uint64_t base_addr = (((uint64_t)hi << 32) | lo) & 0xFFFFF000;
 
     actx.lapic_address[cpu_id]->physical_address = (void*)base_addr;
-    actx.lapic_address[cpu_id]->virtual_address = (void*)base_addr;
+    actx.lapic_address[cpu_id]->virtual_address = (void*)to_identity_map((void*)base_addr);
 
     void * lapic_address = get_lapic_address();
 
@@ -196,7 +196,7 @@ void ioapic_init(uint64_t ioapic_id) {
     uint32_t base = ioapic->gsi_base;
     
     for (uint64_t i = 0; i < max_interrupts; i++) {
-        //printf("Setting up redirection entry %d\n", i);
+        //kprintf("Setting up redirection entry %d\n", i);
         struct ioapic_redirection_entry entry = {
             .vector = IRQ_START + i,
             .delivery_mode = IOAPIC_REDIRECTION_DELIVERY_MODE_FIXED,
@@ -239,9 +239,9 @@ void register_apic(struct madt_header * madt, char* (*cb)(void*, uint8_t, uint64
     actx.ioapic_iso_count = 0;
     actx.max_apic_id = 0;
 
-    //printf("APIC: %x\n", madt->local_apic_address);
-    //printf("flags: %x\n", madt->flags);
-    //printf("length: %x\n", madt->header.length);
+    //kprintf("APIC: %x\n", madt->local_apic_address);
+    //kprintf("flags: %x\n", madt->flags);
+    //kprintf("length: %x\n", madt->header.length);
 
     uint64_t entry = (((uint64_t)madt)+sizeof(struct madt_header));
     uint64_t end = ((uint64_t)madt)+madt->header.length;

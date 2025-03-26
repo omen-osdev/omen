@@ -1,3 +1,4 @@
+#include <omen/apps/debug/debug.h>
 #include <omen/libraries/allocators/bitfield_allocator.h>
 #include <omen/libraries/std/stdatomic.h>
 #include <omen/libraries/std/stddef.h>
@@ -51,7 +52,7 @@ void *allocate(struct bitfield *bf, uint64_t size) {
     mutex_lock(&bf->lock);
     // Check if the size is bigger than the available size
     if (size > bf->available_size) {
-        printf("Size is bigger than the available size\n");
+        kprintf("Size is bigger than the available size\n");
         return NULL;
     }
 
@@ -68,7 +69,7 @@ void *allocate(struct bitfield *bf, uint64_t size) {
     if (index == 0) {
 
         mutex_unlock(&bf->lock);
-        printf("No available pages\n");
+        kprintf("No available pages\n");
         return NULL;
     }
 
@@ -152,7 +153,7 @@ void debug_bitfield(struct bitfield *bf) {
         }
     }
 
-    printf("Total size: %lu\n", total_size);
-    printf("Allocated space: %lu\n", allocated_space);
-    printf("Free space: %lu\n", free_space);
+    kprintf("Total size: %lu\n", total_size);
+    kprintf("Allocated space: %lu\n", allocated_space);
+    kprintf("Free space: %lu\n", free_space);
 }

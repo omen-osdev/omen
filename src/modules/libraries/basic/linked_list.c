@@ -1,10 +1,11 @@
+#include <omen/apps/debug/debug.h>
 #include <omen/libraries/basic/linked_list.h>
 
 void debug_list(struct list_head *head) {
     struct list_head *node;
-    printf("%p -> ", head);
+    kprintf("%p -> ", head);
     list_for_each(node, head) {
-      printf("%p -> ", node);
+      kprintf("%p -> ", node);
     }
-    printf("%p\n", head);
+    kprintf("%p\n", head);
 }

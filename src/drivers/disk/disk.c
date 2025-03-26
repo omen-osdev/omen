@@ -40,7 +40,7 @@ uint64_t dd_disk_write(uint64_t port, uint64_t bytes, uint64_t offset, uint8_t* 
 
 uint64_t dd_disk_atapi_read(uint64_t port, uint64_t bytes, uint64_t offset, uint8_t* buffer) {
     if (offset != 0)
-        printf("WARNING: ATAPI READS ARE NOT WORKING WELL, AN OFFSET != 0 YIELDS ZEROS\n");
+        kprintf("WARNING: ATAPI READS ARE NOT WORKING WELL, AN OFFSET != 0 YIELDS ZEROS\n");
     uint64_t size = size_to_blocks(bytes);
     uint8_t * hw_buffer = get_buffer((uint8_t)port);
     if (!read_atapi_port((uint8_t)port, offset, size))
@@ -110,7 +110,7 @@ struct file_operations atapi_fops = {
 };
 
 void init_drive(void) {
-    printf("### DRIVE STARTUP ###\n");
+    kprintf("### DRIVE STARTUP ###\n");
     register_block(8, DISK_ATA_DD_NAME, &ata_fops);
     register_block(9, DISK_ATAPI_DD_NAME, &atapi_fops);
 }

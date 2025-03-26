@@ -14,6 +14,13 @@
 #define O_CREAT 0x0200
 #define O_TRUNC 0x0400
 #define O_EXCL 0x0800
+#define O_NONBLOCK 0x4000
+
+#define O_ISAPPEND(flags) ((flags) & O_APPEND)
+#define O_ISCREAT(flags) ((flags) & O_CREAT)
+#define O_ISTRUNC(flags) ((flags) & O_TRUNC)
+#define O_ISEXCL(flags) ((flags) & O_EXCL)
+#define O_ISNONBLOCK(flags) ((flags) & O_NONBLOCK)
 
 #define SEEK_SET 0
 #define SEEK_CUR 1

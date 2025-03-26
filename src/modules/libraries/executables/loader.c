@@ -236,7 +236,7 @@ void allocate_segment(struct page_directory * root, Elf64_Phdr * program_header,
 uint8_t elf_open_file(char * filename, uint8_t ** buffer, uint64_t * filesize) {
     int fd = vfs_file_open(filename, 0, 0);
     if (fd < 0) {
-        printf("Could not open file %s\n", filename);
+        kprintf("Could not open file %s\n", filename);
         return 0;
     }
 
@@ -246,7 +246,7 @@ uint8_t elf_open_file(char * filename, uint8_t ** buffer, uint64_t * filesize) {
 
     *buffer = kmalloc(*filesize);
     if (!*buffer) {
-        printf("Could not allocate buffer for file\n");
+        kprintf("Could not allocate buffer for file\n");
         return 0;
     }
 

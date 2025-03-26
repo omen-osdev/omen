@@ -17,7 +17,7 @@ uint32_t read_mbr(const char* disk, struct vfs_partition* partitions, void (*add
 	}
     
     struct mbr_header *mbr_header = (struct mbr_header *)mount_buffer;
-    printf("[MBR] compatible disk found on %s [sig: %llx, boot sig: %lx\n", disk, mbr_header->disk_signature, mbr_header->signature);
+    kprintf("[MBR] compatible disk found on %s [sig: %llx, boot sig: %lx\n", disk, mbr_header->disk_signature, mbr_header->signature);
 
     uint32_t valid_partitions = 0;
 
@@ -27,7 +27,7 @@ uint32_t read_mbr(const char* disk, struct vfs_partition* partitions, void (*add
         //Validity by sector size. I'm guessing a zero size partition must be bogus.
         if (mbr_header->partitions[i].number_of_sectors != 0x0) {
             add_part(partitions, mbr_header->partitions[i].lba_partition_start, mbr_header->partitions[i].number_of_sectors, 1, mbr_header->partitions[i].partition_type);
-		    printf("[MBR] Partition %d: LBA %d, size %d\n", i, mbr_header->partitions[i].lba_partition_start, mbr_header->partitions[i].number_of_sectors);
+		    kprintf("[MBR] Partition %d: LBA %d, size %d\n", i, mbr_header->partitions[i].lba_partition_start, mbr_header->partitions[i].number_of_sectors);
 
             valid_partitions++;
         }

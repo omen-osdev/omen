@@ -341,7 +341,7 @@ void subscribe_pci_interrupt(const char* id, struct pci_device_header * dev, voi
 }
 
 void register_pci_device(struct pci_device_header* pci, uint32_t device_base_address) {
-    printf("[PCI] Device detected: %x, %x, %x\n", pci->class_code, pci->subclass, pci->prog_if);
+    kprintf("[PCI] Device detected: %x, %x, %x\n", pci->class_code, pci->subclass, pci->prog_if);
     switch (pci->class_code){
         case 0x01: {
             switch (pci->subclass){
@@ -370,7 +370,7 @@ void register_pci_device(struct pci_device_header* pci, uint32_t device_base_add
                             }
                             break;
                         default:
-                            printf("[PCI] Unknown AHCI interface: %x\n", pci->prog_if);
+                            kprintf("[PCI] Unknown AHCI interface: %x\n", pci->prog_if);
                     }
                     break;
                 }
@@ -406,7 +406,7 @@ void enumerate_function(uint64_t device_address, uint64_t bus, uint64_t device, 
     //if (pci_device_header->device_id == 0x0) return;
     if (pci_device_header->device_id == 0xFFFF) return;
 
-    printf("[PCI] %s %s: %s %s / %s\n",
+    kprintf("[PCI] %s %s: %s %s / %s\n",
         get_device_class(pci_device_header->class_code),
         get_subclass_name(pci_device_header->class_code, pci_device_header->subclass),
         get_vendor_name(pci_device_header->vendor_id),
@@ -415,7 +415,7 @@ void enumerate_function(uint64_t device_address, uint64_t bus, uint64_t device, 
     );
 
     uint32_t device_base_address = ((1 << 31) | (bus << 16) | (device << 11) | (function << 8));
-    printf("[PCI] Device base address: %x\n", device_base_address);
+    kprintf("[PCI] Device base address: %x\n", device_base_address);
     register_pci_device(pci_device_header, device_base_address);
 }
 
@@ -427,7 +427,7 @@ void enumerate_device(uint64_t bus_address, uint64_t device, uint64_t bus) {
     //if (pci_device_header->device_id == 0x0) return;
     //if (pci_device_header->device_id == 0xFFFF) return;
 
-    //printf("[PCI] enumerating device %x:%x\n", bus_address, device_address);
+    //kprintf("[PCI] enumerating device %x:%x\n", bus_address, device_address);
 
     if (pci_device_header->header_type & 0x80) {
         for (uint64_t function = 0; function < 8; function++) {
@@ -444,10 +444,10 @@ void enumerate_bus(uint64_t base_address, uint64_t bus) {
     //uint64_t bus_address = (uint64_t)to_identity_map(base_address + offset);
     //struct pci_device_header* pci_device_header = (struct pci_device_header*)bus_address;
 
-    //if (pci_device_header->device_id == 0x0) {printf("ig0:%ld|", bus); return;}
-    //if (pci_device_header->device_id == 0xFFFF) {printf("igf:%ld|", bus); return;}
+    //if (pci_device_header->device_id == 0x0) {kprintf("ig0:%ld|", bus); return;}
+    //if (pci_device_header->device_id == 0xFFFF) {kprintf("igf:%ld|", bus); return;}
 
-    //printf("\n[PCI] Enumerating bus %x\n", bus);
+    //kprintf("\n[PCI] Enumerating bus %x\n", bus);
     for (uint64_t device = 0; device < 32; device++) {
         enumerate_device(base_address + offset, device, bus);
     }
@@ -572,11 +572,11 @@ void init_pci() {
     struct mcfg_header * mcfg = (struct mcfg_header*)get_acpi_mcfg();
     uint64_t entries = ((mcfg->header.length) - sizeof(struct mcfg_header)) / sizeof(struct device_config);
 
-    printf("[PCI] Registering pci devices... %ld entries\n", entries);
+    kprintf("[PCI] Registering pci devices... %ld entries\n", entries);
     for (uint64_t i = 0; i < entries; i++) {
         struct device_config * new_device_config = (struct device_config*)((uint64_t)mcfg + sizeof(struct mcfg_header) + (sizeof(struct device_config) * i));	
-        printf("[PCI] Base address as registering: %x\n", new_device_config->base_address);
-        printf("[PCI] Enumerating buses %x:%x\n", new_device_config->start_bus, new_device_config->end_bus);
+        kprintf("[PCI] Base address as registering: %x\n", new_device_config->base_address);
+        kprintf("[PCI] Enumerating buses %x:%x\n", new_device_config->start_bus, new_device_config->end_bus);
         for (uint64_t bus = new_device_config->start_bus; bus < new_device_config->end_bus; bus++) {
             enumerate_bus(new_device_config->base_address, bus);
         }

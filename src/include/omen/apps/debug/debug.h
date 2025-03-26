@@ -20,6 +20,8 @@
 //TODO: Use an abstract device, not a callback!
 void init_debugger(const char * device_name);
 
+char * get_debug_device_name();
+
 int64_t atoi(const char * str);
 
 char* itoa(int64_t value, int base);

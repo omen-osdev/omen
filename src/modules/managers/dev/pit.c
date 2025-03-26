@@ -71,7 +71,7 @@ uint64_t ticks_to_ms(uint64_t ticks) {
 }
 
 uint64_t ms_to_ticks(uint64_t ms) {
-    //printf("MS: %d PITH: %ld\n", ms, pit.hertz);
+    //kprintf("MS: %d PITH: %ld\n", ms, pit.hertz);
     uint64_t cuak = ms * pit.hertz;
     if (cuak < 1000) return 1;
     return cuak / 1000; 

@@ -76,6 +76,7 @@ void * stackalloc(struct stack * stack, uint64_t length) {
     if (top % 0x10) {
         top -= top % 0x10;
     }
+    top -= 0x8;
     
     stack->base = (void*)(base);
     stack->top = (void*)(top);

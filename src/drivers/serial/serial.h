@@ -1,53 +1,84 @@
-// OMEN Serial driver
+//https://wiki.osdev.org/Serial_Ports
+#ifndef _SERIAL_H
+#define _SERIAL_H
 
+//VBox is fucking with the serial check, so we disable it here
+//#define _VBOX_COMPAT
 
-#ifndef _SERIAL_DRIVER_H
-#define _SERIAL_DRIVER_H
+#include <omen/hal/arch/x86/cpu.h>
 
-#include <omen/hal/arch/x86/io.h>
-#include <omen/managers/dev/devices.h>
+#define SERIAL_READ 1
+#define SERIAL_WRITE 2
+#define SERIAL_BUFFER_SIZE 1024
+#define MAX_COM_DEVICES 2
+#define SERIAL_OF_IRQ 0x91
+#define IRQ_COM1 0x24
+#define IRQ_COM2 0x23
+#define IRQ_COM3 0x24
+#define IRQ_COM4 0x23
+#define DEFAULT_COM1_PORT 0x3f8          // COM1
+#define DEFAULT_COM2_PORT 0x2f8          // COM2
+#define DEFAULT_COM3_PORT 0x3e8          // COM3
+#define DEFAULT_COM4_PORT 0x2e8          // COM4
 
+//Important: dont be dislexic
+//Inb: Buffer that hold what the serial port is sending to this computer
+//Outb: Buffer that hold what this computer is sending to the serial port
 
-#define DEVICE_SERIAL 0x8d
-#define SERIAL_DD_NAME "serial"
+struct serial_subscriber {
+    void* parent;
+    void (*handler)(void * parent, char c, int port);
+    struct serial_subscriber * next;
+};
 
+struct serial_device {
+    int valid;
+    int port;
+    int irq;
+    int echo;
 
-//Base addresses of the COM ports
-#define COM1_BASEADDR 0x3F8
-#define COM2_BASEADDR 0x2F8 
+    void (*handler)(cpu_context_t* ctx, uint8_t cpuid);
+    struct serial_subscriber * read_subscribers;
+    struct serial_subscriber * write_subscribers;
 
+    char * inb;
+    int inb_size;
+    int inb_write;
+    int inb_read;
 
-//Offsets into COM base addresses
-#define SERIAL_DATA_PORT(base)          (base + 0)
-#define SERIAL_FIFO_COMMAND_PORT(base)  (base + 2)
-#define SERIAL_LINE_COMMAND_PORT(base)  (base + 3)
-#define SERIAL_MODEM_COMMAND_PORT(base) (base + 4)
-#define SERIAL_LINE_STATUS_PORT(base)   (base + 5)
+    char * outb;
+    int outb_size;
+    int outb_write;
+    int outb_read;
+};
 
+void init_serial(int inbs, int outbs);
 
-//IOCTL Commands
-#define SERIAL_IOCTL_CHANGE_BAUDRATE    0
-#define SERIAL_IOCTL_CHANGE_LINECONFIG  1
-#define SERIAL_IOCTL_ENABLE_LOOPBACK    2
-#define SERIAL_IOCTL_DISABLE_LOOPBACK   3
+struct serial_device* get_serial(int port);
+struct serial_device* get_serial_by_comm(int comm);
+volatile struct serial_device* get_last_interrupted_serial();
 
-//Divisors for the different baud rates
-enum baud_rate { baud_115200 = 1, baud_57600 = 2, baud_38400 = 3, baud_19200 = 6, baud_9600 = 12, baud_4800 = 24 };
+void serial_get_ports(int * ports);
+int  serial_count_ports();
 
+void serial_echo_enable(int port);
+void serial_echo_disable(int port);
 
-#define SERIAL_LINE_ENABLE_DLAB 0x80
+void serial_read_event_add(int port, void* parent, void (*handler)(void* parent, char c, int port));
+void serial_read_event_remove(int port, void* parent, void (*handler)(void* parent, char c, int port));
 
+void serial_write_event_add(int port, void* parent, void (*handler)(void* parent, char c, int port));
+void serial_write_event_remove(int port, void* parent, void (*handler)(void* parent, char c, int port));
 
-extern struct file_operations serial_fops;
+void serial_discard(int port);
 
+void _serial_flush(int port);
+void _serial_write(int port, char c);
+char _serial_read(int port);
 
-char* create_serial_dd(uint16_t com_base_addr, uint16_t baud_rate);
-status_t init_serial_dd();
-uint64_t serial_dd_write(uint64_t id, uint64_t size, uint64_t offset, uint8_t* buffer);
-uint64_t serial_dd_write_string(uint16_t com, char *buf, size_t len);
-uint64_t serial_dd_ioctl(uint64_t id, uint32_t request, void* data);
-uint64_t serial_dd_data_rcvd(uint16_t com);
-uint64_t serial_dd_read(uint64_t id, uint64_t size, uint64_t offset, uint8_t* buffer);
-
+void write_inb(struct serial_device* device, char c);
+char read_inb(struct serial_device* device);
+void write_outb(struct serial_device* device, char c);
+char read_outb(struct serial_device* device);
 
 #endif

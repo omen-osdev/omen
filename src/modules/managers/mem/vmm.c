@@ -559,6 +559,7 @@ void * vmm_create_kernel_stack(struct page_directory* stack_root, uint64_t stack
     {
         stack_top_address -= stack_top_address % 0x10;
     }
+    stack_top_address -= 0x8;
 
     *(uint64_t*)stack_base = base_address;
     return (void*)stack_top_address;

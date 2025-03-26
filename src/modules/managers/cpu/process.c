@@ -72,6 +72,25 @@ void remove_vmarea(process_t* process, void * start) {
     }
 }
 
+void duplicate_vmareas(process_t * old, process_t * new) {
+    struct vm_area * current = old->vm_areas;
+    while (current) {
+        create_vmarea(new, current->start, current->end, current->flags);
+        current = current->next;
+    }
+}
+
+void set_tty(process_t * task, char* tty) {
+    memset(task->regular_tty, 0, 32);
+    if (strlen(tty) > 32) {
+        panic("TTY name too long\n");
+    } else {
+        strncpy(task->regular_tty, tty, strlen(tty));
+        task->regular_tty[strlen(tty)] = '\0';
+        task->tty = task->regular_tty;
+    }
+}
+
 void init_stack(struct page_directory* pd, process_t * task, uint64_t size, uint8_t is_userland_stack) {
     if (size % 0x1000) {
         size = (size + 0x1000) & ~0xfff;
@@ -170,7 +189,27 @@ int16_t get_next_pid() {
     return -1;
 }
 
-process_t * create_user_process(void * init) {
+void open_stdfiles(process_t *task, char * tty) {
+    int stdin, stdout, stderr;
+    stdin = vfs_file_open(tty, O_RDONLY, 0);
+    if (stdin < 0) {
+        panic("Failed to open stdin\n");
+    }
+    stdout = vfs_file_open(tty, O_WRONLY, 0);
+    if (stdout < 0) {
+        panic("Failed to open stdout\n");
+    }
+    stderr = vfs_file_open(tty, O_WRONLY, 0);
+    if (stderr < 0) {
+        panic("Failed to open stderr\n");
+    }
+
+    task->open_files[task->open_files_count++] = stdin;
+    task->open_files[task->open_files_count++] = stdout;
+    task->open_files[task->open_files_count++] = stderr;
+}
+
+process_t * create_user_process(void * init, char * tty) {
     process_t * task = &(process_list[process_count++]);
     memset(task, 0, sizeof(process_t));
     task->status = PROCESS_STATUS_READY;
@@ -189,12 +228,11 @@ process_t * create_user_process(void * init) {
         panic("No more processes available\n");
     }
     task->locks = 0;
-    task->open_files = kmalloc(sizeof(int)*MAX_OPEN_FILES);
     memset(task->open_files, 0, sizeof(int)*MAX_OPEN_FILES);
     task->open_files_count = 0;
+    open_stdfiles(task, tty);
     task->entry_address = init;
-    task->tty = 0;
-    task->descriptors = 0;
+    set_tty(task, tty);
     task->parent = current_process;
     
     if (task->parent) {
@@ -223,6 +261,9 @@ process_t * duplicate_process(process_t * parent) {
     memcpy(task->context, parent->context, sizeof(cpu_context_t));
     task->context->info = kmalloc(sizeof(struct cpu_context_info));
     memcpy(task->context->info, parent->context->info, sizeof(struct cpu_context_info));
+    duplicate_vmareas(parent, task);
+    memcpy(task->open_files, parent->open_files, sizeof(int)*MAX_OPEN_FILES);
+    task->open_files_count = parent->open_files_count;
     memcpy(task->fxsave_region, parent->fxsave_region, 512);
 
     task->pid = get_next_pid();
@@ -248,7 +289,7 @@ void _idle() {
     panic("Stub running, exec failed!\n");
 }
 
-void init_process(const char * _init_path, const char * _idle_path) {
+void init_process(const char * _init_path, const char * _idle_path, char * tty) {
     mprotect_current(init_path, 0x1000, VMM_USER_BIT | VMM_WRITE_BIT);
     memset(init_path, 0, 0x1000);
     strcpy(init_path, _init_path);
@@ -256,13 +297,13 @@ void init_process(const char * _init_path, const char * _idle_path) {
     memset(idle_path, 0, 0x1000);
     strcpy(idle_path, _idle_path);
 
-    process_t * idle_proc = create_user_process((void*)_idle);
+    process_t * idle_proc = create_user_process((void*)_idle, tty);
     idle_proc->pid = 0;
     current_process = idle_proc;
     current_process_index = 0;
     exec(idle_path);
 
-    process_t * init_proc = create_user_process((void*)_idle);
+    process_t * init_proc = create_user_process((void*)_idle, tty);
     init_proc->pid = 1;
     current_process = init_proc;
     current_process_index = 1;
@@ -339,11 +380,12 @@ void alter_process_on_exec(process_t * task, void * init) {
         panic("No more processes available\n");
     }
     task->locks = 0;
-    task->open_files = saved_task.open_files;
+    memcpy(task->open_files, saved_task.open_files, sizeof(int)*MAX_OPEN_FILES);
     task->open_files_count = saved_task.open_files_count;
     task->entry_address = init;
-    task->tty = saved_task.tty;
-    task->descriptors = saved_task.descriptors;
+    memcpy(task->regular_tty, saved_task.regular_tty, 32);
+    task->tty = task->regular_tty;
+    memcpy(task->io_tty, saved_task.io_tty, 32);
     task->parent = saved_task.parent;
     
     task->uid = saved_task.uid;
@@ -361,7 +403,7 @@ int exec(char const *path) {
     strcpy(dynpath, path);
     int fd = vfs_file_open(dynpath, 0, 0);
     if (fd < 0) {
-        printf("Could not open file %s\n", dynpath);
+        kprintf("Could not open file %s\n", dynpath);
         return -1;
     }
     kfree(dynpath);
@@ -381,7 +423,7 @@ int exec(char const *path) {
     MD5_Digest(md5_buffer, buf, size);
     kprintf("MD5: ");
     for (int i = 0; i < 16; i++) {
-        printf("%x", md5_buffer[i]);
+        kprintf("%x", md5_buffer[i]);
     }
     kprintf("\n");
 
@@ -405,5 +447,5 @@ char * get_current_tty() {
 }
 
 void set_current_tty(char * tty) {
-    current_process->tty = tty;
+    set_tty(current_process, tty);
 }

@@ -5,6 +5,7 @@
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wreturn-type"
 
+#include <omen/apps/debug/debug.h>
 #include <omen/libraries/std/stdint.h>
 #include <omen/libraries/std/stdio.h>
 #include <omen/libraries/std/stdbool.h>
@@ -19,7 +20,7 @@ typedef uint64_t size_t;
     #endif
 #endif
 
-#define __UNDEFINED() (printf("[STRING.H ERROR] Undefined function: %s\n", __FUNCTION_NAME__))
+#define __UNDEFINED() (kprintf("[STRING.H ERROR] Undefined function: %s\n", __FUNCTION_NAME__))
 
 void *memchr(const void *s, int c, size_t n);
 void *memmove(void *dest, const void *src, size_t n);

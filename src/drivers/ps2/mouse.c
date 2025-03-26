@@ -159,7 +159,7 @@ uint8_t process_mouse_packet(struct ps2_mouse_status* status, uint8_t* buffer) {
     status->x = MousePosition.x;
     status->y = MousePosition.y;
     //Here: Clear mouse cursor and draw new one at coords
-    //printf("\r(%d,%d)", MousePosition.x, MousePosition.y);
+    //kprintf("\r(%d,%d)", MousePosition.x, MousePosition.y);
     
     if (buffer[0] & PS2LeftButton) {
         status->buttons |= MOUSE_LEFT_CLICK;

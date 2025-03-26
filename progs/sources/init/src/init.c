@@ -33,8 +33,12 @@ int main(int argc, char* argv[]) {
     }
 
     while(1) {
-        //syscall yield, do not optimize this
-        sys_write(1, text, 32);
+        char buffer[10];
+        sys_write(1, "Enter something: ", 17);
+        sys_read(0, buffer, 10);
+        sys_write(1, " You said:", 8);
+        sys_write(1, buffer, 10);
+        sys_write(1, "\n", 1);
         sys_sched_yield();
     }
 }

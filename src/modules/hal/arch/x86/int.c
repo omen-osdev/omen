@@ -110,7 +110,7 @@ void Serial2Int_Handler(cpu_context_t* ctx, uint8_t cpuid) {
 }
 
 static void interrupt_exception_handler(cpu_context_t* ctx, uint8_t cpu_id) {
-    printf("GENERIC EXCEPTION %d ON CPU %d\n", ctx->interrupt_number, cpu_id);
+    kprintf("GENERIC EXCEPTION %d ON CPU %d\n", ctx->interrupt_number, cpu_id);
     panic("Exception\n");
 }
 
@@ -212,7 +212,7 @@ void global_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
 
     //TODO: Get current proces
 
-    //printf("Interrupt %d received on CPU %d\n", ctx->interrupt_number, cpu_id);
+    //kprintf("Interrupt %d received on CPU %d\n", ctx->interrupt_number, cpu_id);
 
     if (handler == 0) {
         kprintf("No handler for interrupt ");
@@ -251,7 +251,7 @@ void mask_interrupt(uint8_t irq) {
 
 void unmask_interrupt(uint8_t irq) {
     if (!interrupts_ready) panic("Interrupts not ready\n");
-    printf("Unmasking interrupt %d\n", irq);
+    kprintf("Unmasking interrupt %d\n", irq);
     if (!ioapic_mask(irq, 0x1)) {
         panic("Failed to unmask interrupt\n");
     }

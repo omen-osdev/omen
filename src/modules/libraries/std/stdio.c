@@ -155,7 +155,7 @@ static inline void _out_char(char character, void* buffer, size_t idx, size_t ma
   //TODO: Improve this
   if (character) {
     //acquire_lock(&printf_lock);
-    const char * ctty = get_current_tty();
+    const char * ctty = get_debug_device_name();
     if (ctty != 0) {
       device_write(ctty, 1, 0, (uint8_t*)&character);
       device_ioctl(ctty, 0x5, 0); //TTY Flush

@@ -30,12 +30,7 @@ uint64_t read_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)buffer;
     (void)size;
     kprintf("[PID: %d] READ_SYSCALL(%d,%d,%d)\n", task->pid, fd, buffer, size);
-    if (fd == 0) {
-        for (uint64_t i = 0; i < size; i++) {
-            ((char*)buffer)[i] = 'a';
-        }
-    }
-    return SYSCALL_SUCCESS;
+    return vfs_file_read(fd, (void*)buffer, size);
 }
 
 uint64_t write_syscall_handler(process_t*task, cpu_context_t* ctx) {
@@ -47,13 +42,7 @@ uint64_t write_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)buffer;
     (void)size;
     kprintf("[PID: %d] WRITE_SYSCALL(%d,%d,%d)\n", task->pid, fd, buffer, size);
-    if (fd == 1) {
-        for (uint64_t i = 0; i < size; i++) {
-            if (((char*)buffer)[i] == 0) break;
-            kprintf("%c", ((char*)buffer)[i]);
-        }
-    }
-    return SYSCALL_SUCCESS;
+    return vfs_file_write(fd, (void*)buffer, size);
 }
 
 uint64_t open_syscall_handler(process_t*task, cpu_context_t* ctx) {

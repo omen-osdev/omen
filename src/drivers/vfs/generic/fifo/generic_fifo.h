@@ -41,7 +41,7 @@ uint8_t fifo_compat_unregister_device(int index) {
 uint8_t fifo_compat_detect(const char* name , uint32_t port) {
     (void)port;
     kprintf("fifo_compat_detect: %s\n", name);
-    return fifo_search(name);
+    return (fifo_search(name) == SUCCESS);
 }
 
 void fifo_compat_debug() {
@@ -133,8 +133,7 @@ int fifo_compat_file_open(int devno, const char* path, int flags, int mode) {
     if (device == 0)
         return -1;
 
-    if (strlen(path) != 1 || strcmp(path, "/"))
-        return -1;
+    if (strlen(path) != 0) return -1;
 
     return get_fd(path, device->name, flags, mode);
 }

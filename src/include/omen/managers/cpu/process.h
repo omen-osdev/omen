@@ -18,12 +18,6 @@
 
 #define MAX_OPEN_FILES 32
 
-struct descriptors {
-    uint8_t stdin;
-    uint8_t stdout;
-    uint8_t stderr;
-};
-
 typedef int process_status_t;
 
 struct vm_area {
@@ -73,18 +67,17 @@ typedef struct process {
 
     unsigned int locks;
 
-    int * open_files;
+    int open_files[MAX_OPEN_FILES];
     int open_files_count;
 
     char fxsave_region[512] __attribute__((aligned(16)));
 
     void * entry_address;
-    struct descriptors* descriptors;
     struct process *next, *prev;
 
 } process_t;
 
-void init_process(const char * init_path, const char * idle_path);
+void init_process(const char * init_path, const char * idle_path, char * tty);
 uint8_t is_in_vmarea(process_t* process, void * address);
 void returnoexit();
 int16_t fork();
@@ -92,7 +85,7 @@ process_t * sched();
 void execve(const char * path, const char * argv, const char * envp);
 int exec(char const *path);
 void exit(int error_code);
-process_t * create_user_process(void * init);
+process_t * create_user_process(void * init, char* tty);
 process_t * get_current_process();
 char * get_current_tty();
 void set_current_tty(char * tty);

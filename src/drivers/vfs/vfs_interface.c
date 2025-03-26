@@ -5,10 +5,10 @@
 #include <omen/libraries/std/string.h>
 
 #define PRINT_ENABLE 0
-#define vfs_print(...) if (PRINT_ENABLE) printf(__VA_ARGS__)
+#define vfs_print(...) if (PRINT_ENABLE) kprintf(__VA_ARGS__)
 
 void vfs_normalize_path(char * path) {
-    //printf("Normalizing: %s\n", path);
+    //kprintf("Normalizing: %s\n", path);
     //Substitute . and .. in the path
     char * path_ptr = path;
     char * path_ptr2 = path;
@@ -42,7 +42,7 @@ void vfs_normalize_path(char * path) {
 
     *path_ptr2 = 0;
 
-    //printf("Normalized path: %s\n", path);
+    //kprintf("Normalized path: %s\n", path);
 }
 
 void vfs_lsdisk() {
@@ -246,22 +246,22 @@ void vfs_dir_list(char* name) {
     vfs_normalize_path(name);
     int fd = vfs_dir_open(name);
     if (fd < 0) {
-        printf("Error opening directory %s\n", name);
+        kprintf("Error opening directory %s\n", name);
         return;
     }
 
     int res = vfs_dir_load(fd);
     if (res < 0) {
-        printf("Error loading directory %s\n", name);
+        kprintf("Error loading directory %s\n", name);
         return;
     }
 
-    printf("Directory %s contents:\n", name);
+    kprintf("Directory %s contents:\n", name);
     char name_buffer[256];
     uint32_t type;
     uint32_t name_len; 
     while (vfs_dir_read(fd, name_buffer, &name_len, &type) > 0) {
-        printf("DIR ENTRY: %s, %d, %d\n", name_buffer, type, name_len);
+        kprintf("DIR ENTRY: %s, %d, %d\n", name_buffer, type, name_len);
     }
 
     vfs_dir_close(fd);
@@ -280,13 +280,13 @@ int vfs_file_search(const char * name, char * path) {
     
     int fd = vfs_dir_open(new_path);
     if (fd < 0) {
-        printf("Error opening directory %s\n", new_path);
+        kprintf("Error opening directory %s\n", new_path);
         return;
     }
 
     int res = vfs_dir_load(fd);
     if (res < 0) {
-        printf("Error loading directory %s\n", new_path);
+        kprintf("Error loading directory %s\n", new_path);
         return;
     }
 
@@ -294,9 +294,9 @@ int vfs_file_search(const char * name, char * path) {
     uint32_t type;
     uint32_t name_len;
     while (vfs_dir_read(fd, name_buffer, &name_len, &type) > 0) {
-        //printf("Searching %s Type %d\n", name_buffer, type);
+        //kprintf("Searching %s Type %d\n", name_buffer, type);
         if (strcmp(name_buffer, name) == 0) {
-            printf("Found %s\n", name_buffer);
+            kprintf("Found %s\n", name_buffer);
             vfs_dir_close(fd);
             memset(path, 0, 1024);
             strcpy(path, new_path);
@@ -307,7 +307,7 @@ int vfs_file_search(const char * name, char * path) {
             return 1;
         }
         if (type == 0x2 && strcmp(name_buffer, ".") != 0 && strcmp(name_buffer, "..") != 0 && strcmp(name_buffer, "lost+found") != 0) {
-            //printf("Nesting into %s\n", name_buffer);
+            //kprintf("Nesting into %s\n", name_buffer);
             memset(new_path, 0, 1024);
             strcpy(new_path, path);
             if (new_path[strlen(new_path) - 1] != '/') {
