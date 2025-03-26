@@ -51,8 +51,8 @@ NUMAFLAGS := \
 -numa dist,src=1,dst=2,val=20 \
 -numa dist,src=1,dst=3,val=20
 
-QFLAGS ?= -cpu qemu64 -d int -no-reboot -no-shutdown -machine q35 $(NUMAFLAGS) -m $(MEMSIZE) -boot d -serial stdio -serial telnet::4444,server,nowait -cdrom
-QFLAGSEXP ?= -cpu qemu64 -d int -no-reboot -no-shutdown -machine q35 $(NUMAFLAGS) -m $(MEMSIZE) -boot d -serial stdio -drive if=pflash,format=raw,unit=0,file=$(OVMFDIR)/OVMF_CODE-pure-efi.fd,readonly=on -drive if=pflash,format=raw,unit=1,file=$(OVMFDIR)/OVMF_VARS-pure-efi.fd -drive file=
+QFLAGS ?= -cpu qemu64 -d cpu_reset -no-reboot -no-shutdown -machine q35 $(NUMAFLAGS) -m $(MEMSIZE) -boot d -serial stdio -serial telnet::4444,server,nowait -cdrom
+QFLAGSEXP ?= -cpu qemu64 -d cpu_reset -no-reboot -no-shutdown -machine q35 $(NUMAFLAGS) -m $(MEMSIZE) -boot d -serial stdio -drive if=pflash,format=raw,unit=0,file=$(OVMFDIR)/OVMF_CODE-pure-efi.fd,readonly=on -drive if=pflash,format=raw,unit=1,file=$(OVMFDIR)/OVMF_VARS-pure-efi.fd -drive file=
 #QWFLAGSEXP ?= -cpu qemu64 -d cpu_reset -machine q35 $(NUMAFLAGS) -m $(MEMSIZE) -boot d -netdev tap,id=mynet0,ifname=tap,script=no,downscript=no -serial stdio -device e1000,netdev=mynet0,mac=51:52:53:54:55:56 -drive if=pflash,format=raw,unit=0,file=$(WINDIRECTORY)/OVMF_CODE-pure-efi.fd,readonly=on -drive if=pflash,format=raw,unit=1,file=$(WINDIRECTORY)/OVMF_VARS-pure-efi.fd -drive file=
 
 CFLAGS ?= -O0 -g -Wall -Werror -Wextra -pipe -Wno-packed-bitfield-compat -std=c11
@@ -62,7 +62,7 @@ CPPFLAGS ?=
 GDBFLAGS ?=  --nx --command=$(ABSDIR)/$(GDBCFG)
 GDBPORT ?= 1234
 
-ABSDIR := $(shell pwd)/..
+ABSDIR := $(shell cd ..; pwd)
 LMNDIR := $(shell pwd)/limine
 OVMFDIR := $(shell pwd)/OVMFbin
 SRCDIR := $(ABSDIR)/src
@@ -78,7 +78,9 @@ ISODIR := $(ABSDIR)/build/image
 PROGSDIR := $(ABSDIR)/progs/sources
 PROGSBUILDDIR := $(ABSDIR)/progs/export
 PROGSDATADIR := $(ABSDIR)/progs/data
+PROGSSYMDIR := $(ABSDIR)/progs/sym
 PROGS := $(wildcard $(PROGSDIR)/*)
+SYMDIR := /mnt/c/omen/
 
 # /mnt/omen
 SYSDIR := $(MNTDIR)/system
@@ -193,6 +195,7 @@ setup:
 	@mkdir -p $(OBJDIR)
 	@mkdir -p $(ISOBUILDDIR)
 	@mkdir -p $(PROGSBUILDDIR)
+	@mkdir -p $(PROGSSYMDIR)
 	@mkdir -p $(ISODIR)
 	@dd if=/dev/zero of=$(ISODIR)/$(IMG_RAW) bs=4096 count=102400
 	@git clone $(LMNREPO) --branch=$(LMNBRCH) --depth=1
@@ -200,14 +203,31 @@ setup:
 	@echo file $(BUILDDIR)/$(KERNEL) > $(ABSDIR)/$(GDBCFG)
 	@echo target remote $(WSLHOSTIP):$(GDBPORT) >> $(ABSDIR)/$(GDBCFG)
 	@echo set disassembly-flavor intel >> $(ABSDIR)/$(GDBCFG)
+	@echo define adds >> $(ABSDIR)/$(GDBCFG)
+	@echo if $$\argc == 1 >> $(ABSDIR)/$(GDBCFG)
+	@echo set confirm off >> $(ABSDIR)/$(GDBCFG)
+	@echo add-symbol-file $(PROGSSYMDIR)/$$\arg0.elf.sym >> $(ABSDIR)/$(GDBCFG)
+	@echo set confirm on >> $(ABSDIR)/$(GDBCFG)
+	@echo end >> $(ABSDIR)/$(GDBCFG)
+	@echo end >> $(ABSDIR)/$(GDBCFG)
+	@echo define rms >> $(ABSDIR)/$(GDBCFG)
+	@echo if $$\argc == 1 >> $(ABSDIR)/$(GDBCFG)
+	@echo set confirm off >> $(ABSDIR)/$(GDBCFG)
+	@echo remove-symbol-file $(PROGSSYMDIR)/$$\arg0.elf.sym >> $(ABSDIR)/$(GDBCFG)
+	@echo set confirm on >> $(ABSDIR)/$(GDBCFG)
+	@echo end >> $(ABSDIR)/$(GDBCFG)
+	@echo end >> $(ABSDIR)/$(GDBCFG)
 	@echo b $(KERNEL_ENTRY) >> $(ABSDIR)/$(GDBCFG)
 	@echo c >> $(ABSDIR)/$(GDBCFG)
 
 cleansetup:
-	@rm -rf $(BUILDHOME)
-	@rm -f $(ABSDIR)/$(GDBCFG)
-	@rm -rf $(LMNDIR)
-	@rm -rf $(PROGSBUILDDIR)
+	@sudo make clean
+	@sudo make cprogs
+	@sudo rm -rf $(BUILDHOME)
+	@sudo rm -f $(ABSDIR)/$(GDBCFG)
+	@sudo rm -rf $(LMNDIR)
+	@sudo rm -rf $(PROGSBUILDDIR)
+	@sudo rm -rf $(PROGSSYMDIR)
 
 cleanup:
 	@echo "Cleaning up..."
@@ -317,6 +337,8 @@ debugpt:
 
 debugpt-wsl:
 	@sudo make clean
+	@sudo make cprogs
+	@make progs
 	@make kernel
 	@echo "Building GPT..."
 #This is required to be before buildimggpt!
@@ -332,11 +354,11 @@ debugsetup:
 
 
 progs:
-	$(foreach prog,$(PROGS),$(MAKE) -C $(prog); rsync -a $(prog)/build/bin/ $(PROGSBUILDDIR);)
-
+	$(foreach prog,$(PROGS),$(MAKE) -C $(prog); rsync -a $(prog)/build/bin/ $(PROGSBUILDDIR);rsync -a $(prog)/build/sym/ $(PROGSSYMDIR);)
 
 cprogs:
 	$(foreach prog,$(PROGS),$(MAKE) -C $(prog) clean;)
 	@rm -rf $(PROGSBUILDDIR)/*
+	@rm -rf $(PROGSSYMDIR)/*
 
 .PHONY: progs

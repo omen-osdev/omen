@@ -186,6 +186,5 @@ void global_syscall_handler(cpu_context_t* ctx) {
     struct tss * tss = arch_get_cpu(current_task->core_id)->tss;
     tss_set_stack(tss, ctx->info->kstack, 0);
     tss_set_stack(tss, ctx->rsp, 3);
-    ctx->interrupt_number = 0x69;
     SYSRET(ctx, result);
 }

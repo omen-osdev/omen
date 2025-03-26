@@ -43,6 +43,14 @@ void kprintf(const char * str, ...) {
     va_end(args);
 }
 
+void disable_debugger() {
+    debug_enabled = false;
+}
+
+void enable_debugger() {
+    debug_enabled = true;
+}
+
 char * get_debug_device_name() {
     if (writer == NULL) {
         return NULL;

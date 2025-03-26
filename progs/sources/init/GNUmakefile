@@ -9,11 +9,12 @@ CFLAGS ?= -O2 -g -Wall -Wextra -Wpedantic -pipe -std=c11
 LDFLAGS ?=
 
 ABSDIR := $(shell pwd)
+LIBCDIR := $(ABSDIR)/../../minilibc
 SRCDIR := src
 BUILDHOME := build
 BUILDDIR := build/bin
 OBJDIR := build/lib
-LIBCDIR := $(ABSDIR)/../../minilibc
+SYMDIR := build/sym
 
 DIRS := $(wildcard $(SRCDIR)/*)
 
@@ -70,6 +71,11 @@ all:
 	@echo "Building program..."
 	@echo "Absdir: $(ABSDIR)"
 	@make program
+	@echo "Generating symbol table..."
+	@mkdir -p $(SYMDIR)
+# Create symbol table for entering in gdb
+	@objcopy --only-keep-debug $(BUILDDIR)/$(PROGRAM) $(SYMDIR)/$(PROGRAM).sym
+	@echo "Done."
 
 program: $(LIBCOBJS) $(OBJS) link
 
@@ -92,3 +98,4 @@ clean:
 	@rm -rf $(OBJDIR)/*
 	@rm -rf $(OBJS)
 	@rm -rf $(BUILDDIR)/*
+	@rm -rf $(SYMDIR)

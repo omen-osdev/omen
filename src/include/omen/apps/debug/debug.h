@@ -19,6 +19,8 @@
 //Setup the debugger over a device
 //TODO: Use an abstract device, not a callback!
 void init_debugger(const char * device_name);
+void disable_debugger();
+void enable_debugger();
 
 char * get_debug_device_name();
 
