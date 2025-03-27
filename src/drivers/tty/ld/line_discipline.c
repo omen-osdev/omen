@@ -115,7 +115,7 @@ struct line_discipline_action_table_entry default_ld_table[] = {
     {.output = {'\n', LD_NULL, LD_NULL, LD_NULL},    .inserti = {LD_NULL, LD_NULL, LD_NULL, LD_NULL}, .inserto = {'\r', '\n', LD_NULL, LD_NULL},    .action = ld_lfeed},   //10 J
     {.output = {LD_NULL, LD_NULL, LD_NULL, LD_NULL}, .inserti = {LD_NULL, LD_NULL, LD_NULL, LD_NULL}, .inserto = {LD_NULL, LD_NULL, LD_NULL, LD_NULL}, .action = ld_vtab},   //11 K
     {.output = {LD_NULL, LD_NULL, LD_NULL, LD_NULL}, .inserti = {LD_NULL, LD_NULL, LD_NULL, LD_NULL}, .inserto = {LD_NULL, LD_NULL, LD_NULL, LD_NULL}, .action = ld_newpage},   //12 L
-    {.output = {'\r', '\n', LD_NULL, LD_NULL},    .inserti = {LD_NULL, LD_NULL, LD_NULL, LD_NULL}, .inserto = {LD_NULL, '\n', LD_NULL, LD_NULL},    .action = ld_cret},   //13 M
+    {.output = {'\r', '\n', LD_NULL, LD_NULL},       .inserti = {'\n', LD_NULL, LD_NULL, LD_NULL}, .inserto = {'\n', LD_NULL, LD_NULL, LD_NULL},    .action = ld_cret},   //13 M
     {.output = {LD_NULL, LD_NULL, LD_NULL, LD_NULL}, .inserti = {LD_NULL, LD_NULL, LD_NULL, LD_NULL}, .inserto = {LD_NULL, LD_NULL, LD_NULL, LD_NULL}, .action = ld_ignore},   //14 N
     {.output = {LD_NULL, LD_NULL, LD_NULL, LD_NULL}, .inserti = {LD_NULL, LD_NULL, LD_NULL, LD_NULL}, .inserto = {LD_NULL, LD_NULL, LD_NULL, LD_NULL}, .action = ld_ignore},   //15 O 
     {.output = {LD_NULL, LD_NULL, LD_NULL, LD_NULL}, .inserti = {LD_NULL, LD_NULL, LD_NULL, LD_NULL}, .inserto = {LD_NULL, LD_NULL, LD_NULL, LD_NULL}, .action = ld_ignore},   //16 P

@@ -69,10 +69,9 @@ uint64_t tty_compat_file_read(int devno, int fd, void* buffer, uint64_t size) {
     } else {
         uint64_t read = 0;
         while (read < size) {
-            uint64_t res = vfs_tty_read(device, buffer + read, size - read, 0);
+            uint64_t res = vfs_tty_read(device, buffer + read, size - read, entry->offset);
             if (res != 0) kprintf("tty read %d bytes\n", res);
             read += res;
-            entry->offset += res;
         }
         return read;
     }

@@ -7,13 +7,17 @@
 #include <omen/libraries/allocators/heap_allocator.h>
 
 uint64_t tty_dd_read_block_direct(struct tty* dev, uint64_t size, uint64_t skip, uint8_t* buffer) {
-    char * skip_buffer = kmalloc(skip);
-    if ((uint64_t)(int)skip != skip) {
-        kprintf("Warning: Skipping more than 2^32 bytes in _tty_read\n");
-    }
+    
+    if (skip) {
+        char * skip_buffer = kmalloc(skip);
+        if ((uint64_t)(int)skip != skip) {
+            kprintf("Warning: Skipping more than 2^32 bytes in _tty_read\n");
+        }
 
-    _tty_read(dev, skip_buffer, (int)skip);
-    kfree(skip_buffer);
+        _tty_read(dev, skip_buffer, (int)skip);
+        kfree(skip_buffer);
+    }
+    
     if ((uint64_t)(int)size != size) {
         kprintf("Warning: Reading more than 2^32 bytes in _tty_read\n");
     }
