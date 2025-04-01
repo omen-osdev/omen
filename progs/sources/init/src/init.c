@@ -1,63 +1,43 @@
 #include <minilibc.h>
-#define PROMPT "root@omen:/$ \n"
+#include <stdio.h>
+#include <string.h>
 
-int strlen(const char* str) {
-    int i = 0;
-    while (str[i] != 0) {
-        i++;
+void print_file() {
+    int fd = sys_open("hdap2/data/lorem-ipsum.txt", 0);
+    if (fd < 0) {
+        printf("Failed to open file\n");
+        return;
     }
-    return i;
-}
+    struct stat file_stat;
+    char file_buffer[0x40];
+    memset(file_buffer, 0, sizeof(file_buffer));
+    memset(&file_stat, 0, sizeof(struct stat));
+    sys_fstat(fd, &file_stat);
+    printf("File size: %d\n", file_stat.st_size);
+    printf("File mode: %d\n", file_stat.st_mode);
 
-void* memset(void* ptr, int value, int num) {
-    char* p = (char*)ptr;
-    for (int i = 0; i < num; i++) {
-        p[i] = value;
-    }
-    return ptr;
-}
-
-char invert_case(char c) {
-    if (c >= 'a' && c <= 'z') {
-        return c - 32;
-    } else if (c >= 'A' && c <= 'Z') {
-        return c + 32;
-    }
-    return c;
-}
-
-void loop() {
-    char command_buffer[128];
-    char c = 0;
-    int i = 0;
-    while (1) {
-        sys_write(1, PROMPT, strlen(PROMPT));
-        sys_read(0, &c, 1);
-        command_buffer[i++] = c;
-        while (c != '\n' && i < 128) {
-            sys_read(0, &c, 1);
-            command_buffer[i++] = c;
+    sys_read(fd, file_buffer, 0x40);
+    printf("File content:\n");
+    for (int i = 0; i < 0x40; i++) {
+        if (file_buffer[i] == '\n') {
+            printf("\n");
+        } else {
+            printf("%c", file_buffer[i]);
         }
-
-        command_buffer[i] = 0;
-        i = 0;
-        c = 0;
-
-        sys_write(1, command_buffer, strlen(command_buffer));
-        sys_write(1, "\n", 1);
     }
+    printf("\n");
+    sys_close(fd);  
 }
 
 int main(int argc, char* argv[]) {
-    
+    printf("Hello from init!\n");
     volatile short pid = sys_fork();
     if (pid == 0) {
-        sys_write(1, "I am the child\n", strlen("I am the child\n"));
-
+        printf("I am the child\n");
     } else {
-        sys_write(1, "I am the parent\n", strlen("I am the parent\n"));
+        printf("I am the parent\n");
         sys_exit(0);
     }
-    
-    loop();
+    print_file();
+    while(1);
 }

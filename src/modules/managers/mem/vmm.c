@@ -12,11 +12,17 @@
 #define PAGE_SIZE_4KIB      0x1000
 #define PAGE_SIZE_DIR       0x1
 
-#define STACK_MEMORY_OFFSET    0xffffB00000000000
-#define STACK_MEMORY_SIZE      0x00000000F0000000
-#define PHYSICAL_MEMORY_OFFSET 0xffffA00000000000
+//Memory layout
+//0xFFFFA00000000000 - 0xFFFFA0EFFFFFFFFF Identity map for kernel use
+//0xFFFFB00000000000 - 0xFFFFB0EFFFFFFFFF Kernel stack
+//------------------------------------------------------
+//0x0000B00000000000 - 0x0000B0EFFFFFFFFF User space stack
+//0x0000C00000000000 - 0x0000C0EFFFFFFFFF User space shared memory and mmaps
+//0x0000D00000000000 - 0x0000D0EFFFFFFFFF User space heap
+
+#define PHYSICAL_MEMORY_OFFSET  0xFFFFA00000000000
+#define PHYSICAL_MEMORY_SIZE    0x000000F000000000
 uint64_t physical_memory_offset = 0;
-#define PHYSICAL_MEMORY_SIZE   0x000000F000000000
 
 #define TO_IDENTITY_MAP(addr) (uint64_t)(((uint64_t)addr) + (uint64_t)physical_memory_offset)
 #define FROM_IDENTITY_MAP(addr) (uint64_t)(((uint64_t)addr) - (uint64_t)physical_memory_offset)
@@ -192,12 +198,21 @@ void map_address(struct page_directory* root, void * virtual_address, void * phy
     if (!IS_PRESENT(ptentry)) {
         init_entry(ptentry, PAGE_SIZE_4KIB, (uint64_t)physical_address);
         flush_tlb_entry(virtual_address);
-        return;
     } else {
         kprintf("4k Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, physical_address);
         init_entry(ptentry, PAGE_SIZE_4KIB, (uint64_t)physical_address);
         flush_tlb_entry(virtual_address);
     }
+
+    //Print virtual address
+    void * phys_addr = get_physical_address(root, virtual_address);
+    //Check that the address is correct
+    if (phys_addr != physical_address)
+    {
+        kprintf("Mapping error: %llx != %llx\n", phys_addr, physical_address);
+        panic("Mapping error");
+    }
+    
 }
 
 void * allocate_vmm_page(struct page_directory * pml4, uint8_t flags)
@@ -525,31 +540,28 @@ void init_vmm()
     switch_cr3(FROM_IDENTITY_MAP(global_cr3));
     kprintf("Page table switched\n");
     
-    void * addr = TO_IDENTITY_MAP(pmm_alloc_page());
-    kprintf("Allocated page at 0x%llx\n", addr);
-
-    debug_address(global_cr3, addr);
-
-    memset(addr, 0x42, PAGE_SIZE_4KIB);
-    kprintf("Value at 0x%llx: 0x%llx\n", addr, *((uint64_t*)addr));
-
-    map_address(global_cr3, (void*)0xffff900000000000, (void*)FROM_IDENTITY_MAP(addr), PAGE_SIZE_4KIB);
-    memset((void*)0xffff900000000000, 0x42, PAGE_SIZE_4KIB);
+    void * addr = pmm_alloc_page();
+    //Map into userspace stack region
+    map_range(global_cr3, (void*)0x0000B00000000000, addr, PAGE_SIZE_4KIB, PAGE_SIZE_4KIB);
+    mprotect(global_cr3, (void*)0x0000B00000000000, PAGE_SIZE_4KIB, PAGE_USER_BIT | PAGE_WRITE_BIT);
     
-    void *physical_address = get_physical_address(global_cr3, (void*)0xffff900000000000);
-    kprintf("Physical address: 0x%llx\n", physical_address);
-    kprintf("Virtual address value: 0x%llx\n", *((uint64_t*)0xffff900000000000));
-
-    physical_address = get_physical_address(global_cr3, addr);
-    kprintf("Physical address: 0x%llx\n", physical_address);
-    kprintf("Virtual address value: 0x%llx\n", *((uint64_t*)addr));
+    //Write to the stack
+    uint64_t * stack = (uint64_t*)0x0000B00000000000;
+    *stack = 0xDEADBEEF;
+    kprintf("Stack value: %llx\n", *stack);
 
 }
 
 void * vmm_create_kernel_stack(struct page_directory* stack_root, uint64_t stack_pages, uint8_t flags, uint64_t * stack_base) {
         
     void * new_stack_phys = pmm_alloc(stack_pages*0x1000);
-    void * base_address = (void*)((uint64_t)STACK_MEMORY_OFFSET+(uint64_t)new_stack_phys);
+    void * base_address = (void*)((uint64_t)VMM_REGION_K_STACK+(uint64_t)new_stack_phys);
+    //CHECK BOUNDS
+    if ((uint64_t)base_address < VMM_REGION_K_STACK || (uint64_t)base_address > VMM_REGION_K_STACK+VMM_REGION_SIZE)
+    {
+        panic("Kernel stack out of bounds\n");
+        return NULL;
+    }
     map_range(stack_root, base_address, new_stack_phys, PAGE_SIZE_4KIB, stack_pages*PAGE_SIZE_4KIB);
     mprotect(stack_root, base_address, stack_pages*PAGE_SIZE_4KIB, flags);
     
@@ -990,16 +1002,23 @@ void debug_current_address(void * address)
     debug_address(get_current_cr3(), address);
 }
 
-void * allocate_current_vmm_uspace(uint64_t size, uint8_t flags) 
+void * allocate_current_vmm_uspace(uint64_t size, uint64_t region, uint8_t flags) 
 {
     void * buffer = pmm_alloc(size);
     if (buffer == NULL)
     {
         return NULL;
     }
-    map_range(get_current_cr3(), buffer, buffer, PAGE_SIZE_4KIB, size);
-    mprotect(get_current_cr3(), buffer, size, flags);
-    return buffer;
+
+    if (region != VMM_REGION_U_STACK && region != VMM_REGION_U_HEAP && region != VMM_REGION_U_SHM_MMAP)
+    {
+        panic("Invalid region for user space allocation\n");
+        return NULL;
+    }
+    void * vaddr = 0x0000B00000000000;
+    map_range(get_current_cr3(), vaddr, buffer, PAGE_SIZE_4KIB, size);
+    mprotect(get_current_cr3(), vaddr, size, flags);
+    return vaddr;
 }
 
 void free_vmm_uspace(void * address)

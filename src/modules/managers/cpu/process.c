@@ -98,6 +98,9 @@ void init_stack(struct page_directory* pd, process_t * task, uint64_t size, uint
 
     struct stack stack;
     if (is_userland_stack) {
+        if (size > PROCESS_STACK_SIZE) {
+            size = PROCESS_STACK_SIZE & ~0xfff;
+        }
         stackalloc(&stack, size);
         task->ustack = stack.top;
         task->ustack_base = stack.base;
@@ -106,6 +109,9 @@ void init_stack(struct page_directory* pd, process_t * task, uint64_t size, uint
         mprotect(pd, task->ustack_base, size, VMM_USER_BIT | VMM_WRITE_BIT);
         create_vmarea(task, task->ustack_base, task->ustack, VMM_USER_BIT | VMM_WRITE_BIT);
     } else {
+        if (size > PROCESS_STACK_SIZE) {
+            size = PROCESS_STACK_SIZE & ~0xfff;
+        }
         kstackalloc(&stack, size);
         task->kstack_base = stack.base;
         task->kstack = stack.top;
@@ -223,6 +229,7 @@ process_t * create_user_process(void * init, char * tty) {
     task->exit_code = 0;    
     task->exit_signal = 0;
     task->pdeath_signal = 0;
+    task->ustack_max_size = PROCESS_STACK_SIZE;
     task->pid = get_next_pid();
     if (task->pid < 0) {
         panic("No more processes available\n");

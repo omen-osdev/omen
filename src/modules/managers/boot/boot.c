@@ -144,6 +144,7 @@ void boot_startup() {
     vfs_lsdisk();
     char vfs_tty[32];
     sprintf(vfs_tty, "%sp0/", tty); 
+
     //Careful, somehow this shit crashes when you rewrite an string 
     //Map ffffffff80000000 - ffffffff803a000 is read only! diagnose this
 
@@ -155,7 +156,6 @@ void boot_startup() {
     __asm__ volatile("sti");
 
     kprintf("Entering uspace...\n");
-    disable_debugger();
     init_process("hdap2/export/init.elf", "hdap2/export/idle.elf", vfs_tty);
     
     panic("¡Returned from the scheduler!\n");

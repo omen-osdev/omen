@@ -36,7 +36,7 @@ void kstackfree(struct stack * stack) {
 }
 
 void * malloc(uint64_t size) {
-    void * ptr = allocate_current_vmm_uspace(size, PAGE_WRITE_BIT);
+    void * ptr = allocate_current_vmm_uspace(size, VMM_REGION_U_HEAP, PAGE_WRITE_BIT);
     memset(ptr, 0, size);
     return ptr;
 }
@@ -70,7 +70,8 @@ void * stackalloc(struct stack * stack, uint64_t length) {
         pages++;
     }
 
-    uint64_t base = (uint64_t)malloc(pages*0x1000);
+    uint64_t base = allocate_current_vmm_uspace(pages*0x1000, VMM_REGION_U_STACK, PAGE_WRITE_BIT);
+    memset((void*)base, 0, pages*0x1000);
     uint64_t top = (uint64_t)(base+pages*0x1000)-0x10;
     //if unaligned_alloc is not 16-byte aligned, align it by subtracting the difference
     if (top % 0x10) {

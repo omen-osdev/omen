@@ -35,3 +35,7 @@ uint64_t fifo_dev_flush(const char* device) {
 uint64_t fifo_get_size(const char* device) {
     return device_ioctl(device, IOCTL_FIFO_GET_SIZE, (void*)0);
 }
+
+uint64_t fifo_ioctl(const char * device, uint32_t op, void* buffer) {
+    return device_ioctl(device, op, buffer);
+}

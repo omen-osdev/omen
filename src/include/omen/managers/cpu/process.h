@@ -33,6 +33,10 @@ typedef struct process {
     void * ustack_base;
     void * kstack;
     void * kstack_base;
+    uint64_t ustack_max_size;
+    void * heap_base;
+    void * heap_end;
+    void * heap_max_size;
     struct vm_area *vm_areas;
     process_status_t status;
     uint8_t core_id;

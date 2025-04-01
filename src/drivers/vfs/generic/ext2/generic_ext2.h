@@ -239,7 +239,24 @@ uint64_t ext2_compat_file_tell(int partno, int fd) {
     return entry->offset;
 }
 
-int ext2_compat_stat(int partno, int fd, stat_t* st) {(void)partno; (void)fd; (void)st;return -1;}
+int ext2_compat_stat(int partno, int fd, stat_t* st) {
+    if (partno < 0 || partno >= MAX_EXT2_PARTITIONS) 
+        return -1;
+    struct ext2_partition * partition = ext2_partitions[partno];
+    if (partition == 0)
+        return -1;
+
+    struct file_descriptor_entry * entry = vfs_compat_get_file_descriptor(fd);
+    if (entry == 0 || entry->loaded == 0) return -1;
+
+    uint8_t result = ext2_get_stat(partition, entry->name, st);
+    if (result != EXT2_RESULT_OK) {
+        return -1;
+    }
+
+    return 0;
+}
+
 int ext2_compat_rename(int partno, const char* path, const char* newpath) {(void)partno;(void)path;(void)newpath; return -1;}
 
 int ext2_compat_prepare_remove(int partno, const char* path) {
@@ -280,6 +297,7 @@ int ext2_compat_remove(int partno, const char* path) {
     return ext2_delete_file(partition, path);
 }
 int ext2_compat_chmod(int partno, const char* path, int mode) {(void)partno;(void)path;(void)mode;return -1;}
+uint64_t ext2_compat_ioctl(int partno, int fd, int request, void * args) {(void)partno;(void)fd;(void)request;(void)args;return -1;}
 
 struct vfs_compatible ext2_register = {
     .name = "EXT2",
@@ -298,6 +316,7 @@ struct vfs_compatible ext2_register = {
     .file_seek = ext2_compat_file_seek,
     .file_tell = ext2_compat_file_tell,
     .file_stat = ext2_compat_stat,
+    .file_ioctl = ext2_compat_ioctl,
     .rename = ext2_compat_rename,
     .remove = ext2_compat_remove,
     .chmod = ext2_compat_chmod,

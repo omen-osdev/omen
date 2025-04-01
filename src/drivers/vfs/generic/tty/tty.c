@@ -49,3 +49,7 @@ uint8_t vfs_tty_read(struct vfs_tty * tty, uint8_t * destination_buffer, uint64_
 uint8_t vfs_tty_write(struct vfs_tty * tty, uint8_t * source_buffer, uint64_t size, uint64_t skip) {
     return tty_write(tty->device, source_buffer, skip, size);
 }
+
+uint8_t vfs_tty_ioctl(struct vfs_tty * tty, uint8_t request, void* arg) {
+    return tty_ioctl(tty->device, request, arg);
+}

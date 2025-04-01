@@ -413,6 +413,90 @@ uint8_t ext2_write_file(struct ext2_partition * partition, const char * path, ui
     return EXT2_RESULT_OK;
 }
 
+struct stat {
+    uint64_t st_dev;
+    uint64_t st_ino;
+    uint64_t st_mode;
+    uint64_t st_nlink;
+    uint64_t st_uid;
+    uint64_t st_gid;
+    uint64_t st_rdev;
+    uint64_t st_size;
+    uint64_t st_blksize;
+    uint64_t st_blocks;
+    uint64_t st_atime;
+    uint64_t st_mtime;
+    uint64_t st_ctime;
+};
+typedef struct stat stat_t;
+
+uint8_t ext2_get_stat(struct ext2_partition* partition, const char * path, void* st_generic) {
+    EXT2_INFO("Getting stat of %s", path);
+    uint32_t inode_index = ext2_path_to_inode(partition, path);
+    if (inode_index == EXT2_INO_PTI_ERROR) {
+        EXT2_WARN("File doesn't exist");
+        return EXT2_RESULT_ERROR;
+    }
+
+    struct ext2_inode_descriptor_generic * inode = (struct ext2_inode_descriptor_generic *)ext2_read_inode(partition, inode_index);
+    if (inode == 0) {
+        EXT2_ERROR("Failed to read inode");
+        return EXT2_RESULT_ERROR;
+    }
+
+    stat_t * st = (stat_t*)st_generic;
+/*
+    uint64_t st_dev;
+    uint64_t st_ino;
+    uint64_t st_mode;
+    uint64_t st_nlink;
+    uint64_t st_uid;
+    uint64_t st_gid;
+    uint64_t st_rdev;
+    uint64_t st_size;
+    uint64_t st_blksize;
+    uint64_t st_blocks;
+    uint64_t st_atime;
+    uint64_t st_mtime;
+    uint64_t st_ctime;
+*/
+
+/*
+    uint16_t i_mode;                File mode
+    uint16_t i_uid;                 Low 16 bits of Owner Uid 
+    uint32_t i_size;                Size in bytes 
+    uint32_t i_atime;               Access time 
+    uint32_t i_ctime;               Creation time 
+    uint32_t i_mtime;               Modification time 
+    uint32_t i_dtime;               Deletion Time 
+    uint16_t i_gid;                 Low 16 bits of Group Id 
+    uint16_t i_links_count;         Links count 
+    uint32_t i_sectors;             sector count 
+    uint32_t i_flags;               File flags 
+    uint32_t i_osd1;                OS dependent 1 
+    uint32_t i_block[15];           Pointers to blocks 
+    uint32_t i_generation;          File version (for NFS) 
+    uint32_t i_file_acl;            File ACL 
+    uint32_t i_dir_acl;             Directory ACL 
+    uint32_t i_faddr;               Fragment address 
+*/
+
+    st->st_dev = partition->lba;
+    st->st_ino = inode_index;
+    st->st_mode = inode->i_mode;
+    st->st_nlink = inode->i_links_count;
+    st->st_uid = inode->i_uid;
+    st->st_gid = inode->i_gid;
+    st->st_size = inode->i_size;
+    st->st_blksize = 1024 << (((struct ext2_superblock*)partition->sb)->s_log_block_size);
+    st->st_blocks = inode->i_sectors;
+    st->st_atime = inode->i_atime;
+    st->st_mtime = inode->i_mtime;
+    st->st_ctime = inode->i_ctime;  
+
+    return EXT2_RESULT_OK;
+}
+
 uint8_t ext2_delete_file(struct ext2_partition* partition, const char * path) {
     EXT2_INFO("Deleting file %s", path);
     uint32_t inode_index = ext2_path_to_inode(partition, path);

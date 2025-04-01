@@ -8,6 +8,79 @@
 #include <vfs/vfs.h>
 #include <vfs/vfs_interface.h>
 
+/*
+
+
+mmap
+munmap
+
+exit
+fork
+waitpid
+exec
+
+mount
+write, read, open, close okey
+opendir, readdir, closedir, chdir, getcwd, mkdir
+
+stat, lseek, getfsstat
+
+dup, pipe
+
+
+kot's
+
+#define SYS_LOG                 0
+#define SYS_ARCH_PRCTL          1
+#define SYS_GET_TID             2
+#define SYS_FUTEX_WAIT          3
+#define SYS_FUTEX_WAKE          4
+#define SYS_MMAP                5
+#define SYS_MUNMAP              6
+#define SYS_MPROTECT            7
+#define SYS_EXIT                8
+#define SYS_THREAD_EXIT         9
+#define SYS_CLOCK_GET           10
+#define SYS_CLOCK_GETRES        11
+#define SYS_SLEEP               12
+#define SYS_SIGPROCMASK         13
+#define SYS_SIGACTION           14
+#define SYS_SIGRESTORE          15
+#define SYS_FORK                16
+#define SYS_WAITPID             17
+#define SYS_EXECVE              18
+#define SYS_GETPID              19
+#define SYS_GETPPID             20
+#define SYS_KILL                21
+#define SYS_FILE_OPEN           22
+#define SYS_FILE_READ           23
+#define SYS_FILE_WRITE          24
+#define SYS_FILE_SEEK           25
+#define SYS_FILE_CLOSE          26
+#define SYS_FILE_IOCTL          27
+#define SYS_DIR_READ_ENTRIES    28
+#define SYS_DIR_REMOVE          29
+#define SYS_DIR_CREATE          30
+#define SYS_UNLINK_AT           31
+#define SYS_RENAME_AT           32
+#define SYS_PATH_STAT           33
+#define SYS_FD_STAT             34
+#define SYS_FCNTL               35
+#define SYS_GETCWD              36
+#define SYS_CHDIR               37
+#define SYS_SOCKET              38
+#define SYS_BIND                39
+#define SYS_CONNECT             40
+#define SYS_LISTEN              41
+#define SYS_ACCEPT              42
+#define SYS_SOCKET_SEND         43
+#define SYS_SOCKET_RECV         44
+#define SYS_SOCKET_PAIR         45
+#define SYS_PPOLL               46
+#define SYS_SELECT              47
+
+*/
+
 #define SYSRET(ctx, val) ctx->rax = val; return;
 #define SYSCALL_ARG0(ctx) ctx->rdi
 #define SYSCALL_ARG1(ctx) ctx->rsi
@@ -15,6 +88,7 @@
 #define SYSCALL_ARG3(ctx) ctx->rcx
 
 extern void syscall_entry();
+
 uint64_t dummy_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)task;
     kprintf("[PID: %d] DUMMY_SYSCALL(%d)\n", task->pid, ctx->rax);
@@ -78,13 +152,36 @@ uint64_t close_syscall_handler(process_t*task, cpu_context_t* ctx) {
 }
 
 uint64_t stat_syscall_handler(process_t*task, cpu_context_t* ctx) {
-    (void)task;
-    uint64_t path = SYSCALL_ARG0(ctx);
-    uint64_t stat = SYSCALL_ARG1(ctx);
-    (void)path;
-    (void)stat;
+    char * path = SYSCALL_ARG0(ctx);
+    stat_t* stat = SYSCALL_ARG1(ctx);
     kprintf("[PID: %d] STAT_SYSCALL(%d,%d)\n", task->pid, path, stat);
-    panic("Not implemented\n");
+
+    int fd = vfs_file_open((char*)path, O_RDONLY, 0);
+    if (fd < 0) {
+        return SYSCALL_ERROR;
+    }
+    int ret = vfs_file_stat(fd, stat);
+    if (ret < 0) {
+        return SYSCALL_ERROR;
+    }
+    vfs_file_close(fd);
+    kprintf("File size: %d\n", stat->st_size);
+    kprintf("File mode: %d\n", stat->st_mode);
+    return SYSCALL_SUCCESS;
+}
+
+uint64_t fstat_syscall_handler(process_t*task, cpu_context_t* ctx) {
+    int fd = SYSCALL_ARG0(ctx);
+    stat_t* stat = SYSCALL_ARG1(ctx);
+
+    kprintf("[PID: %d] FSTAT_SYSCALL(%d,%d)\n", task->pid, fd, stat);
+    int ret = vfs_file_stat(fd, stat);
+    if (ret < 0) {
+        return SYSCALL_ERROR;
+    }
+    kprintf("File size: %d\n", stat->st_size);
+    kprintf("File mode: %d\n", stat->st_mode);
+
     return SYSCALL_SUCCESS;
 }
 
@@ -97,7 +194,12 @@ uint64_t ioctl_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)request;
     (void)arg;
     kprintf("[PID: %d] IOCTL_SYSCALL(%d,%d,%d)\n", task->pid, fd, request, arg);
-    panic("Not implemented\n");
+    int ret = vfs_file_ioctl(fd, request, arg);
+    if (ret < 0) {
+        return SYSCALL_ERROR;
+    }
+
+    kprintf("IOCTL request: %d\n", request);
     return SYSCALL_SUCCESS;
 }
 
@@ -150,7 +252,8 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [2] = open_syscall_handler,
     [3] = close_syscall_handler,
     [4] = stat_syscall_handler,
-    [5 ... 15] = undefined_syscall_handler,
+    [5] = fstat_syscall_handler,
+    [6 ... 15] = undefined_syscall_handler,
     [16] = ioctl_syscall_handler,
     [17 ... 23] = undefined_syscall_handler,
     [24] = sched_yield_syscall_handler,

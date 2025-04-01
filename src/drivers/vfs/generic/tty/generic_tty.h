@@ -136,6 +136,19 @@ uint64_t tty_compat_file_tell(int devno, int fd) {
     return entry->offset;
 }
 
+uint64_t tty_compat_file_ioctl(int devno, int fd, int request, void* arg) {
+    if (devno < 0 || devno >= MAX_TTY_DEVICES) 
+        return -1;
+
+    struct vfs_tty * device = tty_devices[devno];
+    if (device == 0)
+        return -1;
+
+    struct file_descriptor_entry * entry = vfs_compat_get_file_descriptor(fd);
+    if (entry == 0 || entry->loaded == 0) return -1;
+    return vfs_tty_ioctl(device, request, arg);
+}
+
 int tty_compat_file_open(int devno, const char* path, int flags, int mode) {
     if (devno < 0 || devno >= MAX_TTY_DEVICES) 
         return -1;
@@ -199,6 +212,7 @@ struct vfs_compatible tty_register = {
     .file_seek = tty_compat_file_seek,
     .file_tell = tty_compat_file_tell,
     .file_stat = tty_compat_stat,
+    .file_ioctl = tty_compat_file_ioctl,
     .rename = tty_compat_rename,
     .remove = tty_compat_remove,
     .chmod = tty_compat_chmod,

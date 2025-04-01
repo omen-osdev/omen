@@ -9,6 +9,12 @@
 #define VMM_NX_BIT              0x4
 #define VMM_CACHE_DISABLE_BIT   0x8
 
+#define VMM_REGION_SIZE         0x000000F000000000
+#define VMM_REGION_K_STACK      0xFFFFB00000000000
+#define VMM_REGION_U_STACK      0x0000B00000000000
+#define VMM_REGION_U_SHM_MMAP   0x0000C00000000000
+#define VMM_REGION_U_HEAP       0x0000D00000000000
+
 #define COW_WORKING_PAGE 0x00007fff8ffff000
 
 //Used multiple times
@@ -36,7 +42,7 @@ void * allocate_vmm(struct page_directory * pml4, uint64_t size, uint8_t flags);
 void free_vmm(struct page_directory * pml4, void * address);
 void * allocate_current_vmm(uint64_t size, uint8_t flags);
 void free_current_vmm(void * address);
-void * allocate_current_vmm_uspace(uint64_t size, uint8_t flags);
+void * allocate_current_vmm_uspace(uint64_t size, uint64_t region, uint8_t flags);
 void free_vmm_uspace(void * address);
 uint8_t get_page_perms(struct page_directory *pml4, void* address);
 void* get_physical_address(struct page_directory* root, void* virtual_address);

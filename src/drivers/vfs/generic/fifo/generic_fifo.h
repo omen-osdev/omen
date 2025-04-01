@@ -138,6 +138,20 @@ int fifo_compat_file_open(int devno, const char* path, int flags, int mode) {
     return get_fd(path, device->name, flags, mode);
 }
 
+uint64_t fifo_compat_file_ioctl(int devno, int fd, int request, void* arg) {
+    if (devno < 0 || devno >= MAX_FIFO_DEVICES) 
+        return -1;
+
+    struct vfs_fifo * device = fifo_devices[devno];
+    if (device == 0)
+        return -1;
+
+    struct file_descriptor_entry * entry = vfs_compat_get_file_descriptor(fd);
+    if (entry == 0 || entry->loaded == 0) return -1;
+
+    return vfs_fifo_ioctl(device, request, arg);
+}
+
 int fifo_compat_file_close(int devno, int fd) {
     if (devno < 0 || devno >= MAX_FIFO_DEVICES) 
         return -1;
@@ -188,6 +202,7 @@ struct vfs_compatible fifo_register = {
     .file_seek = fifo_compat_file_seek,
     .file_tell = fifo_compat_file_tell,
     .file_stat = fifo_compat_stat,
+    .file_ioctl = fifo_compat_file_ioctl,
     .rename = fifo_compat_rename,
     .remove = fifo_compat_remove,
     .chmod = fifo_compat_chmod,

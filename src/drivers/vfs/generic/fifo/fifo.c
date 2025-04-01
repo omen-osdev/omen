@@ -47,3 +47,7 @@ uint8_t vfs_fifo_read(struct vfs_fifo * fifo, uint8_t * destination_buffer, uint
 uint8_t vfs_fifo_write(struct vfs_fifo * fifo, uint8_t * source_buffer, uint64_t size, uint64_t skip) {
     return fifo_write(fifo->device, source_buffer, skip, size);
 }
+
+uint8_t vfs_fifo_ioctl(struct vfs_fifo * fifo, uint32_t request, uint32_t arg) {
+    return fifo_ioctl(fifo->device, request, arg);
+}

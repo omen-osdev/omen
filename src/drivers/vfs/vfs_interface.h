@@ -1,6 +1,7 @@
 #ifndef _VFS_ADAPTERS_H
 #define _VFS_ADAPTERS_H
 #include <omen/libraries/std/stdint.h>
+#include <vfs/generic/vfs_compat.h>
 
 void vfs_lsdisk();
 
@@ -13,6 +14,8 @@ uint64_t vfs_file_read(int, void*, uint64_t);
 uint64_t vfs_file_write(int, void*, uint64_t);
 uint64_t vfs_file_seek(int, uint64_t, int);
 uint64_t vfs_file_tell(int);
+uint64_t vfs_file_ioctl(int, int, void*);
+int vfs_file_stat(int, stat_t*);
 int vfs_file_creat(char*, int);
 void vfs_file_flush(int);
 
