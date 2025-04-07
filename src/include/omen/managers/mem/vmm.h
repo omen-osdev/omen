@@ -23,6 +23,7 @@
 #define VMM_REGION_K_STACK      0xFFFF900000000000
 #define VMM_REGION_K_HEAP       0xFFFFA00000000000
 #define VMM_REGION_K_IDENT      0xFFFFB00000000000
+#define VMM_REGION_DEVICES      0xFFFFC00000000000
 
 #define VMM_CANONICAL_LOWER_MAX 0x00007FFFFFFFFFFF
 #define VMM_REGION_U_HEAP       0x0000300000000000
@@ -31,6 +32,22 @@
 #define COW_WORKING_PAGE        0x00007fff8ffff000
 
 #define VMM_REGION_SIZE         0x000000F000000000
+
+#define VMM_TO_DEVICE_MEMORY(addr) ((uint64_t)(addr) + (uint64_t)VMM_REGION_DEVICES)
+#define VMM_FROM_DEVICE_MEMORY(addr) ((uint64_t)(addr) - (uint64_t)VMM_REGION_DEVICES)
+#define VMM_TO_KERNEL_MEMORY(addr) ((uint64_t)(addr) + (uint64_t)VMM_REGION_K_IDENT)
+#define VMM_FROM_KERNEL_MEMORY(addr) ((uint64_t)(addr) - (uint64_t)VMM_REGION_K_IDENT)
+#define VMM_TO_KERNEL_STACK(addr) ((uint64_t)(addr) + (uint64_t)VMM_REGION_K_STACK)
+#define VMM_FROM_KERNEL_STACK(addr) ((uint64_t)(addr) - (uint64_t)VMM_REGION_K_STACK)
+#define VMM_TO_KERNEL_HEAP(addr) ((uint64_t)(addr) + (uint64_t)VMM_REGION_K_HEAP)
+#define VMM_FROM_KERNEL_HEAP(addr) ((uint64_t)(addr) - (uint64_t)VMM_REGION_K_HEAP)
+#define VMM_TO_USER_STACK(addr) ((uint64_t)(addr) + (uint64_t)VMM_REGION_U_STACK)
+#define VMM_FROM_USER_STACK(addr) ((uint64_t)(addr) - (uint64_t)VMM_REGION_U_STACK)
+#define VMM_TO_USER_HEAP(addr) ((uint64_t)(addr) + (uint64_t)VMM_REGION_U_HEAP)
+#define VMM_FROM_USER_HEAP(addr) ((uint64_t)(addr) - (uint64_t)VMM_REGION_U_HEAP)
+
+#define TO_IDENTITY_MAP(addr) (uint64_t)(((uint64_t)addr) + (uint64_t)physical_memory_offset)
+#define FROM_IDENTITY_MAP(addr) (uint64_t)(((uint64_t)addr) - (uint64_t)physical_memory_offset)
 
 //Used multiple times
 struct page_directory* get_pml4();

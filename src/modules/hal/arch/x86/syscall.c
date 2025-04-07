@@ -270,7 +270,7 @@ void global_syscall_handler(cpu_context_t* ctx) {
     process_t * current_task = get_current_process();
     memcpy(current_task->context, ctx, sizeof(cpu_context_t));
     __asm__("fxsave %0" : : "m" (current_task->fxsave_region));
-    current_task->context->cr3 = to_identity_map(current_task->context->cr3);
+    current_task->context->cr3 = to_identity_map(ctx->cr3);
 
     uint64_t result = SYSCALL_SUCCESS;
 

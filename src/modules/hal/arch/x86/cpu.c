@@ -57,6 +57,7 @@ void startup_cpu(uint8_t cpuid) {
 
     kprintf("Starting CPU %d\n", ctx->core_id);
     ctx->ustack = 0;
+    ctx->cr3 = from_identity_map(get_pml4());
     ctx->cinfo = kmalloc(sizeof(struct cpu_context_info));
     memset(ctx->cinfo, 0, sizeof(struct cpu_context_info));
     ctx->cinfo->cs = GDT_KERNEL_CODE_ENTRY * sizeof(gdt_entry_t);

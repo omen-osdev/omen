@@ -48,6 +48,7 @@ typedef struct cpu {
     struct cpu_context_info *cinfo;
     void* ustack;
     struct tss *tss;
+    void* cr3;
 } core_context_t;
 
 core_context_t * arch_get_cpu(uint8_t cpuid);

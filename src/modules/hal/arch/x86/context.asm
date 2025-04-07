@@ -159,10 +159,15 @@ newctxcreat:
 
 ; RDI stack pointer
 ; RSI init function
+; RDX cr3 register
 newuctxcreat:
+    push rax
     push rbx
     mov rbx, rsp
+    mov rax, cr3
+
     mov rsp, [rdi]
+    mov cr3, rdx
 
     push returnoexit
     push 0x0
@@ -170,7 +175,9 @@ newuctxcreat:
     push qword [rdi] ; Stack pointer
     push userspace_trampoline
 
+    mov cr3, rax
     mov [rdi], rsp
     mov rsp, rbx
     pop rbx
+    pop rax
     ret

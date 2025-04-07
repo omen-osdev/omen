@@ -157,7 +157,7 @@ void init_interrupts() {
     }
 
     idtr.limit = 256 * sizeof(struct idtdescentry) - 1;
-    idtr.offset = (uint64_t)kmalloc(256 * sizeof(struct idtdescentry));
+    idtr.offset = (uint64_t)kmalloc_standalone(256 * sizeof(struct idtdescentry));
     memset((void*)idtr.offset, 0, 256 * sizeof(struct idtdescentry));
 
     struct page_directory* pml4 = get_pml4();

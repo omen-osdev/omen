@@ -17,7 +17,7 @@
 #include <vfs/vfs_interface.h>
 
 //Always inlined
-extern void newuctxcreat(uint64_t rsp, uint64_t intro);
+extern void newuctxcreat(uint64_t rsp, uint64_t intro, uint64_t cr3);
 extern void newctxcreat(uint64_t rsp, uint64_t intro);
 
 extern void reloadGsFs();
@@ -104,7 +104,6 @@ void init_stack(struct page_directory* pd, process_t * task, uint64_t size, uint
         stackalloc(pd, &stack, size);
         task->ustack = stack.top;
         task->ustack_base = stack.base;
-        memset(task->ustack_base, 0, size);
         create_vmarea(task, task->ustack_base, task->ustack, VMM_USER_BIT | VMM_WRITE_BIT);
     } else {
         if (size > PROCESS_STACK_SIZE) {
@@ -113,7 +112,6 @@ void init_stack(struct page_directory* pd, process_t * task, uint64_t size, uint
         kstackalloc(&stack, size);
         task->kstack_base = stack.base;
         task->kstack = stack.top;
-        memset(task->kstack_base, 0, size);
         create_vmarea(task, task->kstack_base, task->kstack, VMM_WRITE_BIT);
     }
 }
@@ -159,7 +157,7 @@ void init_user_context(struct page_directory* pd, process_t * task, void * init,
 
     //TODO: Initialize the stack
     if (trampoline)
-        newuctxcreat((uint64_t)&(task->ustack), (uint64_t)init);
+        newuctxcreat((uint64_t)&(task->ustack), (uint64_t)init, (uint64_t)get_physical_address(pd, pd));
     else
         newctxcreat((uint64_t)&(task->ustack), (uint64_t)init);
 

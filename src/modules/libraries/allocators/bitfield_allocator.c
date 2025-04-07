@@ -1,4 +1,5 @@
 #include <omen/apps/debug/debug.h>
+#include <omen/apps/panic/panic.h>
 #include <omen/libraries/allocators/bitfield_allocator.h>
 #include <omen/libraries/std/stdatomic.h>
 #include <omen/libraries/std/stddef.h>
@@ -52,7 +53,8 @@ void *allocate(struct bitfield *bf, uint64_t size) {
     mutex_lock(&bf->lock);
     // Check if the size is bigger than the available size
     if (size > bf->available_size) {
-        kprintf("Size is bigger than the available size\n");
+        mutex_unlock(&bf->lock);
+        panic("Size is bigger than the available size\n");
         return NULL;
     }
 
@@ -69,7 +71,7 @@ void *allocate(struct bitfield *bf, uint64_t size) {
     if (index == 0) {
 
         mutex_unlock(&bf->lock);
-        kprintf("No available pages\n");
+        panic("No available pages\n");
         return NULL;
     }
 
@@ -89,6 +91,8 @@ void deallocate(struct bitfield *bf, void *address, uint64_t size) {
     mutex_lock(&bf->lock);
 
     if (address < bf->available_address || address >= (bf->available_address + bf->available_size)) {
+        panic("Address is out of range\n");
+        mutex_unlock(&bf->lock);
         return;
     }
 

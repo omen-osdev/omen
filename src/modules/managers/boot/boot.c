@@ -156,6 +156,7 @@ void boot_startup() {
     __asm__ volatile("sti");
 
     kprintf("Entering uspace...\n");
+    disable_debugger();
     init_process("hdap2/export/init.elf", "hdap2/export/idle.elf", vfs_tty);
     
     panic("¡Returned from the scheduler!\n");
