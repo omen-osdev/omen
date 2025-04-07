@@ -4,16 +4,18 @@
 #include <generic/config.h>
 #include <omen/libraries/std/stdint.h>
 
-#define PAGE_WRITE_BIT     0x1
-#define PAGE_USER_BIT      0x2
-#define PAGE_NX_BIT        0x4
-#define PAGE_CACHE_DISABLE_BIT 0x8
-#define PAGE_COW_BIT       0x1
-
-
 #define MAXPHYADDR 40
-
 //WARNING: WE ARE FIXING MAXPHYADDR = 40
+
+typedef struct page_permissions {
+    uint8_t read_write : 1;
+    uint8_t user : 1;
+    uint8_t write_through : 1;
+    uint8_t cache_disable : 1;
+    uint8_t global : 1;
+    uint8_t no_execute : 1;
+    uint8_t cow : 1;
+} vmm_perms;
 
 struct directory_entry {
     uint64_t P                  :1; //0

@@ -20,17 +20,11 @@
 //0x0000C00000000000 - 0x0000C0EFFFFFFFFF User space shared memory and mmaps
 //0x0000D00000000000 - 0x0000D0EFFFFFFFFF User space heap
 
-#define PHYSICAL_MEMORY_OFFSET  0xFFFFA00000000000
 #define PHYSICAL_MEMORY_SIZE    0x000000F000000000
 uint64_t physical_memory_offset = 0;
 
 #define TO_IDENTITY_MAP(addr) (uint64_t)(((uint64_t)addr) + (uint64_t)physical_memory_offset)
 #define FROM_IDENTITY_MAP(addr) (uint64_t)(((uint64_t)addr) - (uint64_t)physical_memory_offset)
-
-#define CACHE_BIT_SET(x)((x & PAGE_CACHE_DISABLE_BIT) >> 3)
-#define NX_BIT_SET(x)((x & PAGE_NX_BIT) >> 2)
-#define USER_BIT_SET(x)((x & PAGE_USER_BIT) >> 1)
-#define WRITE_BIT_SET(x)(x & PAGE_WRITE_BIT)
 
 #define IS_PRESENT(entry) ((entry)->directory.P)
 #define IS_WRITEABLE(entry) ((entry)->directory.RW)
@@ -42,6 +36,33 @@ uint64_t physical_memory_offset = 0;
 #define GET_PDPP_REGULAR(entry) ((uint64_t)(((uint64_t)(entry)->regular.PDPP) << 12))
 #define GET_PDPP_DIR(entry) ((uint64_t)(((uint64_t)(entry)->directory.PDPP) << 12))
 #define GET_ENTRY(root, index) (vm_entry*)(&((root)->entries[(index)]))
+
+void vmm_entry_to_perms(vm_entry * entry, vmm_perms * perms) {
+    perms->read_write = entry->directory.RW;
+    perms->user = entry->directory.US;
+    perms->write_through = entry->directory.PWT;
+    perms->cache_disable = entry->directory.PCD;
+    perms->global = entry->huge.G;
+    perms->no_execute = entry->directory.XD;
+}
+
+void flags_to_perms(uint8_t flags, vmm_perms * perms) {
+    //Flags format:
+    // 0x1 - Read/Write
+    // 0x2 - User/Supervisor
+    // 0x4 - Write-Through
+    // 0x8 - Cache Disable
+    // 0x10 - Global
+    // 0x20 - No Execute
+
+    perms->read_write = VMM_WRITE_BIT_SET(flags) ? 1 : 0;
+    perms->user = VMM_USER_BIT_SET(flags) ? 1 : 0;
+    perms->write_through = (VMM_WRITE_THROUGH_BIT_SET(flags)) ? 1 : 0;
+    perms->cache_disable = (VMM_CACHE_DISABLE_BIT_SET(flags)) ? 1 : 0;
+    perms->global = (VMM_GLOBAL_BIT_SET(flags)) ? 1 : 0;
+    perms->no_execute = (VMM_NX_BIT_SET(flags)) ? 1 : 0;
+    perms->cow = 0;
+}
 
 void address_to_map(uint64_t address, struct page_map_index* map) {
     address >>= 12;
@@ -97,13 +118,30 @@ struct page_directory* get_current_cr3()
     return TO_IDENTITY_MAP(cr3);
 }
 
-void init_entry(vm_entry * entry, uint64_t size, uint64_t page_ppn)
+void init_entry(vm_entry * entry, uint64_t size, uint64_t page_ppn, vmm_perms perms)
 {   
+
+    //Check that page_ppn is aligned to the size, else panic
+    if (size == PAGE_SIZE_1GIB && (page_ppn & 0x3fffffff) != 0)
+    {
+        panic("Page ppn is not aligned to 1GiB page size");
+    }
+
+    if (size == PAGE_SIZE_2MIB && (page_ppn & 0x1fffff) != 0)
+    {
+        panic("Page ppn is not aligned to 2MiB page size");
+    }
+
+    if (size == PAGE_SIZE_4KIB && (page_ppn & 0xfff) != 0)
+    {
+        panic("Page ppn is not aligned to 4KiB page size");
+    }
+
     entry->directory.P = 1;          //0
-    entry->directory.RW = 1;         //1
-    entry->directory.US = 1;         //2
-    entry->directory.PWT = 0;        //3
-    entry->directory.PCD = 0;        //4
+    entry->directory.RW = perms.read_write; //1
+    entry->directory.US = perms.user; //2
+    entry->directory.PWT = perms.write_through; //3
+    entry->directory.PCD = perms.cache_disable; //4
     entry->directory.A = 0;          //5
     entry->directory.IGNORED1 = 0;          //6
     entry->directory.PS = 0;         //7
@@ -112,7 +150,7 @@ void init_entry(vm_entry * entry, uint64_t size, uint64_t page_ppn)
     entry->directory.PDPP = 0;         //12-39 Provisionally set to 0
     entry->directory.RESERVED = 0;   //40-51
     entry->directory.IGNORED3 = 0;   //52-62
-    entry->directory.XD = 0;           //63
+    entry->directory.XD = perms.no_execute; //63
 
     switch (size)
     {
@@ -133,7 +171,7 @@ void init_entry(vm_entry * entry, uint64_t size, uint64_t page_ppn)
     }
 }
 
-void map_address(struct page_directory* root, void * virtual_address, void * physical_address, uint64_t size)
+void map_address(struct page_directory* root, void * virtual_address, void * physical_address, uint64_t size, uint8_t flags)
 {
     struct page_map_index map;
     address_to_map((uint64_t)virtual_address, &map);
@@ -141,9 +179,20 @@ void map_address(struct page_directory* root, void * virtual_address, void * phy
     struct page_directory *pdptable, *pdtable, *pttable;
     vm_entry *pml4entry, *pdptentry, *pdentry, *ptentry;
 
+    vmm_perms perms;
+    perms.read_write = 1;
+    perms.user = 1;
+    perms.write_through = 0;
+    perms.cache_disable = 0;
+    perms.global = 0;
+    perms.no_execute = 0;
+
+    vmm_perms page_perms;
+    flags_to_perms(flags, &page_perms);
+
     pml4entry = GET_ENTRY(root, map.PML4_index);
     if (!IS_PRESENT(pml4entry)) {
-        init_entry(pml4entry, PAGE_SIZE_DIR, (uint64_t)pmm_alloc_page());
+        init_entry(pml4entry, PAGE_SIZE_DIR, (uint64_t)allocate_phys_page(), perms);
     }
 
     pdptable = (struct page_directory*)get_pdpp(pml4entry, PAGE_SIZE_DIR);
@@ -151,18 +200,18 @@ void map_address(struct page_directory* root, void * virtual_address, void * phy
 
     if (!IS_PRESENT(pdptentry)) {
         if (size == PAGE_SIZE_1GIB) {
-            init_entry(pdptentry, PAGE_SIZE_1GIB, (uint64_t)physical_address);
+            init_entry(pdptentry, PAGE_SIZE_1GIB, (uint64_t)physical_address, page_perms);
             flush_tlb_entry(virtual_address);
-            return;
+            goto check_mapping;
         } else {
-            init_entry(pdptentry, PAGE_SIZE_DIR, (uint64_t)pmm_alloc_page());
+            init_entry(pdptentry, PAGE_SIZE_DIR, (uint64_t)allocate_phys_page(), perms);
         }
     } else if (pdptentry->huge.PS) {
         if (size == PAGE_SIZE_1GIB) {
-            init_entry(pdptentry, PAGE_SIZE_1GIB, (uint64_t)physical_address);
+            init_entry(pdptentry, PAGE_SIZE_1GIB, (uint64_t)physical_address, page_perms);
             flush_tlb_entry(virtual_address);
             kprintf("1g Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, get_pdpp(pdptentry, PAGE_SIZE_1GIB));
-            return;
+            goto check_mapping;
         } else {
             kprintf("%llx 1g Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, physical_address, get_pdpp(pdptentry, PAGE_SIZE_1GIB));
             panic("1GiB Mapping overlap detected\n");
@@ -174,18 +223,18 @@ void map_address(struct page_directory* root, void * virtual_address, void * phy
 
     if (!IS_PRESENT(pdentry)) {
         if (size == PAGE_SIZE_2MIB) {
-            init_entry(pdentry, PAGE_SIZE_2MIB, (uint64_t)physical_address);
+            init_entry(pdentry, PAGE_SIZE_2MIB, (uint64_t)physical_address, page_perms);
             flush_tlb_entry(virtual_address);
-            return;
+            goto check_mapping;
         } else {
-            init_entry(pdentry, PAGE_SIZE_DIR, (uint64_t)pmm_alloc_page());
+            init_entry(pdentry, PAGE_SIZE_DIR, (uint64_t)allocate_phys_page(), perms);
         }
-    } else if (pdptentry->big.PS) {
+    } else if (pdentry->big.PS) {
         if (size == PAGE_SIZE_2MIB) {
-            init_entry(pdentry, PAGE_SIZE_2MIB, (uint64_t)physical_address);
+            init_entry(pdentry, PAGE_SIZE_2MIB, (uint64_t)physical_address, page_perms);
             flush_tlb_entry(virtual_address);
             kprintf("2m Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, get_pdpp(pdentry, PAGE_SIZE_2MIB));
-            return;
+            goto check_mapping;
         } else {
             kprintf("2m Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, physical_address);
             panic("2MiB Mapping overlap detected\n");
@@ -196,14 +245,15 @@ void map_address(struct page_directory* root, void * virtual_address, void * phy
     ptentry = GET_ENTRY(pttable, map.PT_index);
 
     if (!IS_PRESENT(ptentry)) {
-        init_entry(ptentry, PAGE_SIZE_4KIB, (uint64_t)physical_address);
+        init_entry(ptentry, PAGE_SIZE_4KIB, (uint64_t)physical_address, page_perms);
         flush_tlb_entry(virtual_address);
     } else {
         kprintf("4k Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, physical_address);
-        init_entry(ptentry, PAGE_SIZE_4KIB, (uint64_t)physical_address);
+        init_entry(ptentry, PAGE_SIZE_4KIB, (uint64_t)physical_address, page_perms);
         flush_tlb_entry(virtual_address);
     }
 
+check_mapping:
     //Print virtual address
     void * phys_addr = get_physical_address(root, virtual_address);
     //Check that the address is correct
@@ -215,41 +265,81 @@ void map_address(struct page_directory* root, void * virtual_address, void * phy
     
 }
 
-void * allocate_vmm_page(struct page_directory * pml4, uint8_t flags)
+void unmap_memory(struct page_directory* root, void* virtual_address)
 {
-    void * buffer = TO_IDENTITY_MAP(pmm_alloc_page());
-    if (FROM_IDENTITY_MAP(buffer) == 0x0)
-    {
-        return NULL;
-    }
-    mprotect(pml4, buffer, PAGE_SIZE_4KIB, flags);
-    return buffer;
-}
+    struct page_map_index map;
+    address_to_map((uint64_t)virtual_address, &map);
 
-void free_vmm_page(struct page_directory * pml4, void * address)
-{
-    if (FROM_IDENTITY_MAP(address) == 0x0)
+    struct page_directory *pdptable, *pdtable, *pttable;
+    vm_entry *pml4entry, *pdptentry, *pdentry, *ptentry;
+
+    pml4entry = GET_ENTRY(root, map.PML4_index);
+    if (!IS_PRESENT(pml4entry))
     {
         return;
     }
-    pmm_free(FROM_IDENTITY_MAP(address));
-    unmap_memory(pml4, address);
+
+    pdptable = (struct page_directory*)get_pdpp(pml4entry, PAGE_SIZE_DIR);
+    pdptentry = GET_ENTRY(pdptable, map.PDP_index);
+
+    if (!IS_PRESENT(pdptentry))
+    {
+        return;
+    }
+    
+    if (pdptentry->huge.PS)
+    {
+        pdptentry->directory.P = 0;
+        return;
+    }
+
+    pdtable = (struct page_directory*)get_pdpp(pdptentry, PAGE_SIZE_DIR);
+    pdentry = GET_ENTRY(pdtable, map.PD_index);
+
+    if (!IS_PRESENT(pdentry))
+    {
+        return;
+    }
+    if (pdptentry->big.PS)
+    {
+        pdptentry->directory.P = 0;
+        return;
+    }
+
+    pttable = (struct page_directory*)get_pdpp(pdentry, PAGE_SIZE_DIR);
+    ptentry = GET_ENTRY(pttable, map.PT_index);
+
+    if (!IS_PRESENT(ptentry))
+    {
+        return;
+    }
+
+    ptentry->directory.P = 0;
 }
 
-void * allocate_vmm(struct page_directory * pml4, uint64_t size, uint8_t flags)
+void * allocate_vmm(struct page_directory * pml4, uint64_t size, uint64_t region, uint8_t flags)
 {
-    void * buffer = TO_IDENTITY_MAP(pmm_alloc(size));
-    if (FROM_IDENTITY_MAP(buffer) == 0x0)
+    if (region != VMM_REGION_U_STACK && region != VMM_REGION_U_HEAP && region != VMM_REGION_U_SHM_MMAP && region != VMM_REGION_K_STACK && region != VMM_REGION_K_IDENT)
+    {
+        panic("Invalid region for allocation\n");
+        return NULL;
+    }
+
+    void * buffer = pmm_alloc(size);
+    if (buffer == NULL)
     {
         return NULL;
     }
-    mprotect(pml4, buffer, size, flags);
-    return buffer;
-}
 
-void * allocate_current_vmm(uint64_t size, uint8_t flags)
-{
-    return allocate_vmm(get_current_cr3(), size, flags);
+    memset(TO_IDENTITY_MAP(buffer), 0, size);
+    if (region == VMM_REGION_K_IDENT)
+    {
+        return TO_IDENTITY_MAP(buffer);
+    }
+    void * vaddr = (void*)((uint64_t)region + (uint64_t)buffer);
+    map_range(pml4, vaddr, buffer, PAGE_SIZE_4KIB, size, flags);
+
+    return vaddr;
 }
 
 void free_vmm(struct page_directory * pml4, void * address)
@@ -262,11 +352,7 @@ void free_vmm(struct page_directory * pml4, void * address)
     unmap_memory(pml4, address);
 }
 
-void free_current_vmm(void * address) {
-    free_vmm(get_current_cr3(), address);
-}
-
-void map_range(struct page_directory* root, void * virtual_start, void * physical_start, uint64_t page_size, uint64_t size)
+void map_range(struct page_directory* root, void * virtual_start, void * physical_start, uint64_t page_size, uint64_t size, uint8_t flags)
 {
     //number of pages to map
     uint64_t pages = size / page_size;
@@ -277,7 +363,7 @@ void map_range(struct page_directory* root, void * virtual_start, void * physica
     kprintf("Need to map %d pages\n", pages);
     for (uint64_t i = 0; i < pages; i++)
     {
-        map_address(root, (void*)((uint64_t)virtual_start + (i * page_size)), (void*)((uint64_t)physical_start + (i * page_size)), page_size);
+        map_address(root, (void*)((uint64_t)virtual_start + (i * page_size)), (void*)((uint64_t)physical_start + (i * page_size)), page_size, flags);
     }
 
     kprintf("Mapped range from 0x%llx to 0x%llx\n", virtual_start, (uint64_t)virtual_start + size);
@@ -310,7 +396,7 @@ void duplicate_page_directory(struct page_directory* root, struct page_directory
             {
                 new_entry->directory.PDPP = entry->directory.PDPP;
             } else {
-                new_entry->directory.PDPP = ((uint64_t)pmm_alloc_page()) >> 12;
+                new_entry->directory.PDPP = ((uint64_t)allocate_phys_page()) >> 12;
 
                 uint64_t source_pdpp = (root_on_phys) ? GET_PDPP_DIR(entry) : get_pdpp(entry, PAGE_SIZE_DIR);
 
@@ -328,14 +414,14 @@ void duplicate_page_directory(struct page_directory* root, struct page_directory
 
 struct page_directory * vmm_copy_kernel(struct page_directory* root)
 {
-    struct page_directory* new = (struct page_directory*)TO_IDENTITY_MAP(pmm_alloc_page());
+    struct page_directory* new = (struct page_directory*)TO_IDENTITY_MAP(allocate_phys_page());
     duplicate_page_directory(root, new, 3, 256, 0);
     return new;
 }
 
 struct page_directory * vmm_copy(struct page_directory* root)
 {
-    struct page_directory* new = (struct page_directory*)TO_IDENTITY_MAP(pmm_alloc_page());
+    struct page_directory* new = (struct page_directory*)TO_IDENTITY_MAP(allocate_phys_page());
     duplicate_page_directory(root, new, 3, 0, 0);
     return new;
 }
@@ -414,67 +500,15 @@ void compare_directories(struct page_directory* root, struct page_directory* new
     }
 }
 
-void unmap_address(struct page_directory* root, void* virtual_address)
-{
-    struct page_map_index map;
-    address_to_map((uint64_t)virtual_address, &map);
-
-    struct page_directory *pdptable, *pdtable, *pttable;
-    vm_entry *pml4entry, *pdptentry, *pdentry, *ptentry;
-
-    pml4entry = GET_ENTRY(root, map.PML4_index);
-    if (!IS_PRESENT(pml4entry))
-    {
-        return;
-    }
-
-    pdptable = (struct page_directory*)get_pdpp(pml4entry, PAGE_SIZE_DIR);
-    pdptentry = GET_ENTRY(pdptable, map.PDP_index);
-
-    if (!IS_PRESENT(pdptentry))
-    {
-        return;
-    }
-    
-    if (pdptentry->huge.PS)
-    {
-        pdptentry->directory.P = 0;
-        return;
-    }
-
-    pdtable = (struct page_directory*)get_pdpp(pdptentry, PAGE_SIZE_DIR);
-    pdentry = GET_ENTRY(pdtable, map.PD_index);
-
-    if (!IS_PRESENT(pdentry))
-    {
-        return;
-    }
-    if (pdptentry->big.PS)
-    {
-        pdptentry->directory.P = 0;
-        return;
-    }
-
-    pttable = (struct page_directory*)get_pdpp(pdentry, PAGE_SIZE_DIR);
-    ptentry = GET_ENTRY(pttable, map.PT_index);
-
-    if (!IS_PRESENT(ptentry))
-    {
-        return;
-    }
-
-    ptentry->directory.P = 0;
-}
-    
 
 void* get_physical_address(struct page_directory* root, void* virtual_address)
 {
 
     //Check if address is in the IDENTITIY MAP
-    if ((uint64_t)virtual_address > PHYSICAL_MEMORY_OFFSET && (uint64_t)virtual_address < PHYSICAL_MEMORY_OFFSET + PHYSICAL_MEMORY_SIZE)
+    if ((uint64_t)virtual_address > VMM_REGION_K_IDENT && (uint64_t)virtual_address < VMM_REGION_K_IDENT + PHYSICAL_MEMORY_SIZE)
     {
         //kprintf("[DEBUG] Address is in the identity map, returning physical address\n");
-        return (void*)((uint64_t)virtual_address - PHYSICAL_MEMORY_OFFSET);
+        return (void*)((uint64_t)virtual_address - VMM_REGION_K_IDENT);
     }
 
     struct page_map_index map;
@@ -513,10 +547,10 @@ void* get_physical_address(struct page_directory* root, void* virtual_address)
     if (!IS_PRESENT(pdentry))
     {
         panic("[DEBUG][PD] pdtable->entries[PD_index] not present\n");
-    } else if (pdptentry->big.PS)
+    } else if (pdentry->big.PS)
     {
         //kprintf("[DEBUG][PD] pdtable->entries[PD_index] is a 2MiB page\n");
-        return (void*)((((uint64_t)pdptentry->big.PDPP) << 21) | ((uint64_t)virtual_address & 0x1fffff));
+        return (void*)((((uint64_t)pdentry->big.PDPP) << 21) | ((uint64_t)virtual_address & 0x1fffff));
     }
 
     pttable = (struct page_directory*)get_pdpp(pdentry, PAGE_SIZE_DIR);
@@ -527,34 +561,30 @@ void* get_physical_address(struct page_directory* root, void* virtual_address)
         panic("[DEBUG][PT] pttable->entries[PT_index] not present\n");
     }
 
-    return (void*)((((uint64_t)pdptentry->regular.PDPP) << 12) | ((uint64_t)virtual_address & 0xfff));
+    return (void*)((((uint64_t)ptentry->regular.PDPP) << 12) | ((uint64_t)virtual_address & 0xfff));
 }
 
 void init_vmm()
 {
-    map_range(get_current_cr3(), (void*)PHYSICAL_MEMORY_OFFSET, (void*)0, PAGE_SIZE_1GIB, PHYSICAL_MEMORY_SIZE);
-    physical_memory_offset = PHYSICAL_MEMORY_OFFSET;
-    remap_bitfield(PHYSICAL_MEMORY_OFFSET);
-    struct page_directory* global_cr3 = vmm_copy(get_current_cr3());
+    map_range(get_current_cr3(), (void*)VMM_REGION_K_IDENT, (void*)0, PAGE_SIZE_1GIB, PHYSICAL_MEMORY_SIZE, VMM_WRITE_BIT | VMM_USER_BIT);
+    struct page_directory * cr3 = get_current_cr3();
+    vm_entry * vme = (vm_entry*)&(cr3->entries[2]);
+    vme->directory.P = 1;
+    vme->directory.RW = 1;
+    vme->directory.US = 1;
+    physical_memory_offset = VMM_REGION_K_IDENT;
+    remap_bitfield(VMM_REGION_K_IDENT);
+    struct page_directory* global_cr3 = vmm_copy_kernel(get_current_cr3());
     //compare_directories(get_current_cr3(), global_cr3, 4);
     switch_cr3(FROM_IDENTITY_MAP(global_cr3));
     kprintf("Page table switched\n");
-    
-    void * addr = pmm_alloc_page();
-    //Map into userspace stack region
-    map_range(global_cr3, (void*)0x0000B00000000000, addr, PAGE_SIZE_4KIB, PAGE_SIZE_4KIB);
-    mprotect(global_cr3, (void*)0x0000B00000000000, PAGE_SIZE_4KIB, PAGE_USER_BIT | PAGE_WRITE_BIT);
-    
-    //Write to the stack
-    uint64_t * stack = (uint64_t*)0x0000B00000000000;
-    *stack = 0xDEADBEEF;
-    kprintf("Stack value: %llx\n", *stack);
-
 }
 
 void * vmm_create_kernel_stack(struct page_directory* stack_root, uint64_t stack_pages, uint8_t flags, uint64_t * stack_base) {
         
     void * new_stack_phys = pmm_alloc(stack_pages*0x1000);
+    //Init to zero
+    memset(TO_IDENTITY_MAP(new_stack_phys), 0, stack_pages*0x1000);
     void * base_address = (void*)((uint64_t)VMM_REGION_K_STACK+(uint64_t)new_stack_phys);
     //CHECK BOUNDS
     if ((uint64_t)base_address < VMM_REGION_K_STACK || (uint64_t)base_address > VMM_REGION_K_STACK+VMM_REGION_SIZE)
@@ -562,8 +592,7 @@ void * vmm_create_kernel_stack(struct page_directory* stack_root, uint64_t stack
         panic("Kernel stack out of bounds\n");
         return NULL;
     }
-    map_range(stack_root, base_address, new_stack_phys, PAGE_SIZE_4KIB, stack_pages*PAGE_SIZE_4KIB);
-    mprotect(stack_root, base_address, stack_pages*PAGE_SIZE_4KIB, flags);
+    map_range(stack_root, base_address, new_stack_phys, PAGE_SIZE_4KIB, stack_pages*PAGE_SIZE_4KIB, flags);
     
     uint64_t stack_top_address = base_address+stack_pages*PAGE_SIZE_4KIB-0x10;
     //If address is not 16-byte aligned, align it by subtracting the difference
@@ -582,8 +611,7 @@ void * vmm_copy_stack(struct page_directory* stack_root, void * stack_base, uint
     stack_size = (stack_size + 0xfff) & ~0xfff;
     void * new_stack_phys = pmm_alloc(stack_size);
     memcpy(TO_IDENTITY_MAP(new_stack_phys), stack_base, stack_size);
-    map_range(stack_root, stack_base, new_stack_phys, PAGE_SIZE_4KIB, stack_size);
-    mprotect(stack_root, stack_base, stack_size, flags);
+    map_range(stack_root, stack_base, new_stack_phys, PAGE_SIZE_4KIB, stack_size, flags);
     return stack_base;
 }
 
@@ -615,7 +643,7 @@ uint8_t compare_entries(vm_entry* entry1, vm_entry* entry2)
 }
 
 void map_memory(struct page_directory * pml4, void * address, void * physical, uint64_t page_size, uint8_t flags) {
-    map_address(pml4, address, physical, page_size);
+    map_address(pml4, address, physical, page_size, flags);
 }
 
 void mprotect_current(void* address, uint64_t size, uint8_t flags) {
@@ -646,10 +674,6 @@ void * virtual_to_physical(struct page_directory * pml4, void * address) {
     return get_physical_address(pml4, address);
 }
 
-void unmap_memory(struct page_directory * pml4, void * address) {
-    unmap_address(pml4, address);
-}
-
 //Unused
 void invalidate_current_pml4() {
     struct page_directory* pml4 = get_current_cr3();
@@ -662,10 +686,10 @@ void init_paging() {
 
 void set_permissions(vm_entry* entry, uint8_t flags)
 {
-    entry->directory.RW = WRITE_BIT_SET(flags);
-    entry->directory.US = USER_BIT_SET(flags);
-    entry->directory.PCD = CACHE_BIT_SET(flags);
-    entry->directory.XD = NX_BIT_SET(flags);    
+    entry->directory.RW = VMM_WRITE_BIT_SET(flags);
+    entry->directory.US = VMM_USER_BIT_SET(flags);
+    entry->directory.PCD = VMM_CACHE_BIT_SET(flags);
+    entry->directory.XD = VMM_NX_BIT_SET(flags);    
 }
 
 uint64_t mprotect_page(struct page_directory * root, void* address, uint8_t flags)
@@ -673,7 +697,7 @@ uint64_t mprotect_page(struct page_directory * root, void* address, uint8_t flag
     struct page_map_index map;
     address_to_map((uint64_t)address, &map);
 
-    //kprintf("Mprotecting vaddr: %llx (phys: %llx) with flags (W: %d, U: %d, NX: %d, CD: %d)\n", address, get_physical_address(root, address), WRITE_BIT_SET(flags), USER_BIT_SET(flags), NX_BIT_SET(flags), CACHE_BIT_SET(flags));
+    //kprintf("Mprotecting vaddr: %llx (phys: %llx) with flags (W: %d, U: %d, NX: %d, CD: %d)\n", address, get_physical_address(root, address), VMM_WRITE_BIT_SET(flags), VMM_USER_BIT_SET(flags), NX_BIT_SET(flags), CACHE_BIT_SET(flags));
 
     struct page_directory* pdptable, *pdtable, *pttable;
     vm_entry *pml4entry, *pdptentry, *pdentry, *ptentry;
@@ -695,7 +719,7 @@ uint64_t mprotect_page(struct page_directory * root, void* address, uint8_t flag
     if (pdptentry->huge.PS)
     {
         set_permissions(pdptentry, flags);
-        if (USER_BIT_SET(flags))
+        if (VMM_USER_BIT_SET(flags))
         {
             pml4entry->directory.US = 1;
             pdptentry->huge.US = 1;
@@ -713,7 +737,7 @@ uint64_t mprotect_page(struct page_directory * root, void* address, uint8_t flag
     if (pdptentry->big.PS)
     {
         set_permissions(pdentry, flags);
-        if (USER_BIT_SET(flags))
+        if (VMM_USER_BIT_SET(flags))
         {
             pml4entry->directory.US = 1;
             pdptentry->directory.US = 1;
@@ -731,7 +755,7 @@ uint64_t mprotect_page(struct page_directory * root, void* address, uint8_t flag
     }
 
     set_permissions(ptentry, flags);
-    if (USER_BIT_SET(flags))
+    if (VMM_USER_BIT_SET(flags))
     {
         pml4entry->directory.US = 1;
         pdptentry->directory.US = 1;
@@ -814,7 +838,7 @@ uint8_t get_page_perms(struct page_directory *pml4, void* address)
 
 uint8_t is_user_access(struct page_directory* pml4, void * address)
 {
-    return USER_BIT_SET(get_page_perms(pml4, address));
+    return VMM_USER_BIT_SET(get_page_perms(pml4, address));
 }
 
 uint8_t is_present(struct page_directory* pml4, void * address)
@@ -870,12 +894,12 @@ uint8_t is_present(struct page_directory* pml4, void * address)
 
 uint8_t is_writeable(struct page_directory* pml4, void * address)
 {
-    return WRITE_BIT_SET(get_page_perms(pml4, address));
+    return VMM_WRITE_BIT_SET(get_page_perms(pml4, address));
 }
 
 uint8_t is_executable(struct page_directory* pml4, void * address)
 {
-    return NX_BIT_SET(get_page_perms(pml4, address));
+    return VMM_NX_BIT_SET(get_page_perms(pml4, address));
 }
 
 void print_entry(vm_entry* entry, uint64_t size)
@@ -1002,27 +1026,16 @@ void debug_current_address(void * address)
     debug_address(get_current_cr3(), address);
 }
 
-void * allocate_current_vmm_uspace(uint64_t size, uint64_t region, uint8_t flags) 
-{
-    void * buffer = pmm_alloc(size);
+void * allocate_phys_page() {
+    void * buffer = pmm_alloc_page();
     if (buffer == NULL)
     {
         return NULL;
     }
-
-    if (region != VMM_REGION_U_STACK && region != VMM_REGION_U_HEAP && region != VMM_REGION_U_SHM_MMAP)
-    {
-        panic("Invalid region for user space allocation\n");
-        return NULL;
-    }
-    void * vaddr = 0x0000B00000000000;
-    map_range(get_current_cr3(), vaddr, buffer, PAGE_SIZE_4KIB, size);
-    mprotect(get_current_cr3(), vaddr, size, flags);
-    return vaddr;
+    memset(TO_IDENTITY_MAP(buffer), 0, PAGE_SIZE_4KIB);
+    return buffer;
 }
 
-void free_vmm_uspace(void * address)
-{
+void free_phys_page(void * address) {
     pmm_free(address);
-    unmap_memory(get_current_cr3(), address);
 }

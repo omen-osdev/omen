@@ -223,14 +223,14 @@ void allocate_segment(struct page_directory * root, Elf64_Phdr * program_header,
     uint64_t page_no = total_size / 0x1000;
     if (total_size % 0x1000) page_no++;
 
-    uint8_t perms = PAGE_USER_BIT;
-    if (program_header->p_flags & PF_W) perms |= PAGE_WRITE_BIT;
-    if (!(program_header->p_flags & PF_X)) perms |= PAGE_NX_BIT;
+    uint8_t perms = VMM_USER_BIT;
+    if (program_header->p_flags & PF_W) perms |= VMM_WRITE_BIT;
+    if (!(program_header->p_flags & PF_X)) perms |= VMM_NX_BIT;
 
     void * new_buffer = kmalloc(page_no * 0x1000);
     memset(new_buffer, 0, page_no * 0x1000);
     memcpy(new_buffer + vaddr_offset,  (void*)(buffer+program_header->p_offset), program_header->p_filesz);
-    map_range(root, (void*)vaddr, get_current_physical_address(new_buffer), 0x1000, page_no * 0x1000); 
+    map_range(root, (void*)vaddr, get_current_physical_address(new_buffer), 0x1000, page_no * 0x1000, perms);
 }
 
 uint8_t elf_open_file(char * filename, uint8_t ** buffer, uint64_t * filesize) {

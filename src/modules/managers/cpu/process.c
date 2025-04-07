@@ -30,8 +30,8 @@ process_t process_list[MAX_PROCESSES] = {0};
 process_t *current_process = process_list;
 uint32_t current_process_index = 0;
 uint32_t process_count = 0;
-char init_path[0x1000] __attribute__((aligned(0x1000)));
-char idle_path[0x1000] __attribute__((aligned(0x1000)));
+//char init_path[0x1000] __attribute__((aligned(0x1000)));
+//char idle_path[0x1000] __attribute__((aligned(0x1000)));
 
 uint8_t is_in_vmarea(process_t* process, void * address) {
     struct vm_area * current = process->vm_areas;
@@ -64,7 +64,7 @@ void remove_vmarea(process_t* process, void * start) {
             } else {
                 process->vm_areas = current->next;
             }
-            free(current);
+            free(process->context->cr3, current);
             return;
         }
         previous = current;
@@ -101,12 +101,10 @@ void init_stack(struct page_directory* pd, process_t * task, uint64_t size, uint
         if (size > PROCESS_STACK_SIZE) {
             size = PROCESS_STACK_SIZE & ~0xfff;
         }
-        stackalloc(&stack, size);
+        stackalloc(pd, &stack, size);
         task->ustack = stack.top;
         task->ustack_base = stack.base;
-        memset(to_identity_map(task->ustack_base), 0, size);
-        map_range(pd, task->ustack_base, task->ustack_base, 0x1000, size);
-        mprotect(pd, task->ustack_base, size, VMM_USER_BIT | VMM_WRITE_BIT);
+        memset(task->ustack_base, 0, size);
         create_vmarea(task, task->ustack_base, task->ustack, VMM_USER_BIT | VMM_WRITE_BIT);
     } else {
         if (size > PROCESS_STACK_SIZE) {
@@ -116,8 +114,6 @@ void init_stack(struct page_directory* pd, process_t * task, uint64_t size, uint
         task->kstack_base = stack.base;
         task->kstack = stack.top;
         memset(task->kstack_base, 0, size);
-        map_range(pd, task->kstack_base, task->kstack_base, 0x1000, size);
-        mprotect(pd, task->kstack_base, size, VMM_WRITE_BIT);
         create_vmarea(task, task->kstack_base, task->kstack, VMM_WRITE_BIT);
     }
 }
@@ -297,24 +293,24 @@ void _idle() {
 }
 
 void init_process(const char * _init_path, const char * _idle_path, char * tty) {
-    mprotect_current(init_path, 0x1000, VMM_USER_BIT | VMM_WRITE_BIT);
-    memset(init_path, 0, 0x1000);
-    strcpy(init_path, _init_path);
-    mprotect_current(idle_path, 0x1000, VMM_USER_BIT | VMM_WRITE_BIT);
-    memset(idle_path, 0, 0x1000);
-    strcpy(idle_path, _idle_path);
+    //mprotect_current(init_path, 0x1000, VMM_USER_BIT | VMM_WRITE_BIT);
+    //memset(init_path, 0, 0x1000);
+    //strcpy(init_path, _init_path);
+    //mprotect_current(idle_path, 0x1000, VMM_USER_BIT | VMM_WRITE_BIT);
+    //memset(idle_path, 0, 0x1000);
+    //strcpy(idle_path, _idle_path);
 
     process_t * idle_proc = create_user_process((void*)_idle, tty);
     idle_proc->pid = 0;
     current_process = idle_proc;
     current_process_index = 0;
-    exec(idle_path);
+    exec(_idle_path);
 
     process_t * init_proc = create_user_process((void*)_idle, tty);
     init_proc->pid = 1;
     current_process = init_proc;
     current_process_index = 1;
-    exec(init_path);
+    exec(_init_path);
 
     current_process = &process_list[1];
     current_process_index = 1;

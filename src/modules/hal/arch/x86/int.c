@@ -162,7 +162,7 @@ void init_interrupts() {
 
     struct page_directory* pml4 = get_pml4();
 
-    mprotect(pml4, (void*)idtr.offset, 256 * sizeof(struct idtdescentry), PAGE_USER_BIT | PAGE_WRITE_BIT);
+    mprotect(pml4, (void*)idtr.offset, 256 * sizeof(struct idtdescentry), VMM_USER_BIT | VMM_WRITE_BIT);
 
     for (int i = 0; i < 256; i++) {
         set_idt_gate((uint64_t)interrupt_vector[i], i, IDT_TA_InterruptGate, 1, get_kernel_code_selector());

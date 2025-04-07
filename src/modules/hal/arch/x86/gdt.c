@@ -100,7 +100,7 @@ void create_gdt() {
     }
 
     kprintf("Dumping GDT for CPU 0\n");
-    dump_gdt(&gdt[0]);
+    //dump_gdt(&gdt[0]);
 }
 
 void load_gdt(uint8_t cpu) {

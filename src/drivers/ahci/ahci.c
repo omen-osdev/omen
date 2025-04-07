@@ -3,7 +3,6 @@
 #include <omen/libraries/std/string.h>
 #include <omen/apps/panic/panic.h>
 #include <omen/managers/mem/vmm.h>
-#include <omen/managers/mem/pmm.h>
 #include <omen/libraries/allocators/heap_allocator.h>
 
 struct hba_memory* abar = 0;
@@ -110,7 +109,7 @@ uint8_t read_atapi_port(uint8_t port_no, uint64_t sector, uint32_t sector_count)
         return 0;
     }
 
-    struct hba_command_header* command_header = (struct hba_command_header*)(uint64_t)(port->hba_port->command_list_base | (((uint64_t)port->hba_port->command_list_base_upper) << 32));
+    struct hba_command_header* command_header = (struct hba_command_header*)to_identity_map((uint64_t)(port->hba_port->command_list_base | (((uint64_t)port->hba_port->command_list_base_upper) << 32)));
     command_header += slot;
 
     command_header->command_fis_length = sizeof(struct hba_command_fis) / sizeof(uint32_t);
@@ -118,7 +117,7 @@ uint8_t read_atapi_port(uint8_t port_no, uint64_t sector, uint32_t sector_count)
     command_header->atapi = 1;
     command_header->prdt_length = 1;
     
-    struct hba_command_table* command_table = (struct hba_command_table*)(uint64_t)(command_header->command_table_base_address | ((uint64_t)command_header->command_table_base_address_upper << 32));
+    struct hba_command_table* command_table = (struct hba_command_table*)to_identity_map((uint64_t)(command_header->command_table_base_address | ((uint64_t)command_header->command_table_base_address_upper << 32)));
     memset(command_table, 0, sizeof(struct hba_command_table) + (command_header->prdt_length - 1) * sizeof(struct hba_prdt_entry));
 
     command_table->prdt_entry[0].data_base_address = (uint32_t)(uint64_t)buffer;
@@ -444,14 +443,14 @@ void init_ahci(uint32_t bar5) {
         panic("AHCI already initialized\n");
 
     abar = (struct hba_memory*)(uint64_t)(to_identity_map(bar5));
-    mprotect_current(abar, 4096, PAGE_CACHE_DISABLE_BIT | PAGE_WRITE_BIT | PAGE_NX_BIT);
+    mprotect_current(abar, 4096, VMM_CACHE_DISABLE_BIT | VMM_WRITE_BIT | VMM_NX_BIT);
     probe_ports(abar);
 
     for (int i = 0; i < port_count; i++) {
         struct ahci_port* port = &ahci_ports[i];
         configure_port(port);
-        port->buffer = (uint8_t*)pmm_alloc_page();
-        mprotect_current(to_identity_map(port->buffer), 4096,  PAGE_WRITE_BIT | PAGE_NX_BIT);
+        port->buffer = (uint8_t*)allocate_phys_page();
+        mprotect_current(to_identity_map(port->buffer), 4096,  VMM_WRITE_BIT | VMM_NX_BIT);
         memset(to_identity_map(port->buffer), 0, 4096);
     }
 }

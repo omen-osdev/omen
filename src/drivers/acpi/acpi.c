@@ -1,4 +1,5 @@
 #include <acpi/acpi.h>
+#include <omen/managers/mem/vmm.h>
 #include <omen/managers/boot/bootloaders/bootloader.h>
 #include <omen/libraries/std/string.h>
 #include <omen/apps/debug/debug.h>
@@ -80,7 +81,7 @@ struct acpi_sdt_header* find_rsdt(struct rsdt* rsdt, const char* signature, uint
 
     for (uint32_t i = 0; i < entries; i++) {
         uint32_t pto = rsdt->pointer_other_sdt[i];
-        struct acpi_sdt_header* header = (struct acpi_sdt_header*)(uint64_t)pto; //TODO: delete this inmediately
+        struct acpi_sdt_header* header = to_identity_map((struct acpi_sdt_header*)(uint64_t)pto); //TODO: delete this inmediately
         kprintf("Entry %d => %x HEADER AT: %p SIG: %.4s\n", i, pto, header, header->signature);
 
         if (!memcmp(header->signature, signature, sig_len))
@@ -97,7 +98,7 @@ struct acpi_sdt_header* find_xsdt(struct xsdt* xsdt, const char* signature, uint
 
     for (uint32_t i = 0; i < entries; i++) {
         uint32_t pto = xsdt->pointer_other_sdt[i];
-        struct acpi_sdt_header* header = (struct acpi_sdt_header*)(uint64_t)pto; //TODO: delete this inmediately
+        struct acpi_sdt_header* header =  to_identity_map((struct acpi_sdt_header*)(uint64_t)pto); //TODO: delete this inmediately
         kprintf("Entry %d => %x HEADER AT: %p SIG: %.4s\n", i, pto, header, header->signature);
 
         if (!memcmp(header->signature, signature, sig_len))
@@ -128,7 +129,7 @@ void* init_acpi_vt(void* rsdp_address, const char* target) {
         rsdp->xsdt_address, rsdp->extended_checksum, rsdp->reserved
     );
     */
-    struct xsdt* xsdt = (struct xsdt*)(uint64_t)(rsdp->xsdt_address);
+    struct xsdt* xsdt = to_identity_map((struct xsdt*)(uint64_t)(rsdp->xsdt_address));
     struct acpi_sdt_header* result = find_xsdt(xsdt, target, 4);
     if (result == 0) {
         return 0;
@@ -160,7 +161,7 @@ void* init_acpi_vz(void* rsdp_address, const char * target) {
     );
     */
 
-    struct rsdt* rsdt = (struct rsdt*)(uint64_t)(rsdp->rsdt_address);
+    struct rsdt* rsdt = to_identity_map((struct rsdt*)(uint64_t)(rsdp->rsdt_address));
     struct acpi_sdt_header* result = find_rsdt(rsdt, target, 4);
 
     if (!acpi_sdt_checksum(result))
