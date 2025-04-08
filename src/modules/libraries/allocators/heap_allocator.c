@@ -18,22 +18,31 @@ void * kmalloc_standalone(uint64_t size) {
     return ptr;
 }
 
-void kstackalloc(struct stack * stack, uint64_t length) {
-
+void kstackalloc(struct page_directory* pd, struct stack * stack, uint64_t length) {
     uint64_t pages = length / 0x1000;
+
     if (length % 0x1000) {
         pages++;
     }
 
-    uint64_t stack_base;
-    uint64_t stack_top = vmm_create_kernel_stack(get_pml4(), pages, VMM_WRITE_BIT, &stack_base);
-    memset(stack_base, 0, pages*0x1000);
-    stack->base = (void*)stack_base;
-    stack->top = (void*)stack_top;
+    uint64_t base = allocate_vmm(pd, pages*0x1000, VMM_REGION_K_STACK, VMM_WRITE_BIT | VMM_USER_BIT);
+    if (base == 0) {
+        return NULL;
+    }
+    memset((void*)to_identity_map(VMM_FROM_KERNEL_STACK(base)), 0, pages*0x1000);
+    uint64_t top = (uint64_t)(base+pages*0x1000)-0x10;
+    //if unaligned_alloc is not 16-byte aligned, align it by subtracting the difference
+    if (top % 0x10) {
+        top -= top % 0x10;
+    }
+    top -= 0x8;
+    
+    stack->base = (void*)(base);
+    stack->top = (void*)(top);
 }
 
-void kstackfree(struct stack * stack) {
-    free_vmm(get_pml4(), stack->base);
+void kstackfree(struct page_directory* pd, struct stack * stack) {
+    free_vmm(pd, stack->base);
 }
 
 void kfree(void* address) {
@@ -60,6 +69,7 @@ void * stackalloc(struct page_directory* root, struct stack * stack, uint64_t le
     if (base == 0) {
         return NULL;
     }
+    
     memset((void*)to_identity_map(VMM_FROM_USER_STACK(base)), 0, pages*0x1000);
     uint64_t top = (uint64_t)(base+pages*0x1000)-0x10;
     //if unaligned_alloc is not 16-byte aligned, align it by subtracting the difference

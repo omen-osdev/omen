@@ -17,7 +17,7 @@
 #include <vfs/vfs_interface.h>
 
 //Always inlined
-extern void newuctxcreat(uint64_t rsp, uint64_t intro, uint64_t cr3);
+extern void newuctxcreat(uint64_t rsp, uint64_t intro);
 extern void newctxcreat(uint64_t rsp, uint64_t intro);
 
 extern void reloadGsFs();
@@ -109,7 +109,7 @@ void init_stack(struct page_directory* pd, process_t * task, uint64_t size, uint
         if (size > PROCESS_STACK_SIZE) {
             size = PROCESS_STACK_SIZE & ~0xfff;
         }
-        kstackalloc(&stack, size);
+        kstackalloc(pd, &stack, size);
         task->kstack_base = stack.base;
         task->kstack = stack.top;
         create_vmarea(task, task->kstack_base, task->kstack, VMM_WRITE_BIT);
@@ -156,11 +156,13 @@ void init_user_context(struct page_directory* pd, process_t * task, void * init,
     init_stack(pd, task, PROCESS_STACK_SIZE, 0);
 
     //TODO: Initialize the stack
+    void * ustack_ident = to_identity_map(VMM_FROM_USER_STACK(task->ustack));
     if (trampoline)
-        newuctxcreat((uint64_t)&(task->ustack), (uint64_t)init, (uint64_t)get_physical_address(pd, pd));
+        newuctxcreat((uint64_t)&(ustack_ident), (uint64_t)init);
     else
-        newctxcreat((uint64_t)&(task->ustack), (uint64_t)init);
+        newctxcreat((uint64_t)&(ustack_ident), (uint64_t)init);
 
+    task->ustack = (void*)VMM_TO_USER_STACK(from_identity_map((uint64_t)ustack_ident));
     create_context(task, pd, task->ustack, task->kstack, init);
     
     __asm__ volatile("fxsave %0" : "=m" (task->fxsave_region));

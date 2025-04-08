@@ -38,9 +38,10 @@ void callback(boot_smp_info_t *lcpu) {
 
 void startup_tss(struct tss ** tss, uint8_t cpuid, void * kstack) {
     *tss = get_tss(cpuid);
+    struct page_directory * pml4 = get_pml4();
     struct stack ist0_stack, ist1_stack;
-    kstackalloc(&ist0_stack, KERNEL_STACK_SIZE);
-    kstackalloc(&ist1_stack, KERNEL_STACK_SIZE);
+    kstackalloc(pml4, &ist0_stack, KERNEL_STACK_SIZE);
+    kstackalloc(pml4, &ist1_stack, KERNEL_STACK_SIZE);
 
     memset(ist0_stack.base, 0, KERNEL_STACK_SIZE);
     memset(ist1_stack.base, 0, KERNEL_STACK_SIZE);
@@ -53,7 +54,8 @@ void startup_tss(struct tss ** tss, uint8_t cpuid, void * kstack) {
 void startup_cpu(uint8_t cpuid) {
     core_context_t * ctx = &cpu[cpuid];
     struct stack kernel_stack;
-    kstackalloc(&kernel_stack, KERNEL_STACK_SIZE);
+    struct page_directory * pml4 = get_pml4();
+    kstackalloc(pml4, &kernel_stack, KERNEL_STACK_SIZE);
 
     kprintf("Starting CPU %d\n", ctx->core_id);
     ctx->ustack = 0;
