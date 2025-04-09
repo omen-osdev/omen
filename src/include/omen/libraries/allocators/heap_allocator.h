@@ -16,8 +16,6 @@ void kfree(void* address);
 
 void kstackalloc(struct page_directory* pd, struct stack * stack, uint64_t length);
 void kstackfree(struct page_directory* pd, struct stack * stack);
-void * malloc(struct page_directory* root, uint64_t size);
-void free(struct page_directory* root, void * address);
 void * stackalloc(struct page_directory* root, struct stack * stack, uint64_t length);
 void stackfree(struct page_directory* root, struct stack * stack);
 #endif

@@ -14,7 +14,6 @@ typedef struct page_permissions {
     uint8_t cache_disable : 1;
     uint8_t global : 1;
     uint8_t no_execute : 1;
-    uint8_t cow : 1;
 } vmm_perms;
 
 struct directory_entry {

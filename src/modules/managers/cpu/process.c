@@ -33,22 +33,24 @@ uint32_t process_count = 0;
 //char init_path[0x1000] __attribute__((aligned(0x1000)));
 //char idle_path[0x1000] __attribute__((aligned(0x1000)));
 
-uint8_t is_in_vmarea(process_t* process, void * address) {
+struct vm_area* is_in_vmarea(process_t* process, void * address) {
     struct vm_area * current = process->vm_areas;
     while (current) {
         if (address >= current->start && address < current->end) {
-            return 1;
+            return current;
         }
         current = current->next;
     }
     return 0;
 }
 
-void create_vmarea(process_t* process, void * start, void * end, uint8_t flags) {
+void create_vmarea(process_t* process, void * start, void * end, uint8_t flags, uint8_t extended_flags, uint64_t page_size) {
     struct vm_area * new_area = kmalloc(sizeof(struct vm_area));
     new_area->start = start;
     new_area->end = end;
     new_area->flags = flags;
+    new_area->extended_flags = extended_flags;
+    new_area->page_size = page_size;
     new_area->next = process->vm_areas;
     process->vm_areas = new_area;
 }
@@ -64,7 +66,7 @@ void remove_vmarea(process_t* process, void * start) {
             } else {
                 process->vm_areas = current->next;
             }
-            free(process->context->cr3, current);
+            kfree(current);
             return;
         }
         previous = current;
@@ -75,9 +77,37 @@ void remove_vmarea(process_t* process, void * start) {
 void duplicate_vmareas(process_t * old, process_t * new) {
     struct vm_area * current = old->vm_areas;
     while (current) {
-        create_vmarea(new, current->start, current->end, current->flags);
+        create_vmarea(new, current->start, current->end, current->flags, current->extended_flags, current->page_size);
         current = current->next;
     }
+}
+
+void engrave_vmareas(process_t * child, process_t * parent) {
+    struct vm_area * current = child->vm_areas;
+    while (current) {
+        if (current->extended_flags & VMAREA_EXT_SHARED) {
+            //Map the area in the child process to the same address as the parent
+            void * parent_physical = get_physical_address(parent->context->cr3, current->start);
+            map_range(child->context->cr3, current->start, parent_physical, current->page_size, current->end - current->start, current->flags);
+        }
+        if (current->extended_flags & VMAREA_EXT_COW) {
+            uint8_t flags = current->flags;
+            if (flags & VMM_WRITE_BIT) {
+                flags &= ~VMM_WRITE_BIT;
+            }
+            mprotect(child->context->cr3, current->start, current->end - current->start, flags);
+        }
+        current = current->next;
+    }
+}
+
+void duplicate_vmarea_cow(process_t * task, struct vm_area* vma) {
+    kprintf("Duplicating page in COW area\n");
+    kprintf("VMA Start: %llx, VMA End: %llx\n", vma->start, vma->end);
+    kprintf("VMA Flags: %d, VMA Extended Flags: %d\n", vma->flags, vma->extended_flags);
+    kprintf("VMA Page Size: %d\n", vma->page_size);
+
+    panic("Not implemented\n");
 }
 
 void set_tty(process_t * task, char* tty) {
@@ -104,7 +134,7 @@ void init_stack(struct page_directory* pd, process_t * task, uint64_t size, uint
         stackalloc(pd, &stack, size);
         task->ustack = stack.top;
         task->ustack_base = stack.base;
-        create_vmarea(task, task->ustack_base, task->ustack, VMM_USER_BIT | VMM_WRITE_BIT);
+        create_vmarea(task, task->ustack_base, task->ustack, VMM_USER_BIT | VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB);
     } else {
         if (size > PROCESS_STACK_SIZE) {
             size = PROCESS_STACK_SIZE & ~0xfff;
@@ -112,7 +142,7 @@ void init_stack(struct page_directory* pd, process_t * task, uint64_t size, uint
         kstackalloc(pd, &stack, size);
         task->kstack_base = stack.base;
         task->kstack = stack.top;
-        create_vmarea(task, task->kstack_base, task->kstack, VMM_WRITE_BIT);
+        create_vmarea(task, task->kstack_base, task->kstack, VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB);
     }
 }
 
@@ -274,6 +304,7 @@ process_t * duplicate_process(process_t * parent) {
     task->context->cr3 = vmm_copy(parent->context->cr3);
     vmm_copy_stack(task->context->cr3, parent->ustack_base, PROCESS_STACK_SIZE, VMM_USER_BIT | VMM_WRITE_BIT);
     vmm_copy_stack(task->context->cr3, parent->kstack_base, PROCESS_STACK_SIZE, VMM_WRITE_BIT);
+    engrave_vmareas(task, parent);
     kprintf("Process %d duplicated\n", task->pid);
     return task;
 }

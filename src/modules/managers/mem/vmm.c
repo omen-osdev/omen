@@ -7,11 +7,6 @@
 #include <omen/libraries/std/string.h>
 #include <generic/config.h>
 
-#define PAGE_SIZE_1GIB      0x40000000
-#define PAGE_SIZE_2MIB      0x200000
-#define PAGE_SIZE_4KIB      0x1000
-#define PAGE_SIZE_DIR       0x1
-
 //Memory layout
 //0xFFFFA00000000000 - 0xFFFFA0EFFFFFFFFF Identity map for kernel use
 //0xFFFFB00000000000 - 0xFFFFB0EFFFFFFFFF Kernel stack
@@ -58,7 +53,6 @@ void flags_to_perms(uint8_t flags, vmm_perms * perms) {
     perms->cache_disable = (VMM_CACHE_DISABLE_BIT_SET(flags)) ? 1 : 0;
     perms->global = (VMM_GLOBAL_BIT_SET(flags)) ? 1 : 0;
     perms->no_execute = (VMM_NX_BIT_SET(flags)) ? 1 : 0;
-    perms->cow = 0;
 }
 
 void address_to_map(uint64_t address, struct page_map_index* map) {
@@ -1027,6 +1021,55 @@ void * allocate_phys_page() {
     }
     memset(TO_IDENTITY_MAP(buffer), 0, PAGE_SIZE_4KIB);
     return buffer;
+}
+
+void * allocate_at_vaddr(struct page_directory * root, void * virtual_address, uint64_t pages, uint8_t flags)
+{
+    void * buffer = pmm_alloc(pages * PAGE_SIZE_4KIB);
+    if (buffer == NULL)
+    {
+        return NULL;
+    }
+    memset(TO_IDENTITY_MAP(buffer), 0, pages * PAGE_SIZE_4KIB);
+    map_memory(root, virtual_address, buffer, PAGE_SIZE_4KIB, flags);
+    return buffer;
+}
+
+void * get_contiguous_free_range(struct page_directory * root, void * start_addres, uint64_t pages) {
+    uint64_t start = (uint64_t)start_addres;
+    uint64_t end = start + pages * PAGE_SIZE_4KIB;
+
+    for (uint64_t i = start; i < end; i += PAGE_SIZE_4KIB)
+    {
+        if (get_physical_address(root, (void*)i) != NULL)
+        {
+            return NULL;
+        }
+    }
+
+    return (void*)start;
+}
+
+void * get_shm_vmaddress(struct page_directory * root, void * hint, uint64_t size) {
+    if (hint == 0) hint = VMM_REGION_U_SHM_MMAP;
+    
+    uint64_t shm_address = hint;
+    uint64_t pages = size / PAGE_SIZE_4KIB;
+    if (size % PAGE_SIZE_4KIB)
+    {
+        pages++;
+    }
+
+    while (shm_address < (uint64_t)hint + VMM_REGION_SIZE)
+    {
+        void * address = get_contiguous_free_range(root, (void*)shm_address, pages);
+        if (address != NULL)
+        {
+            return address;
+        }
+        shm_address += PAGE_SIZE_4KIB;
+    }
+    panic("No free memory for shared memory\n");
 }
 
 void free_phys_page(void * address) {

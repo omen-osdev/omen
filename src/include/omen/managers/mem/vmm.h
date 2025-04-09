@@ -4,6 +4,11 @@
 #include <omen/managers/mem/pmm.h>
 #include <omen/hal/arch/x86/vm.h>
 
+#define PAGE_SIZE_1GIB      0x40000000
+#define PAGE_SIZE_2MIB      0x200000
+#define PAGE_SIZE_4KIB      0x1000
+#define PAGE_SIZE_DIR       0x1
+
 #define VMM_WRITE_BIT          0x1
 #define VMM_USER_BIT           0x2
 #define VMM_WRITE_THROUGH_BIT  0x4 
@@ -56,11 +61,12 @@ uint8_t remap_allocate_cow(struct page_directory * pml4, void * address_raw);
 void * vmm_create_kernel_stack(struct page_directory* stack_root, uint64_t stack_pages, uint8_t flags, uint64_t * stack_base);
 void * vmm_copy_stack(struct page_directory* stack_root, void * stack_base, uint64_t stack_size, uint8_t flags);
 struct page_directory * vmm_copy_kernel(struct page_directory* root);
+void * get_shm_vmaddress(struct page_directory * root, void * hint, uint64_t size);
 void vmm_unmap_userspace(struct page_directory* root);
 void * get_current_physical_address(void * address);
 void * to_identity_map(void * address);
 void * from_identity_map(void * address);
-
+void * allocate_at_vaddr(struct page_directory * root, void * virtual_address, uint64_t pages, uint8_t flags);
 struct page_directory * vmm_copy(struct page_directory* root);
 
 void map_memory(struct page_directory * pml4, void * address, void * physical, uint64_t page_size, uint8_t flags);

@@ -50,14 +50,16 @@ void PageFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {
     kprintf("Error code: %lx\n", ctx->error_code);
     process_t * task = get_current_process();
     
-    if (task && is_in_vmarea(task, (void*)faulting_address)) {
-        if (remap_allocate_cow(task->context->cr3, (void*)faulting_address)) {
-            kprintf("COW'ed the shit out of %lx\n", (uint64_t)faulting_address);
-            return;
-        }
+    if (!task) panic("Page fault in kernel mode, no task detected!\n");
+
+    struct vm_area* vma = is_in_vmarea(task, (void*)faulting_address);
+    if (task && vma && (vma->flags & VMM_WRITE_BIT) && (vma->extended_flags & VMAREA_EXT_COW)) {
+        kprintf("Page fault in COW area, duplicating page\n");
+        duplicate_vmarea_cow(task, vma);
+        return;
     }
 
-    panic("Page fault\n");
+    panic("Page fault in kernel mode\n");
 }
 
 void DoubleFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {

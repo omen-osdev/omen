@@ -9,14 +9,19 @@ void print_file() {
         return;
     }
     struct stat file_stat;
-    char file_buffer[0x40];
-    memset(file_buffer, 0, sizeof(file_buffer));
     memset(&file_stat, 0, sizeof(struct stat));
     sys_fstat(fd, &file_stat);
     printf("File size: %d\n", file_stat.st_size);
     printf("File mode: %d\n", file_stat.st_mode);
 
-    sys_read(fd, file_buffer, 0x40);
+    char * file_buffer = sys_mmap(NULL, file_stat.st_size, PROT_READ, MAP_SHARED, fd, 0);
+    if (file_buffer == NULL) {
+        printf("Failed to map file\n");
+        sys_close(fd);
+        return;
+    }
+    printf("File mapped at: %p\n", file_buffer);
+
     printf("File content:\n");
     for (int i = 0; i < 0x40; i++) {
         if (file_buffer[i] == '\n') {

@@ -87,7 +87,7 @@ int vfs_file_close(int fd) {
     return res;
 }
 
-uint64_t vfs_file_read(int fd, void* buffer, uint64_t size) {
+int64_t vfs_file_read(int fd, void* buffer, uint64_t size) {
     vfs_print("vfs_file_read(%d, %p, %ld)\n", fd, buffer, size);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
@@ -105,7 +105,7 @@ uint64_t vfs_file_read(int fd, void* buffer, uint64_t size) {
     return res;
 }
 
-uint64_t vfs_file_write(int fd, void* buffer, uint64_t size) {
+int64_t vfs_file_write(int fd, void* buffer, uint64_t size) {
     vfs_print("vfs_file_write(%d, %p, %ld)\n", fd, buffer, size);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
@@ -124,7 +124,7 @@ uint64_t vfs_file_write(int fd, void* buffer, uint64_t size) {
     return res;
 }
 
-uint64_t vfs_file_ioctl(int fd, int request, void* arg) {
+int64_t vfs_file_ioctl(int fd, int request, void* arg) {
     vfs_print("vfs_file_ioctl(%d, %d, %p)\n", fd, request, arg);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
@@ -176,7 +176,7 @@ int vfs_file_stat(int fd, stat_t* st) {
     return res;
 }
 
-uint64_t vfs_file_seek(int fd, uint64_t offset, int whence) {
+int64_t vfs_file_seek(int fd, uint64_t offset, int whence) {
     vfs_print("vfs_file_seek(%d, %ld, %d)\n", fd, offset, whence);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
@@ -194,7 +194,7 @@ uint64_t vfs_file_seek(int fd, uint64_t offset, int whence) {
     return res;
 }
 
-uint64_t vfs_file_tell(int fd) {
+int64_t vfs_file_tell(int fd) {
     vfs_print("vfs_file_tell(%d)\n", fd);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {

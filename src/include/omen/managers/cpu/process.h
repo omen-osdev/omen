@@ -18,12 +18,18 @@
 
 #define MAX_OPEN_FILES 32
 
+#define VMAREA_EXT_COW      0x1
+#define VMAREA_EXT_SHARED   0x2
+#define VMAREA_EXT_GUARD    0x4
+
 typedef int process_status_t;
 
 struct vm_area {
     void * start;
     void * end;
     uint8_t flags;
+    uint8_t extended_flags;
+    uint64_t page_size;
     struct vm_area * next;
 };
 
@@ -81,8 +87,11 @@ typedef struct process {
 
 } process_t;
 
+
 void init_process(const char * init_path, const char * idle_path, char * tty);
-uint8_t is_in_vmarea(process_t* process, void * address);
+void create_vmarea(process_t* process, void * start, void * end, uint8_t flags, uint8_t extended_flags, uint64_t page_size);
+struct vm_area* is_in_vmarea(process_t* process, void * address);
+void duplicate_vmarea_cow(process_t * task, struct vm_area* vma);
 void returnoexit();
 int16_t fork();
 process_t * sched();

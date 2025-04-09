@@ -4,7 +4,24 @@
 
 uint64_t syscall(uint64_t syscall_number, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6) {
     unsigned long long ret;
-    __asm__ volatile ("syscall" : "=a" (ret) : "a" (syscall_number), "D" (arg1), "S" (arg2), "d" (arg3), "r" (arg4), "r" (arg5), "r" (arg6) : "memory");
+    // The syscall number is passed in rax
+    //arg0 is rdi
+    //arg1 is rsi
+    //arg2 is rdx
+    //arg3 is rcx
+    //arg4 is r8
+    //arg5 is r9
+    //return value is in rax
+
+    __asm__ volatile ("mov %0, %%rax\n"
+        "mov %1, %%rdi\n"
+        "mov %2, %%rsi\n"
+        "mov %3, %%rdx\n"
+        "mov %4, %%rcx\n"
+        "mov %5, %%r8\n"
+        "mov %6, %%r9\n"
+        "syscall\n" : "=a" (ret) : "r" (syscall_number), "r" (arg1), "r" (arg2), "r" (arg3), "r" (arg4), "r" (arg5), "r" (arg6) : "rcx", "r11", "memory");
+
     return ret;
 }
 
@@ -41,4 +58,13 @@ void sys_exit(int error_code) {
 }
 void sys_execve(const char * path, const char * argv, const char * envp) {
     syscall(59, (uint64_t)path, (uint64_t)argv, (uint64_t)envp, 0, 0, 0);
+}
+void * sys_mmap(void * addr, size_t length, int prot, int flags, int fd, off_t offset) {
+    return (void *)syscall(9, (uint64_t)addr, (uint64_t)length, (uint64_t)prot, (uint64_t)flags, (uint64_t)fd, (uint64_t)offset);
+}
+void sys_mprotect(void * addr, size_t length, int prot) {
+    syscall(10, (uint64_t)addr, (uint64_t)length, (uint64_t)prot, 0, 0, 0);
+}
+void sys_munmap(void * addr, size_t length) {
+    syscall(11, (uint64_t)addr, (uint64_t)length, 0, 0, 0, 0);
 }

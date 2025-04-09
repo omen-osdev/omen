@@ -86,7 +86,8 @@ kot's
 #define SYSCALL_ARG1(ctx) ctx->rsi
 #define SYSCALL_ARG2(ctx) ctx->rdx
 #define SYSCALL_ARG3(ctx) ctx->rcx
-
+#define SYSCALL_ARG4(ctx) ctx->r8
+#define SYSCALL_ARG5(ctx) ctx->r9
 extern void syscall_entry();
 
 uint64_t dummy_syscall_handler(process_t*task, cpu_context_t* ctx) {
@@ -240,6 +241,153 @@ uint64_t exit_syscall_handler(process_t*task, cpu_context_t* ctx) {
     return SYSCALL_SUCCESS;
 }
 
+//void * mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+//Prots: 0x1 = PROT_READ, 0x2 = PROT_WRITE, 0x4 = PROT_EXEC
+//Flags: 0x1 = MAP_SHARED, 0x2 = MAP_PRIVATE, 0x4 = MAP_ANONYMOUS
+#define MAP_SHARED 0x1
+#define MAP_PRIVATE 0x2
+#define MAP_ANONYMOUS 0x4
+#define PROT_READ 0x1
+#define PROT_WRITE 0x2
+#define PROT_EXEC 0x4
+#define PROT_NONE 0x8
+uint64_t mmap_syscall_handler(process_t*task, cpu_context_t*ctx) {
+    void * addr = (void *)SYSCALL_ARG0(ctx);
+    size_t length = SYSCALL_ARG1(ctx);
+    int prot = SYSCALL_ARG2(ctx);
+    int flags = SYSCALL_ARG3(ctx);
+    int fd = SYSCALL_ARG4(ctx);
+    off_t offset = SYSCALL_ARG5(ctx);
+    kprintf("[PID: %d] MMAP_SYSCALL(%p,%d,%d,%d,%d,%d)\n", task->pid, addr, length, prot, flags, fd, offset);
+    
+    //Validate the arguments
+    if (length == 0) {
+        panic("Length is 0\n");
+        return SYSCALL_ERROR;
+    }
+    //Make sure MAP_SHARED, MAP_PRIVATE
+    if ((flags & MAP_SHARED) && (flags & MAP_PRIVATE)) {
+        panic("MAP_SHARED and MAP_PRIVATE are used together\n");
+        return SYSCALL_ERROR;
+    }
+    
+    //Check that protections are valid
+    uint8_t vmm_flags = 0;
+    if (!(prot & PROT_READ) || prot & PROT_NONE) {
+        panic("Not implemented!");
+    }
+    if (prot & PROT_WRITE) {
+        vmm_flags |= VMM_WRITE_BIT;
+    }
+    if (!(prot & PROT_EXEC)) {
+        vmm_flags |= VMM_NX_BIT;
+    }
+    vmm_flags |= VMM_USER_BIT;
+
+    uint8_t vma_flags = 0;
+    if (flags & MAP_SHARED) {
+        vma_flags |= VMAREA_EXT_SHARED;
+    }
+    if (flags & MAP_PRIVATE) {
+        vma_flags |= VMAREA_EXT_COW;
+    }
+    if (flags & PROT_NONE || (!(flags & PROT_READ) && !(flags & PROT_WRITE))) {
+        vma_flags |= VMAREA_EXT_GUARD;
+    }
+
+    if (fd < 0) {
+        panic("Invalid fd\n");
+        return SYSCALL_ERROR;
+    }
+    if (offset % PAGE_SIZE != 0) {
+        panic("Offset is not page aligned\n");
+        return SYSCALL_ERROR;
+    }
+    if (offset > 0 && fd == 0) {
+        panic("Invalid fd\n");
+        return SYSCALL_ERROR;
+    }
+
+    if (addr != NULL && ((uint64_t)addr % PAGE_SIZE != 0))
+        addr = (void *)((uint64_t)addr & ~(PAGE_SIZE - 1));
+    addr = get_shm_vmaddress(task->context->cr3, addr, length);
+
+    //Logic for MAP_PRIVATE
+    if (flags & MAP_PRIVATE) {
+        allocate_at_vaddr(task->context->cr3, addr, length, vmm_flags);
+        create_vmarea(task, addr, (addr + length), vmm_flags, vma_flags, PAGE_SIZE_4KIB);
+
+        if (flags & MAP_ANONYMOUS) {
+            return addr;
+        }
+        
+        //Read the file into the memory
+        if (vfs_file_seek(fd, offset, SEEK_SET) < 0) {
+            panic("Failed to seek file\n");
+            return SYSCALL_ERROR;
+        }
+
+        int64_t bytes_read = vfs_file_read(fd, addr, length);
+        if (bytes_read < 0) {
+            panic("Failed to read file\n");
+            return SYSCALL_ERROR;
+        } 
+
+        return addr;
+    }
+
+    //Logic for MAP_SHARED
+    if (flags & MAP_SHARED) {
+        allocate_at_vaddr(task->context->cr3, addr, length, vmm_flags);
+        create_vmarea(task, addr, (addr + length), vmm_flags, vma_flags, PAGE_SIZE_4KIB);
+
+        if (flags & MAP_ANONYMOUS) {
+            return addr;
+        }
+
+        //Read the file into the memory
+        if (vfs_file_seek(fd, offset, SEEK_SET) < 0) {
+            panic("Failed to seek file\n");
+            return SYSCALL_ERROR;
+        }
+        int64_t bytes_read = vfs_file_read(fd, addr, length);
+        if (bytes_read < 0) {
+            panic("Failed to read file\n");
+            return SYSCALL_ERROR;
+        }
+
+        return addr;
+    }
+}
+
+//mprotect
+uint64_t mprotect_syscall_handler(process_t*task, cpu_context_t* ctx) {
+    (void)task;
+    void * addr = (void *)SYSCALL_ARG0(ctx);
+    size_t length = SYSCALL_ARG1(ctx);
+    int prot = SYSCALL_ARG2(ctx);
+
+    kprintf("mprotect(%p,%d,%d)\n", addr, length, prot);
+    panic("Not implemented\n");
+    return NULL;
+}
+
+uint64_t munmap_syscall_handler(process_t*task, cpu_context_t* ctx) {
+    (void)task;
+    void * addr = (void *)SYSCALL_ARG0(ctx);
+    size_t length = SYSCALL_ARG1(ctx);
+    kprintf("[PID: %d] MUNMAP_SYSCALL(%p,%d)\n", task->pid, addr, length);
+    
+    if (addr == NULL || length == 0) {
+        return SYSCALL_ERROR;
+    }
+    
+    //Unmap the memory
+    panic("Not implemented\n");
+    //unmap_memory(task->context->cr3, addr);
+    return SYSCALL_SUCCESS;
+}
+
 uint64_t undefined_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)task;
     kprintf("[PID: %d] UNDEFINED_SYSCALL(%d)\n", task->pid, ctx->rax);
@@ -253,7 +401,11 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [3] = close_syscall_handler,
     [4] = stat_syscall_handler,
     [5] = fstat_syscall_handler,
-    [6 ... 15] = undefined_syscall_handler,
+    [6 ... 8] = undefined_syscall_handler,
+    [9] = mmap_syscall_handler,
+    [10] = mprotect_syscall_handler,
+    [11] = munmap_syscall_handler,
+    [12 ... 15] = undefined_syscall_handler,
     [16] = ioctl_syscall_handler,
     [17 ... 23] = undefined_syscall_handler,
     [24] = sched_yield_syscall_handler,
