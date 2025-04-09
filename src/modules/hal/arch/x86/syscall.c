@@ -85,7 +85,7 @@ kot's
 #define SYSCALL_ARG0(ctx) ctx->rdi
 #define SYSCALL_ARG1(ctx) ctx->rsi
 #define SYSCALL_ARG2(ctx) ctx->rdx
-#define SYSCALL_ARG3(ctx) ctx->rcx
+#define SYSCALL_ARG3(ctx) ctx->r10
 #define SYSCALL_ARG4(ctx) ctx->r8
 #define SYSCALL_ARG5(ctx) ctx->r9
 extern void syscall_entry();
@@ -295,7 +295,7 @@ uint64_t mmap_syscall_handler(process_t*task, cpu_context_t*ctx) {
         vma_flags |= VMAREA_EXT_GUARD;
     }
 
-    if (fd < 0) {
+    if (fd < 0 && fd != -1) {
         panic("Invalid fd\n");
         return SYSCALL_ERROR;
     }
@@ -310,10 +310,14 @@ uint64_t mmap_syscall_handler(process_t*task, cpu_context_t*ctx) {
 
     if (addr != NULL && ((uint64_t)addr % PAGE_SIZE != 0))
         addr = (void *)((uint64_t)addr & ~(PAGE_SIZE - 1));
-    addr = get_shm_vmaddress(task->context->cr3, addr, length);
+    addr = find_shm_vmarea(task, addr, length);
+    if (addr == NULL) {
+        panic("Failed to find a free area\n");
+        return SYSCALL_ERROR;
+    }
+    kprintf("Found free area: %p\n", addr);
 
-    //Logic for MAP_PRIVATE
-    if (flags & MAP_PRIVATE) {
+    if (flags & MAP_PRIVATE || flags & MAP_SHARED) {
         allocate_at_vaddr(task->context->cr3, addr, length, vmm_flags);
         create_vmarea(task, addr, (addr + length), vmm_flags, vma_flags, PAGE_SIZE_4KIB);
 
@@ -321,43 +325,30 @@ uint64_t mmap_syscall_handler(process_t*task, cpu_context_t*ctx) {
             return addr;
         }
         
+        //add write privilege to the buffer
+        mprotect(task->context->cr3, addr, length, PROT_READ | PROT_WRITE);
+
         //Read the file into the memory
         if (vfs_file_seek(fd, offset, SEEK_SET) < 0) {
-            panic("Failed to seek file\n");
-            return SYSCALL_ERROR;
+            kprintf("Failed to seek file\n");
+            goto cleanup_on_error;
         }
 
         int64_t bytes_read = vfs_file_read(fd, addr, length);
         if (bytes_read < 0) {
-            panic("Failed to read file\n");
-            return SYSCALL_ERROR;
+            kprintf("Failed to read file\n");
+            goto cleanup_on_error;
         } 
 
+        //Reset permissions
+        mprotect(task->context->cr3, addr, length, vmm_flags);
         return addr;
     }
 
-    //Logic for MAP_SHARED
-    if (flags & MAP_SHARED) {
-        allocate_at_vaddr(task->context->cr3, addr, length, vmm_flags);
-        create_vmarea(task, addr, (addr + length), vmm_flags, vma_flags, PAGE_SIZE_4KIB);
-
-        if (flags & MAP_ANONYMOUS) {
-            return addr;
-        }
-
-        //Read the file into the memory
-        if (vfs_file_seek(fd, offset, SEEK_SET) < 0) {
-            panic("Failed to seek file\n");
-            return SYSCALL_ERROR;
-        }
-        int64_t bytes_read = vfs_file_read(fd, addr, length);
-        if (bytes_read < 0) {
-            panic("Failed to read file\n");
-            return SYSCALL_ERROR;
-        }
-
-        return addr;
-    }
+cleanup_on_error:
+    panic("Failed to map memory\n");
+    unmap_memory(task->context->cr3, addr);
+    return SYSCALL_ERROR;
 }
 
 //mprotect

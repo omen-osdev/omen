@@ -91,6 +91,7 @@ typedef struct process {
 void init_process(const char * init_path, const char * idle_path, char * tty);
 void create_vmarea(process_t* process, void * start, void * end, uint8_t flags, uint8_t extended_flags, uint64_t page_size);
 struct vm_area* is_in_vmarea(process_t* process, void * address);
+void * find_shm_vmarea(process_t * task, void * hint, uint64_t size);
 void duplicate_vmarea_cow(process_t * task, struct vm_area* vma);
 void returnoexit();
 int16_t fork();

@@ -34,8 +34,7 @@ void print_file() {
     sys_close(fd);  
 }
 
-int main(int argc, char* argv[]) {
-    printf("Hello from init!\n");
+void test_fork() {
     volatile short pid = sys_fork();
     if (pid == 0) {
         printf("I am the child\n");
@@ -43,6 +42,34 @@ int main(int argc, char* argv[]) {
         printf("I am the parent\n");
         sys_exit(0);
     }
-    print_file();
+}
+
+void test_cow() {
+    char * buffer = sys_mmap(NULL, 0x1000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (buffer == NULL) {
+        printf("Failed to map memory\n");
+        return;
+    }
+
+    volatile short pid = sys_fork();
+    if (pid == 0) {
+        printf("I am the child\n");
+        printf("Child buffer before: %s\n", buffer);
+        buffer[0] = 'C';
+        printf("Child buffer after: %s\n", buffer);
+    } else {
+        printf("I am the parent\n");
+        printf("Parent buffer before: %s\n", buffer);
+        buffer[0] = 'P';
+        printf("Parent buffer: %s\n", buffer);
+        sys_exit(0);
+    }
+}
+
+int main(int argc, char* argv[]) {
+    printf("Hello from init!\n");
+    test_fork();
+    //print_file();
+    //test_cow();
     while(1);
 }

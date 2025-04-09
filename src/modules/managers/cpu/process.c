@@ -110,6 +110,55 @@ void duplicate_vmarea_cow(process_t * task, struct vm_area* vma) {
     panic("Not implemented\n");
 }
 
+//Check if vma collides with any other vma in the process
+struct vm_area* vmarea_collides(process_t * task, struct vm_area * vma) {
+    struct vm_area * current = task->vm_areas;
+    while (current) {
+        if (current->start < vma->end && vma->start < current->end) {
+            return current;
+        }
+        current = current->next;
+    }
+    return 0;
+}
+
+
+void * find_shm_vmarea(process_t * task, void * hint, uint64_t size) {
+    if (hint == 0) hint = VMM_REGION_U_SHM_MMAP;
+    
+    struct vm_area desired_vma = {
+        .start = hint,
+        .end = hint + size,
+        .flags = VMM_USER_BIT,
+        .extended_flags = VMAREA_EXT_SHARED,
+        .page_size = PAGE_SIZE_4KIB
+    };
+
+    struct vm_area * collision = vmarea_collides(task, &desired_vma);
+    uint8_t wrapped = 0;
+    uint64_t collision_end_aligned;
+    while(collision) {
+        //Align collision end to next page
+        collision_end_aligned = (uint64_t)collision->end;
+        collision_end_aligned = (collision_end_aligned + PAGE_SIZE_4KIB - 1) & ~(PAGE_SIZE_4KIB - 1);
+
+        desired_vma.start = collision_end_aligned;
+        desired_vma.end = collision_end_aligned + size;
+        if ((uint64_t)(desired_vma.start) > VMM_REGION_U_SHM_MMAP + VMM_REGION_SIZE) {
+            if (wrapped) {
+                return NULL;
+            }
+            desired_vma.start = VMM_REGION_U_SHM_MMAP;
+            desired_vma.end = VMM_REGION_U_SHM_MMAP + size;
+            wrapped = 1;
+        }
+        collision = vmarea_collides(task, &desired_vma);
+    }
+
+    return desired_vma.start;
+}
+
+
 void set_tty(process_t * task, char* tty) {
     memset(task->regular_tty, 0, 32);
     if (strlen(tty) > 32) {
@@ -304,7 +353,7 @@ process_t * duplicate_process(process_t * parent) {
     task->context->cr3 = vmm_copy(parent->context->cr3);
     vmm_copy_stack(task->context->cr3, parent->ustack_base, PROCESS_STACK_SIZE, VMM_USER_BIT | VMM_WRITE_BIT);
     vmm_copy_stack(task->context->cr3, parent->kstack_base, PROCESS_STACK_SIZE, VMM_WRITE_BIT);
-    engrave_vmareas(task, parent);
+    //engrave_vmareas(task, parent);
     kprintf("Process %d duplicated\n", task->pid);
     return task;
 }

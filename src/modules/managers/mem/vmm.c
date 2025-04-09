@@ -576,6 +576,49 @@ void init_vmm()
     kprintf("Page table switched\n");
 }
 
+uint64_t vmm_is_present(struct page_directory* root, void * vmm_address) {
+    struct page_map_index map;
+    address_to_map((uint64_t)vmm_address, &map);
+
+    vm_entry *pml4entry = GET_ENTRY(root, map.PML4_index);
+    if (!IS_PRESENT(pml4entry))
+    {
+        return 0;
+    }
+
+    struct page_directory* pdptable = (struct page_directory*)get_pdpp(pml4entry, PAGE_SIZE_DIR);
+    vm_entry *pdptentry = GET_ENTRY(pdptable, map.PDP_index);
+
+    if (!IS_PRESENT(pdptentry))
+    {
+        return 0;
+    } else if (pdptentry->huge.PS)
+    {
+        return PAGE_SIZE_1GIB;
+    }
+
+    struct page_directory* pdtable = (struct page_directory*)get_pdpp(pdptentry, PAGE_SIZE_DIR);
+    vm_entry *pdentry = GET_ENTRY(pdtable, map.PD_index);
+
+    if (!IS_PRESENT(pdentry))
+    {
+        return 0;
+    } else if (pdentry->big.PS)
+    {
+        return PAGE_SIZE_2MIB;
+    }
+
+    struct page_directory* pttable = (struct page_directory*)get_pdpp(pdentry, PAGE_SIZE_DIR);
+    vm_entry *ptentry = GET_ENTRY(pttable, map.PT_index);
+
+    if (!IS_PRESENT(ptentry))
+    {
+        return 0;
+    }
+
+    return PAGE_SIZE_4KIB;
+}
+
 void * vmm_create_kernel_stack(struct page_directory* stack_root, uint64_t stack_pages, uint8_t flags, uint64_t * stack_base) {
         
     void * new_stack_phys = pmm_alloc(stack_pages*0x1000);
@@ -1023,53 +1066,21 @@ void * allocate_phys_page() {
     return buffer;
 }
 
-void * allocate_at_vaddr(struct page_directory * root, void * virtual_address, uint64_t pages, uint8_t flags)
+void * allocate_at_vaddr(struct page_directory * root, void * virtual_address, uint64_t size, uint8_t flags)
 {
+    uint64_t pages = size / PAGE_SIZE_4KIB;
+    if (size % PAGE_SIZE_4KIB)
+    {
+        pages++;
+    }
     void * buffer = pmm_alloc(pages * PAGE_SIZE_4KIB);
     if (buffer == NULL)
     {
         return NULL;
     }
     memset(TO_IDENTITY_MAP(buffer), 0, pages * PAGE_SIZE_4KIB);
-    map_memory(root, virtual_address, buffer, PAGE_SIZE_4KIB, flags);
+    map_range(root, virtual_address, buffer, PAGE_SIZE_4KIB, pages * PAGE_SIZE_4KIB, flags);
     return buffer;
-}
-
-void * get_contiguous_free_range(struct page_directory * root, void * start_addres, uint64_t pages) {
-    uint64_t start = (uint64_t)start_addres;
-    uint64_t end = start + pages * PAGE_SIZE_4KIB;
-
-    for (uint64_t i = start; i < end; i += PAGE_SIZE_4KIB)
-    {
-        if (get_physical_address(root, (void*)i) != NULL)
-        {
-            return NULL;
-        }
-    }
-
-    return (void*)start;
-}
-
-void * get_shm_vmaddress(struct page_directory * root, void * hint, uint64_t size) {
-    if (hint == 0) hint = VMM_REGION_U_SHM_MMAP;
-    
-    uint64_t shm_address = hint;
-    uint64_t pages = size / PAGE_SIZE_4KIB;
-    if (size % PAGE_SIZE_4KIB)
-    {
-        pages++;
-    }
-
-    while (shm_address < (uint64_t)hint + VMM_REGION_SIZE)
-    {
-        void * address = get_contiguous_free_range(root, (void*)shm_address, pages);
-        if (address != NULL)
-        {
-            return address;
-        }
-        shm_address += PAGE_SIZE_4KIB;
-    }
-    panic("No free memory for shared memory\n");
 }
 
 void free_phys_page(void * address) {
