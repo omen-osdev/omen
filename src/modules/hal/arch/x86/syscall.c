@@ -412,7 +412,10 @@ void global_syscall_handler(cpu_context_t* ctx) {
 
     process_t * current_task = get_current_process();
     memcpy(current_task->context, ctx, sizeof(cpu_context_t));
+    memcpy(current_task->context->info, ctx->info, sizeof(struct cpu_context_info));
     __asm__("fxsave %0" : : "m" (current_task->fxsave_region));
+    if (current_task->context->cr3 > VMM_REGION_K_IDENT)
+        panic("in Invalid cr3 value\n");
     current_task->context->cr3 = to_identity_map(ctx->cr3);
 
     uint64_t result = SYSCALL_SUCCESS;
@@ -425,10 +428,12 @@ void global_syscall_handler(cpu_context_t* ctx) {
     }
 
     current_task = get_current_process();
+    if (current_task->context->cr3 < VMM_REGION_K_IDENT)
+        panic("out Invalid cr3 value\n");
     current_task->context->cr3 = from_identity_map(current_task->context->cr3);
     __asm__("fxrstor %0" : "=m" (current_task->fxsave_region));
     memcpy(ctx, current_task->context, sizeof(cpu_context_t));
-
+    memcpy(ctx->info, current_task->context->info, sizeof(struct cpu_context_info));
     struct tss * tss = arch_get_cpu(current_task->core_id)->tss;
     tss_set_stack(tss, ctx->info->kstack, 0);
     tss_set_stack(tss, ctx->rsp, 3);

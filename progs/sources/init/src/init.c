@@ -45,7 +45,7 @@ void test_fork() {
 }
 
 void test_cow() {
-    char * buffer = sys_mmap(NULL, 0x1000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    char * buffer = sys_mmap(NULL, 0x1000, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     if (buffer == NULL) {
         printf("Failed to map memory\n");
         return;
@@ -57,19 +57,38 @@ void test_cow() {
         printf("Child buffer before: %s\n", buffer);
         buffer[0] = 'C';
         printf("Child buffer after: %s\n", buffer);
+        sys_sched_yield();
     } else {
         printf("I am the parent\n");
-        printf("Parent buffer before: %s\n", buffer);
         buffer[0] = 'P';
-        printf("Parent buffer: %s\n", buffer);
-        sys_exit(0);
+        printf("Parent buffer before: %s\n", buffer);
+        sys_sched_yield();
+        printf("Parent buffer after: %s\n", buffer);
+    }
+}
+
+void test_sched() {
+    volatile short pid = sys_fork();
+    if (pid == 0) {
+        printf("I am the child\n");
+        while (1) {
+            printf("Child is running\n");
+            sys_sched_yield();
+        }
+    } else {
+        printf("I am the parent\n");
+        while (1) {
+            printf("Parent is running\n");
+            sys_sched_yield();
+        }
     }
 }
 
 int main(int argc, char* argv[]) {
     printf("Hello from init!\n");
-    test_fork();
-    //print_file();
-    //test_cow();
+    //test_fork();
+    test_sched();
+    print_file();
+    test_cow();
     while(1);
 }

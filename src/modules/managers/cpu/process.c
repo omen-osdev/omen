@@ -107,7 +107,8 @@ void duplicate_vmarea_cow(process_t * task, struct vm_area* vma) {
     kprintf("VMA Flags: %d, VMA Extended Flags: %d\n", vma->flags, vma->extended_flags);
     kprintf("VMA Page Size: %d\n", vma->page_size);
 
-    panic("Not implemented\n");
+    remap_allocate_cow(task->context->cr3, vma->start, vma->end - vma->start, vma->page_size, vma->flags);
+    vma->extended_flags &= ~VMAREA_EXT_COW;
 }
 
 //Check if vma collides with any other vma in the process
@@ -234,14 +235,15 @@ void init_user_context(struct page_directory* pd, process_t * task, void * init,
     init_stack(pd, task, PROCESS_STACK_SIZE, 1);
     init_stack(pd, task, PROCESS_STACK_SIZE, 0);
 
-    //TODO: Initialize the stack
-    void * ustack_ident = to_identity_map(VMM_FROM_USER_STACK(task->ustack));
-    if (trampoline)
-        newuctxcreat((uint64_t)&(ustack_ident), (uint64_t)init);
-    else
-        newctxcreat((uint64_t)&(ustack_ident), (uint64_t)init);
+    //Only required to map the stack
+    map_range(get_pml4(), task->ustack_base, get_physical_address(pd, task->ustack_base), PAGE_SIZE_4KIB, PROCESS_STACK_SIZE, VMM_WRITE_BIT);
 
-    task->ustack = (void*)VMM_TO_USER_STACK(from_identity_map((uint64_t)ustack_ident));
+    //TODO: Initialize the stack
+    if (trampoline)
+        newuctxcreat((uint64_t)&(task->ustack), (uint64_t)init);
+    else
+        panic("Trampoline not implemented\n");
+
     create_context(task, pd, task->ustack, task->kstack, init);
     
     __asm__ volatile("fxsave %0" : "=m" (task->fxsave_region));
@@ -353,7 +355,7 @@ process_t * duplicate_process(process_t * parent) {
     task->context->cr3 = vmm_copy(parent->context->cr3);
     vmm_copy_stack(task->context->cr3, parent->ustack_base, PROCESS_STACK_SIZE, VMM_USER_BIT | VMM_WRITE_BIT);
     vmm_copy_stack(task->context->cr3, parent->kstack_base, PROCESS_STACK_SIZE, VMM_WRITE_BIT);
-    //engrave_vmareas(task, parent);
+    engrave_vmareas(task, parent);
     kprintf("Process %d duplicated\n", task->pid);
     return task;
 }

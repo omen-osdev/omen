@@ -49,13 +49,14 @@ void PageFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {
     kprintf("Page Fault Address: %lx\n", (uint64_t)faulting_address);
     kprintf("Error code: %lx\n", ctx->error_code);
     process_t * task = get_current_process();
-    
+    task->context->cr3 = to_identity_map(ctx->cr3);
     if (!task) panic("Page fault in kernel mode, no task detected!\n");
 
     struct vm_area* vma = is_in_vmarea(task, (void*)faulting_address);
     if (task && vma && (vma->flags & VMM_WRITE_BIT) && (vma->extended_flags & VMAREA_EXT_COW)) {
         kprintf("Page fault in COW area, duplicating page\n");
         duplicate_vmarea_cow(task, vma);
+        task->context->cr3 = from_identity_map(task->context->cr3);
         return;
     }
 

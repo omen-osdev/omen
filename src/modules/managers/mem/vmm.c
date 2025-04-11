@@ -661,9 +661,17 @@ struct page_directory* get_pml4() {
     return get_current_cr3();
 }
 
-uint8_t remap_allocate_cow(struct page_directory * pml4, void * address_raw) {
-    panic("Not implemented\n");
-    return 0;
+void remap_allocate_cow(struct page_directory * pml4, void * section_start, uint64_t size, uint64_t page_size, uint8_t flags) {
+    void * physical = pmm_alloc(size);
+    if (physical == NULL) {
+        panic("Failed to allocate memory for cow\n");
+        return 0;
+    }
+
+    memset(TO_IDENTITY_MAP(physical), 0, size);
+    //Add write protection
+    flags |= VMM_WRITE_BIT;
+    map_range(pml4, section_start, physical, page_size, size, flags);
 }
 
 uint8_t compare_entries(vm_entry* entry1, vm_entry* entry2)

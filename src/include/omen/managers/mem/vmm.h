@@ -57,7 +57,7 @@
 //Used multiple times
 struct page_directory* get_pml4();
 
-uint8_t remap_allocate_cow(struct page_directory * pml4, void * address_raw);
+void remap_allocate_cow(struct page_directory * pml4, void * section_start, uint64_t size, uint64_t page_size, uint8_t flags);
 void * vmm_create_kernel_stack(struct page_directory* stack_root, uint64_t stack_pages, uint8_t flags, uint64_t * stack_base);
 void * vmm_copy_stack(struct page_directory* stack_root, void * stack_base, uint64_t stack_size, uint8_t flags);
 struct page_directory * vmm_copy_kernel(struct page_directory* root);
