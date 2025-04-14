@@ -208,36 +208,42 @@ uint64_t sched_yield_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)task;
     (void)ctx;
     kprintf("[PID: %d] SCHED_YIELD_SYSCALL()\n", task->pid);
+    kprintf("Yielding process %d\n", get_current_process()->pid);
     sched();
+    kprintf("Resuming process %d\n", get_current_process()->pid);
     return SYSCALL_SUCCESS;
 }
 
 uint64_t fork_syscall_handler(process_t*task, cpu_context_t* ctx) {
-    (void)task;
     (void)ctx;
     kprintf("[PID: %d] FORK_SYSCALL()\n", task->pid);
-    uint64_t child_pid = (uint64_t)fork();
+    uint64_t child_pid = (uint64_t)fork(task);
     kprintf("Child PID: %d\n", child_pid);
     return child_pid;
 }
 
 uint64_t execve_syscall_handler(process_t*task, cpu_context_t* ctx) {
-    (void)task;
     (void)ctx;
     const char * path = (const char *)SYSCALL_ARG0(ctx);
     const char * argv = (const char *)SYSCALL_ARG1(ctx);
     const char * envp = (const char *)SYSCALL_ARG2(ctx);
-    kprintf("[PID: %d] EXECVE_SYSCALL(%s,%s,%s)\n", task->pid, path, argv, envp);
-    execve(path, argv, envp);
+    if (path == NULL) {
+        kprintf("Invalid arguments for execve\n");
+        return SYSCALL_ERROR;
+    } else if (argv == NULL || envp == NULL) {
+        kprintf("[PID: %d] EXECVE_SYSCALL(%s,NULL,NULL)\n", task->pid, path);
+    } else {
+        kprintf("[PID: %d] EXECVE_SYSCALL(%s,%s,%s)\n", task->pid, path, argv, envp);
+    }
+    execve(task, path, argv, envp);
     return SYSCALL_SUCCESS;
 }
 
 uint64_t exit_syscall_handler(process_t*task, cpu_context_t* ctx) {
-    (void)task;
     (void)ctx;
     int error_code = SYSCALL_ARG0(ctx);
     kprintf("[PID: %d] EXIT_SYSCALL(%d)\n", task->pid, error_code);
-    exit(error_code);
+    exit(task, error_code);
     return SYSCALL_SUCCESS;
 }
 
@@ -318,7 +324,7 @@ uint64_t mmap_syscall_handler(process_t*task, cpu_context_t*ctx) {
     kprintf("Found free area: %p\n", addr);
 
     if (flags & MAP_PRIVATE || flags & MAP_SHARED) {
-        allocate_at_vaddr(task->context->cr3, addr, length, vmm_flags);
+        allocate_at_vaddr(task->vmm, addr, length, vmm_flags);
         create_vmarea(task, addr, (addr + length), vmm_flags, vma_flags, PAGE_SIZE_4KIB);
 
         if (flags & MAP_ANONYMOUS) {
@@ -326,7 +332,7 @@ uint64_t mmap_syscall_handler(process_t*task, cpu_context_t*ctx) {
         }
         
         //add write privilege to the buffer
-        mprotect(task->context->cr3, addr, length, PROT_READ | PROT_WRITE);
+        mprotect(task->vmm, addr, length, PROT_READ | PROT_WRITE);
 
         //Read the file into the memory
         if (vfs_file_seek(fd, offset, SEEK_SET) < 0) {
@@ -341,13 +347,13 @@ uint64_t mmap_syscall_handler(process_t*task, cpu_context_t*ctx) {
         } 
 
         //Reset permissions
-        mprotect(task->context->cr3, addr, length, vmm_flags);
+        mprotect(task->vmm, addr, length, vmm_flags);
         return addr;
     }
 
 cleanup_on_error:
     panic("Failed to map memory\n");
-    unmap_memory(task->context->cr3, addr);
+    unmap_memory(task->vmm, addr);
     return SYSCALL_ERROR;
 }
 
@@ -411,15 +417,12 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
 void global_syscall_handler(cpu_context_t* ctx) {
 
     process_t * current_task = get_current_process();
+    
     memcpy(current_task->context, ctx, sizeof(cpu_context_t));
     memcpy(current_task->context->info, ctx->info, sizeof(struct cpu_context_info));
     __asm__("fxsave %0" : : "m" (current_task->fxsave_region));
-    if (current_task->context->cr3 > VMM_REGION_K_IDENT)
-        panic("in Invalid cr3 value\n");
-    current_task->context->cr3 = to_identity_map(ctx->cr3);
 
     uint64_t result = SYSCALL_SUCCESS;
-
     if (ctx->rax < SYSCALL_HANDLER_COUNT) {
         result = syscall_handlers[ctx->rax](current_task, ctx);
     } else {
@@ -428,12 +431,11 @@ void global_syscall_handler(cpu_context_t* ctx) {
     }
 
     current_task = get_current_process();
-    if (current_task->context->cr3 < VMM_REGION_K_IDENT)
-        panic("out Invalid cr3 value\n");
-    current_task->context->cr3 = from_identity_map(current_task->context->cr3);
+
     __asm__("fxrstor %0" : "=m" (current_task->fxsave_region));
     memcpy(ctx, current_task->context, sizeof(cpu_context_t));
     memcpy(ctx->info, current_task->context->info, sizeof(struct cpu_context_info));
+    
     struct tss * tss = arch_get_cpu(current_task->core_id)->tss;
     tss_set_stack(tss, ctx->info->kstack, 0);
     tss_set_stack(tss, ctx->rsp, 3);

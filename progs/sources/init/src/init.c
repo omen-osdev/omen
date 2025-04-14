@@ -84,11 +84,32 @@ void test_sched() {
     }
 }
 
+//Create a test that spawns hundreds of processes and schedules them
+void test_sched_hundreds() {
+    for (int i = 0; i < 100; i++) {
+        volatile short pid = sys_fork();
+        if (pid == 0) {
+            printf("I am the child %d\n", i);
+            while (1) {
+                printf("Child %d is running\n", i);
+                sys_sched_yield();
+            }
+        }
+    }
+}
+
 int main(int argc, char* argv[]) {
     printf("Hello from init!\n");
-    //test_fork();
-    test_sched();
-    print_file();
-    test_cow();
-    while(1);
+    volatile short pid = sys_fork();
+    if (pid == 0) {
+        printf("I am the child\n");
+        print_file();
+    } else {
+        sys_execve("hdap2/export/idle.elf", NULL, NULL);
+    }
+
+    while (1) {
+        printf("Init process is running\n");
+        sys_sched_yield();
+    }
 }

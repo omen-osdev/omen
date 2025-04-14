@@ -87,15 +87,15 @@ void engrave_vmareas(process_t * child, process_t * parent) {
     while (current) {
         if (current->extended_flags & VMAREA_EXT_SHARED) {
             //Map the area in the child process to the same address as the parent
-            void * parent_physical = get_physical_address(parent->context->cr3, current->start);
-            map_range(child->context->cr3, current->start, parent_physical, current->page_size, current->end - current->start, current->flags);
+            void * parent_physical = get_physical_address(parent->vmm, current->start);
+            map_range(child->vmm, current->start, parent_physical, current->page_size, current->end - current->start, current->flags);
         }
         if (current->extended_flags & VMAREA_EXT_COW) {
             uint8_t flags = current->flags;
             if (flags & VMM_WRITE_BIT) {
                 flags &= ~VMM_WRITE_BIT;
             }
-            mprotect(child->context->cr3, current->start, current->end - current->start, flags);
+            mprotect(child->vmm, current->start, current->end - current->start, flags);
         }
         current = current->next;
     }
@@ -107,7 +107,7 @@ void duplicate_vmarea_cow(process_t * task, struct vm_area* vma) {
     kprintf("VMA Flags: %d, VMA Extended Flags: %d\n", vma->flags, vma->extended_flags);
     kprintf("VMA Page Size: %d\n", vma->page_size);
 
-    remap_allocate_cow(task->context->cr3, vma->start, vma->end - vma->start, vma->page_size, vma->flags);
+    remap_allocate_cow(task->vmm, vma->start, vma->end - vma->start, vma->page_size, vma->flags);
     vma->extended_flags &= ~VMAREA_EXT_COW;
 }
 
@@ -201,7 +201,7 @@ void create_context(process_t * task, struct page_directory* pd, void * ustack, 
     memset(task->context, 0, sizeof(cpu_context_t));
     task->context->info = kmalloc(sizeof(struct cpu_context_info));
     memset(task->context->info, 0, sizeof(struct cpu_context_info));
-    task->context->cr3 = pd;
+    task->context->cr3 = from_identity_map(pd);
     task->context->info->kstack = (uint64_t) kstack;
     task->context->info->cs = get_user_code_selector();
     task->context->info->ss = get_user_data_selector();
@@ -234,15 +234,15 @@ void init_user_context(struct page_directory* pd, process_t * task, void * init,
 
     init_stack(pd, task, PROCESS_STACK_SIZE, 1);
     init_stack(pd, task, PROCESS_STACK_SIZE, 0);
-
-    //Only required to map the stack
-    map_range(get_pml4(), task->ustack_base, get_physical_address(pd, task->ustack_base), PAGE_SIZE_4KIB, PROCESS_STACK_SIZE, VMM_WRITE_BIT);
-
-    //TODO: Initialize the stack
+    
+    void * stack_ident = to_identity_map(get_physical_address(pd, task->ustack));
+    void * stack_delta = stack_ident;
     if (trampoline)
-        newuctxcreat((uint64_t)&(task->ustack), (uint64_t)init);
+        newuctxcreat((uint64_t)&(stack_delta), (uint64_t)init);
     else
         panic("Trampoline not implemented\n");
+    
+    task->ustack += ((uint64_t)stack_delta - (uint64_t)stack_ident);
 
     create_context(task, pd, task->ustack, task->kstack, init);
     
@@ -329,9 +329,9 @@ process_t * create_user_process(void * init, char * tty) {
         task->ppid = 0;
     }
 
-    struct page_directory * pd = vmm_copy_kernel(get_pml4());
+    task->vmm = vmm_copy_kernel(get_pml4());
 
-    init_user_context(pd, task, init, 1);
+    init_user_context(task->vmm, task, init, 1);
 
     kprintf("Process %d created\n", task->pid);
     return task;
@@ -352,9 +352,10 @@ process_t * duplicate_process(process_t * parent) {
 
     task->pid = get_next_pid();
     task->ppid = parent->pid;
-    task->context->cr3 = vmm_copy(parent->context->cr3);
-    vmm_copy_stack(task->context->cr3, parent->ustack_base, PROCESS_STACK_SIZE, VMM_USER_BIT | VMM_WRITE_BIT);
-    vmm_copy_stack(task->context->cr3, parent->kstack_base, PROCESS_STACK_SIZE, VMM_WRITE_BIT);
+    task->vmm = vmm_copy(parent->vmm);
+    task->context->cr3 = from_identity_map(task->vmm);
+    vmm_copy_stack(task->vmm, parent->ustack_base, PROCESS_STACK_SIZE, VMM_USER_BIT | VMM_WRITE_BIT);
+    vmm_copy_stack(task->vmm, parent->kstack_base, PROCESS_STACK_SIZE, VMM_WRITE_BIT);
     engrave_vmareas(task, parent);
     kprintf("Process %d duplicated\n", task->pid);
     return task;
@@ -382,30 +383,23 @@ void init_process(const char * _init_path, const char * _idle_path, char * tty) 
     //memset(idle_path, 0, 0x1000);
     //strcpy(idle_path, _idle_path);
 
-    process_t * idle_proc = create_user_process((void*)_idle, tty);
-    idle_proc->pid = 0;
-    current_process = idle_proc;
-    current_process_index = 0;
-    exec(_idle_path);
-
     process_t * init_proc = create_user_process((void*)_idle, tty);
-    init_proc->pid = 1;
+    init_proc->pid = 0;
     current_process = init_proc;
-    current_process_index = 1;
-    exec(_init_path);
+    current_process_index = 0;
+    exec(init_proc, _init_path);
 
-    current_process = &process_list[1];
-    current_process_index = 1;
+    current_process = &process_list[0];
+    current_process_index = 0;
     current_process->status = PROCESS_STATUS_RUNNING;
 
     struct tss * tss = arch_get_cpu(current_process->core_id)->tss;
     tss_set_stack(tss, current_process->kstack, 0);
     tss_set_stack(tss, current_process->ustack, 3);
-    void * cr3 = get_physical_address(current_process->context->cr3, current_process->context->cr3);
     __asm__("mov %0, %%rsp\n"
             "mov %1, %%cr3\n"
             "fxrstor %2\n"
-            "ret\n" : : "r" (current_process->ustack), "r" (cr3), "m" (current_process->fxsave_region));
+            "ret\n" : : "r" (current_process->ustack), "r" (current_process->context->cr3), "m" (current_process->fxsave_region));
     panic("Returned from init process\n");
 }
 
@@ -427,16 +421,16 @@ process_t * sched() {
     return current_process;
 }
 
-int16_t fork() {   
-    process_t * child = duplicate_process(current_process);
+int16_t fork(process_t * ct) {   
+    process_t * child = duplicate_process(ct);
     child->status = PROCESS_STATUS_READY;
     child->context->rax = 0;
     return child->pid;
 }
 
-void exit(int error_code) {
-    current_process->status = PROCESS_STATUS_ZOMBIE;
-    current_process->exit_code = error_code;
+void exit(process_t* task, int error_code) {
+    task->status = PROCESS_STATUS_ZOMBIE;
+    task->exit_code = error_code;
     sched();
 }
 
@@ -476,13 +470,13 @@ void alter_process_on_exec(process_t * task, void * init) {
     task->uid = saved_task.uid;
     task->gid = saved_task.gid;
     task->ppid = saved_task.ppid;
+    task->vmm = saved_task.vmm;
 
-    init_user_context(saved_task.context->cr3, task, init, 1);
+    init_user_context(saved_task.vmm, task, init, 1);
     kprintf("Exec: Process %d created\n", task->pid);
 }
 
-int exec(char const *path) {
-    process_t * task = get_current_process();
+int exec(process_t * task, char const *path) {
 
     char * dynpath = kmalloc(256);
     strcpy(dynpath, path);
@@ -514,17 +508,17 @@ int exec(char const *path) {
 
     elf_readelf(buf, size);
     kfree(md5_buffer);
-    vmm_unmap_userspace(task->context->cr3);
-    void * entry = elf_load_elf(task->context->cr3, buf, size);
+    vmm_unmap_userspace(task->vmm);
+    void * entry = elf_load_elf(task->vmm, buf, size);
     kfree(buf);
     alter_process_on_exec(task, entry);
     return 0;
 }
 
-void execve(const char * path, const char * argv, const char * envp) {
+void execve(process_t* task, const char * path, const char * argv, const char * envp) {
     (void)argv;
     (void)envp;
-    exec(path);
+    exec(task, path);
 }
 
 char * get_current_tty() {
