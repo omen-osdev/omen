@@ -21,6 +21,7 @@
 #define VMAREA_EXT_COW      0x1
 #define VMAREA_EXT_SHARED   0x2
 #define VMAREA_EXT_GUARD    0x4
+#define VMAREA_EXT_REQ_SYNC 0x8
 
 typedef int process_status_t;
 
@@ -30,6 +31,8 @@ struct vm_area {
     uint8_t flags;
     uint8_t extended_flags;
     uint64_t page_size;
+    int fd;
+    off_t offset;
     struct vm_area * next;
 };
 
@@ -48,6 +51,7 @@ typedef struct process {
     process_status_t status;
     uint8_t core_id;
     uint8_t privilege;
+    uint8_t syscall_ready; //A process has to have called sycall_entry to return from a syscall
     int signal_pending;
     //signal_queue_t *signal_queue;
     //signal_handler_t signal_handlers[PROCESS_SIGNAL_MAX];
@@ -90,8 +94,10 @@ typedef struct process {
 
 
 void init_process(const char * init_path, const char * idle_path, char * tty);
-void create_vmarea(process_t* process, void * start, void * end, uint8_t flags, uint8_t extended_flags, uint64_t page_size);
+void remove_vmarea(process_t* process, void * start);
+void create_vmarea(process_t* process, void * start, void * end, uint8_t flags, uint8_t extended_flags, uint64_t page_size, int fd, off_t offset);
 struct vm_area* is_in_vmarea(process_t* process, void * address);
+void task_sync_files(process_t *task, struct vm_area * vma, uint64_t size);
 void * find_shm_vmarea(process_t * task, void * hint, uint64_t size);
 void duplicate_vmarea_cow(process_t * task, struct vm_area* vma);
 void returnoexit();

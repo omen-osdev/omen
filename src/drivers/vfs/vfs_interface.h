@@ -8,6 +8,7 @@ void vfs_lsdisk();
 int vfs_socket_open(int, int, int);
 
 int vfs_file_open(char*, int, int);
+int vfs_file_dup(int oldfd, int newfd);
 int vfs_file_search(const char * name, char * path);
 int vfs_file_close(int);
 int64_t vfs_file_read(int, void*, uint64_t);

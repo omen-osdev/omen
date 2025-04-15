@@ -44,7 +44,7 @@ struct vm_area* is_in_vmarea(process_t* process, void * address) {
     return 0;
 }
 
-void create_vmarea(process_t* process, void * start, void * end, uint8_t flags, uint8_t extended_flags, uint64_t page_size) {
+void create_vmarea(process_t* process, void * start, void * end, uint8_t flags, uint8_t extended_flags, uint64_t page_size, int fd, off_t offset) {
     struct vm_area * new_area = kmalloc(sizeof(struct vm_area));
     new_area->start = start;
     new_area->end = end;
@@ -52,6 +52,8 @@ void create_vmarea(process_t* process, void * start, void * end, uint8_t flags, 
     new_area->extended_flags = extended_flags;
     new_area->page_size = page_size;
     new_area->next = process->vm_areas;
+    new_area->fd = fd;
+    new_area->offset = offset;
     process->vm_areas = new_area;
 }
 
@@ -76,8 +78,9 @@ void remove_vmarea(process_t* process, void * start) {
 
 void duplicate_vmareas(process_t * old, process_t * new) {
     struct vm_area * current = old->vm_areas;
+    new->vm_areas = 0;
     while (current) {
-        create_vmarea(new, current->start, current->end, current->flags, current->extended_flags, current->page_size);
+        create_vmarea(new, current->start, current->end, current->flags, current->extended_flags, current->page_size, current->fd, current->offset);
         current = current->next;
     }
 }
@@ -132,7 +135,9 @@ void * find_shm_vmarea(process_t * task, void * hint, uint64_t size) {
         .end = hint + size,
         .flags = VMM_USER_BIT,
         .extended_flags = VMAREA_EXT_SHARED,
-        .page_size = PAGE_SIZE_4KIB
+        .page_size = PAGE_SIZE_4KIB,
+        .fd = -1,
+        .offset = 0,
     };
 
     struct vm_area * collision = vmarea_collides(task, &desired_vma);
@@ -184,7 +189,7 @@ void init_stack(struct page_directory* pd, process_t * task, uint64_t size, uint
         stackalloc(pd, &stack, size);
         task->ustack = stack.top;
         task->ustack_base = stack.base;
-        create_vmarea(task, task->ustack_base, task->ustack, VMM_USER_BIT | VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB);
+        create_vmarea(task, task->ustack_base, task->ustack, VMM_USER_BIT | VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
     } else {
         if (size > PROCESS_STACK_SIZE) {
             size = PROCESS_STACK_SIZE & ~0xfff;
@@ -192,7 +197,7 @@ void init_stack(struct page_directory* pd, process_t * task, uint64_t size, uint
         kstackalloc(pd, &stack, size);
         task->kstack_base = stack.base;
         task->kstack = stack.top;
-        create_vmarea(task, task->kstack_base, task->kstack, VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB);
+        create_vmarea(task, task->kstack_base, task->kstack, VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
     }
 }
 
@@ -235,14 +240,18 @@ void init_user_context(struct page_directory* pd, process_t * task, void * init,
     init_stack(pd, task, PROCESS_STACK_SIZE, 1);
     init_stack(pd, task, PROCESS_STACK_SIZE, 0);
     
-    void * stack_ident = to_identity_map(get_physical_address(pd, task->ustack));
-    void * stack_delta = stack_ident;
+    if (get_pml4() != pd) {
+        void * stack_physical = get_physical_address(pd, task->ustack_base);
+        map_range(get_pml4(), task->ustack_base, (uint64_t)stack_physical, PAGE_SIZE_4KIB, PROCESS_STACK_SIZE, VMM_WRITE_BIT);
+    }
+    
     if (trampoline)
-        newuctxcreat((uint64_t)&(stack_delta), (uint64_t)init);
+        newuctxcreat((uint64_t)&(task->ustack), (uint64_t)init);
     else
         panic("Trampoline not implemented\n");
-    
-    task->ustack += ((uint64_t)stack_delta - (uint64_t)stack_ident);
+
+    if (get_pml4() != pd)
+        unmap_range(get_pml4(), task->ustack_base, PROCESS_STACK_SIZE);
 
     create_context(task, pd, task->ustack, task->kstack, init);
     
@@ -292,6 +301,27 @@ void open_stdfiles(process_t *task, char * tty) {
     task->open_files[task->open_files_count++] = stderr;
 }
 
+void task_sync_files(process_t *task, struct vm_area * vma, uint64_t size) {
+
+    uint64_t sync_size = (size) ? size : (uint64_t)(vma->end - vma->start);
+    if (vma->fd) {
+        vfs_file_seek(vma->fd, vma->offset, SEEK_SET);
+        vfs_file_write(vma->fd, vma->start, sync_size);
+        vfs_file_seek(vma->fd, vma->offset, SEEK_SET);
+        vma->extended_flags &= ~VMAREA_EXT_REQ_SYNC;
+    }
+}
+
+void task_sync_all_files(process_t *task) {
+    struct vm_area * current = task->vm_areas;
+    while (current) {
+        if (current->extended_flags & VMAREA_EXT_REQ_SYNC) { //MAYBE WE NEED TO FORCE THIS INSTEAD OF CHECKING IF REQ_SYNC
+            task_sync_files(task, current, 0);
+        }
+        current = current->next;
+    }    
+}
+
 process_t * create_user_process(void * init, char * tty) {
     process_t * task = &(process_list[process_count++]);
     memset(task, 0, sizeof(process_t));
@@ -300,6 +330,7 @@ process_t * create_user_process(void * init, char * tty) {
     task->nice = 0;
     task->privilege = 0;
     task->core_id = arch_get_bsp_cpu()->core_id;
+    task->syscall_ready = 0;
     task->cpu_time = 0;
     task->last_scheduled = 0;
     task->sleep_time = 0;
@@ -338,9 +369,10 @@ process_t * create_user_process(void * init, char * tty) {
 }
 
 process_t * duplicate_process(process_t * parent) {
+    task_sync_all_files(parent);
+
     process_t * task = &(process_list[process_count++]);
     memcpy(task, parent, sizeof(process_t));
-
     task->context = kmalloc(sizeof(cpu_context_t));
     memcpy(task->context, parent->context, sizeof(cpu_context_t));
     task->context->info = kmalloc(sizeof(struct cpu_context_info));
@@ -439,7 +471,7 @@ process_t * get_current_process() {
     return current_process;
 }
 
-void alter_process_on_exec(process_t * task, void * init) {
+void alter_process_on_exec(process_t * task, void * init, void * ustack_phys_base) {
     process_t saved_task;
     memcpy(&saved_task, task, sizeof(process_t));
     memset(task, 0, sizeof(process_t));
@@ -449,6 +481,7 @@ void alter_process_on_exec(process_t * task, void * init) {
     task->privilege = 0;
     task->core_id = arch_get_bsp_cpu()->core_id;
     task->cpu_time = 0;
+    task->syscall_ready = 0;
     task->last_scheduled = 0;
     task->sleep_time = 0;
     task->exit_code = 0;    
@@ -466,13 +499,37 @@ void alter_process_on_exec(process_t * task, void * init) {
     task->tty = task->regular_tty;
     memcpy(task->io_tty, saved_task.io_tty, 32);
     task->parent = saved_task.parent;
+    task->vm_areas = saved_task.vm_areas;
     
     task->uid = saved_task.uid;
     task->gid = saved_task.gid;
     task->ppid = saved_task.ppid;
-    task->vmm = saved_task.vmm;
 
-    init_user_context(saved_task.vmm, task, init, 1);
+    task->vmm = saved_task.vmm;
+    task->ustack_base = saved_task.ustack_base;
+    task->ustack = saved_task.ustack_base + PROCESS_STACK_SIZE;
+    task->kstack_base = saved_task.kstack_base;
+    task->kstack = saved_task.kstack_base + PROCESS_STACK_SIZE;
+
+    map_range(task->vmm, task->ustack_base, (uint64_t)ustack_phys_base, PAGE_SIZE_4KIB, PROCESS_STACK_SIZE, VMM_USER_BIT | VMM_WRITE_BIT);
+
+    if (get_pml4() != task->vmm) {
+        map_range(get_pml4(), task->ustack_base, (uint64_t)ustack_phys_base, PAGE_SIZE_4KIB, PROCESS_STACK_SIZE, VMM_WRITE_BIT);
+    }
+
+    memset(task->ustack_base, 0, PROCESS_STACK_SIZE);
+
+    newuctxcreat((uint64_t)&(task->ustack), (uint64_t)init);
+
+    if (get_pml4() != task->vmm) {
+        unmap_range(get_pml4(), task->ustack_base, PROCESS_STACK_SIZE);
+    }
+
+    create_context(task, task->vmm, task->ustack, task->kstack, init);
+    
+    __asm__ volatile("fxsave %0" : "=m" (task->fxsave_region));
+
+
     kprintf("Exec: Process %d created\n", task->pid);
 }
 
@@ -508,10 +565,12 @@ int exec(process_t * task, char const *path) {
 
     elf_readelf(buf, size);
     kfree(md5_buffer);
+
+    void * user_stack_base = get_physical_address(task->vmm, task->ustack_base);
     vmm_unmap_userspace(task->vmm);
     void * entry = elf_load_elf(task->vmm, buf, size);
+    alter_process_on_exec(task, entry, user_stack_base);
     kfree(buf);
-    alter_process_on_exec(task, entry);
     return 0;
 }
 

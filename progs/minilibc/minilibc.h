@@ -10,6 +10,10 @@
 #define PROT_EXEC 0x4
 #define PROT_NONE 0x8
 
+#define MS_SYNC 0x0
+#define MS_ASYNC 0x1
+#define MS_INVALIDATE 0x2
+
 struct stat {
     uint64_t st_dev;
     uint64_t st_ino;
@@ -35,6 +39,7 @@ int sys_close(int fd);
 int sys_ioctl(int fd, unsigned long request, void * arg);
 int sys_fstat(int fd, struct stat * buf);
 int sys_stat(const char * path, struct stat * buf);
+int sys_msync(void * addr, size_t length, int flags);
 void sys_sched_yield();
 short sys_fork();
 void sys_exit(int error_code);
@@ -42,3 +47,5 @@ void sys_execve(const char * path, const char * argv, const char * envp);
 void * sys_mmap(void * addr, size_t length, int prot, int flags, int fd, off_t offset);
 void sys_mprotect(void * addr, size_t length, int prot);
 void sys_munmap(void * addr, size_t length);
+int sys_dup(int fd);
+int sys_dup2(int oldfd, int newfd);

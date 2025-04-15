@@ -44,7 +44,7 @@ syscall_entry:
     mov [gs:0x10], rsp    ; save current stack to the local cpu structure
     mov rsp, [gs:0x8]    ; use the kernel syscall stack
     mov rsp, [rsp]
-    push qword rbp
+    push qword rbp ; 
     mov rbp, [gs:0x8]
 
     push qword [rbp + 0x10] ; ss
@@ -73,7 +73,7 @@ syscall_entry:
     push    rcx
     push    rbx
     push    rax
-    push   qword [gs:0x8]
+    push   qword [gs:0x8] ; info
     mov     rax, cr3
     push    rax
 

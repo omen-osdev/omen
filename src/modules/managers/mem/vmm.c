@@ -92,6 +92,25 @@ uint64_t get_pdpp(vm_entry * entry, uint64_t size)
     }
 }
 
+void * check_k_regions(uint64_t address) {
+    if (address > VMM_REGION_K_IDENT && address < VMM_REGION_K_IDENT + VMM_REGION_SIZE)
+    {
+        return (void*)((uint64_t)address - VMM_REGION_K_IDENT);
+    }
+
+    if (address > VMM_REGION_K_HEAP && address < VMM_REGION_K_HEAP + VMM_REGION_SIZE)
+    {
+        return (void*)((uint64_t)address - VMM_REGION_K_HEAP);
+    }
+
+    if (address > VMM_REGION_DEVICES && address < VMM_REGION_DEVICES + VMM_REGION_SIZE)
+    {
+        return (void*)((uint64_t)address - VMM_REGION_DEVICES);
+    }
+
+    return 0x0;
+}
+
 void switch_cr3(struct page_directory* cr3)
 {
     __asm__("mov %0, %%cr3" : : "r"(cr3));
@@ -164,6 +183,17 @@ void init_entry(vm_entry * entry, uint64_t size, uint64_t page_ppn, vmm_perms pe
 
 void map_address(struct page_directory* root, void * virtual_address, void * physical_address, uint64_t size, uint8_t flags)
 {
+    //Make sure addresses are aligned to the page size
+    if ((uint64_t)virtual_address % size != 0)
+    {
+        panic("Virtual address is not aligned to page size");
+    }
+
+    if ((uint64_t)physical_address % size != 0)
+    {
+        panic("Physical address is not aligned to page size");
+    }
+
     struct page_map_index map;
     address_to_map((uint64_t)virtual_address, &map);
 
@@ -322,9 +352,14 @@ void * allocate_vmm(struct page_directory * pml4, uint64_t size, uint64_t region
     }
 
     memset(TO_IDENTITY_MAP(buffer), 0, size);
-    if (region == VMM_REGION_K_IDENT)
-    {
-        return TO_IDENTITY_MAP(buffer);
+
+    switch (region) {
+        case VMM_REGION_K_IDENT:
+            return TO_IDENTITY_MAP(buffer);
+        case VMM_REGION_K_HEAP:
+            return VMM_TO_KERNEL_HEAP(buffer);
+        case VMM_REGION_DEVICES:
+            return VMM_TO_DEVICE_MEMORY(buffer);
     }
 
     void * vaddr = (void*)((uint64_t)region + (uint64_t)buffer);
@@ -335,16 +370,17 @@ void * allocate_vmm(struct page_directory * pml4, uint64_t size, uint64_t region
 
 void free_vmm(struct page_directory * pml4, void * address)
 {
-    if ((uint64_t)address > VMM_REGION_K_IDENT && (uint64_t)address < VMM_REGION_K_IDENT + PHYSICAL_MEMORY_SIZE)
+    void * physical = check_k_regions((uint64_t)address);
+    if (!physical)
     {
-        //kprintf("[DEBUG] Address is in the identity map, freeing physical address\n");
-        pmm_free((void*)((uint64_t)address - VMM_REGION_K_IDENT));
-        return;
+        physical = get_physical_address(pml4, address);
+        if (!physical)
+        {
+            panic("free_vmm failed to get physical address\n");
+        }
+        unmap_memory(pml4, address);
     }
-
-    void * physical = get_physical_address(pml4, address);
     pmm_free(physical);
-    unmap_memory(pml4, address);
 }
 
 void map_range(struct page_directory* root, void * virtual_start, void * physical_start, uint64_t page_size, uint64_t size, uint8_t flags)
@@ -362,6 +398,23 @@ void map_range(struct page_directory* root, void * virtual_start, void * physica
     }
 
     kprintf("Mapped range from 0x%llx to 0x%llx\n", virtual_start, (uint64_t)virtual_start + size);
+}
+
+void unmap_range(struct page_directory* root, void * virtual_start, uint64_t size)
+{
+    //number of pages to unmap
+    uint64_t pages = size / PAGE_SIZE_4KIB;
+    if (size % PAGE_SIZE_4KIB)
+    {
+        pages++;
+    }
+    kprintf("Need to unmap %d pages\n", pages);
+    for (uint64_t i = 0; i < pages; i++)
+    {
+        free_vmm(root, (void*)((uint64_t)virtual_start + (i * PAGE_SIZE_4KIB)));
+    }
+
+    kprintf("Unmapped range from 0x%llx to 0x%llx\n", virtual_start, (uint64_t)virtual_start + size);
 }
 
 void duplicate_page_directory(struct page_directory* root, struct page_directory* new, uint8_t level, int override, uint8_t root_on_phys)
@@ -495,15 +548,13 @@ void compare_directories(struct page_directory* root, struct page_directory* new
     }
 }
 
-
 void* get_physical_address(struct page_directory* root, void* virtual_address)
 {
 
-    //Check if address is in the IDENTITIY MAP
-    if ((uint64_t)virtual_address > VMM_REGION_K_IDENT && (uint64_t)virtual_address < VMM_REGION_K_IDENT + PHYSICAL_MEMORY_SIZE)
+    void * k_address = check_k_regions((uint64_t)virtual_address);
+    if (k_address)
     {
-        //kprintf("[DEBUG] Address is in the identity map, returning physical address\n");
-        return (void*)((uint64_t)virtual_address - VMM_REGION_K_IDENT);
+        return (void*)k_address;
     }
 
     struct page_map_index map;
@@ -561,7 +612,9 @@ void* get_physical_address(struct page_directory* root, void* virtual_address)
 
 void init_vmm()
 {
-    map_range(get_current_cr3(), (void*)VMM_REGION_K_IDENT, (void*)0, PAGE_SIZE_1GIB, PHYSICAL_MEMORY_SIZE, VMM_WRITE_BIT | VMM_USER_BIT);
+    map_range(get_current_cr3(), (void*)VMM_REGION_K_IDENT, (void*)0, PAGE_SIZE_1GIB, PHYSICAL_MEMORY_SIZE, VMM_WRITE_BIT);
+    map_range(get_current_cr3(), (void*)VMM_REGION_K_HEAP, (void*)0, PAGE_SIZE_1GIB, PHYSICAL_MEMORY_SIZE, VMM_WRITE_BIT);
+    map_range(get_current_cr3(), (void*)VMM_REGION_DEVICES, (void*)0, PAGE_SIZE_1GIB, PHYSICAL_MEMORY_SIZE, VMM_WRITE_BIT | VMM_CACHE_DISABLE_BIT | VMM_NX_BIT);
 
     struct page_directory * cr3 = get_current_cr3();
     vm_entry * vme = (vm_entry*)&(cr3->entries[2]);
@@ -619,38 +672,11 @@ uint64_t vmm_is_present(struct page_directory* root, void * vmm_address) {
     return PAGE_SIZE_4KIB;
 }
 
-void * vmm_create_kernel_stack(struct page_directory* stack_root, uint64_t stack_pages, uint8_t flags, uint64_t * stack_base) {
-        
-    void * new_stack_phys = pmm_alloc(stack_pages*0x1000);
-    //Init to zero
-    memset(TO_IDENTITY_MAP(new_stack_phys), 0, stack_pages*0x1000);
-    void * base_address = (void*)((uint64_t)VMM_REGION_K_STACK+(uint64_t)new_stack_phys);
-    //CHECK BOUNDS
-    if ((uint64_t)base_address < VMM_REGION_K_STACK || (uint64_t)base_address > VMM_REGION_K_STACK+VMM_REGION_SIZE)
-    {
-        panic("Kernel stack out of bounds\n");
-        return NULL;
-    }
-
-    map_range(stack_root, base_address, new_stack_phys, PAGE_SIZE_4KIB, stack_pages*PAGE_SIZE_4KIB, flags);
-    
-    uint64_t stack_top_address = base_address+stack_pages*PAGE_SIZE_4KIB-0x10;
-    //If address is not 16-byte aligned, align it by subtracting the difference
-    if (stack_top_address % 0x10)
-    {
-        stack_top_address -= stack_top_address % 0x10;
-    }
-    stack_top_address -= 0x8;
-
-    *(uint64_t*)stack_base = base_address;
-    return (void*)stack_top_address;
-}
-
 void * vmm_copy_stack(struct page_directory* stack_root, void * stack_base, uint64_t stack_size, uint8_t flags)
 {
     stack_size = (stack_size + 0xfff) & ~0xfff;
-    void * new_stack_phys = pmm_alloc(stack_size);
 
+    void * new_stack_phys = pmm_alloc(stack_size);
     memcpy(TO_IDENTITY_MAP(new_stack_phys), stack_base, stack_size);
     map_range(stack_root, stack_base, new_stack_phys, PAGE_SIZE_4KIB, stack_size, flags);
     return stack_base;

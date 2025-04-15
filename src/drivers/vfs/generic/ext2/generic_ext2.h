@@ -122,6 +122,19 @@ int ext2_compat_file_creat(int partno, const char* path, int mode) {
     return get_fd(path, partition->name, 0, mode);
 }
 
+int ext2_compat_file_dup(int partno, int oldfd, int newfd) {
+    if (partno < 0 || partno >= MAX_EXT2_PARTITIONS) 
+        return -1;
+    struct ext2_partition * partition = ext2_partitions[partno];
+    if (partition == 0)
+        return -1;
+
+    struct file_descriptor_entry * entry = vfs_compat_get_file_descriptor(oldfd);
+    if (entry == 0 || entry->loaded == 0) return -1;
+    return dup_fd(oldfd, newfd);
+}
+
+
 int ext2_compat_dir_creat(int partno, const char* path, int mode) {
     if (partno < 0 || partno >= MAX_EXT2_PARTITIONS) 
         return -1;
@@ -137,7 +150,6 @@ int ext2_compat_dir_creat(int partno, const char* path, int mode) {
 
     return get_dirfd(path, partition->name, 0, mode);
 }
-
 
 uint64_t ext2_compat_file_read(int partno, int fd, void* buffer, uint64_t size) {
     if (partno < 0 || partno >= MAX_EXT2_PARTITIONS) 
@@ -311,6 +323,7 @@ struct vfs_compatible ext2_register = {
     .file_open = ext2_compat_file_open,
     .file_close = ext2_compat_file_close,
     .file_creat = ext2_compat_file_creat,
+    .file_dup = ext2_compat_file_dup,
     .file_read = ext2_compat_file_read,
     .file_write = ext2_compat_file_write,
     .file_seek = ext2_compat_file_seek,

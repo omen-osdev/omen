@@ -76,6 +76,8 @@ void mprotect_current(void*, uint64_t, uint8_t);
 uint8_t is_user_access(struct page_directory* pml4, void * address);
 
 void map_range(struct page_directory* root, void * virtual_start, void * physical_start, uint64_t page_size, uint64_t size, uint8_t flags);
+void unmap_range(struct page_directory* root, void * virtual_start, uint64_t size);
+
 void * allocate_vmm(struct page_directory * pml4, uint64_t size, uint64_t region, uint8_t flags);
 void free_vmm(struct page_directory * pml4, void * address);
 

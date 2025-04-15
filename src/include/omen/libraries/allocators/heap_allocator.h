@@ -11,7 +11,6 @@ struct stack {
 };
 
 void * kmalloc(uint64_t size);
-void * kmalloc_standalone(uint64_t size);
 void kfree(void* address);
 
 void kstackalloc(struct page_directory* pd, struct stack * stack, uint64_t length);

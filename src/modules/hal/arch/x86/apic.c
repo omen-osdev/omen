@@ -178,11 +178,9 @@ void ioapic_init(uint64_t ioapic_id) {
     enable_apic(apic_id);
 
     struct ioapic* ioapic = actx.ioapics[ioapic_id];
-    uint64_t ioapic_address = (uint64_t)ioapic->ioapic_address;
-    struct page_directory* pml4 = get_pml4();
-    map_memory(pml4, (void*)ioapic_address, (void*)ioapic_address, 0x1000, VMM_WRITE_BIT);
+    void *ioapic_address = (uint64_t)VMM_TO_DEVICE_MEMORY(ioapic->ioapic_address);
     uint64_t ioapic_version = ioapic_read_register(
-        (void*)ioapic_address,
+        ioapic_address,
         IOAPIC_VERSION
     );
 
@@ -303,7 +301,7 @@ void io_change_irq_state(uint8_t irq, uint8_t io_apic_id, uint8_t is_enable){
     if (ioapic == 0) {
         return;
     }
-    uint64_t ioapic_address = (uint64_t)ioapic->ioapic_address;
+    uint64_t ioapic_address = (uint64_t)VMM_TO_DEVICE_MEMORY(ioapic->ioapic_address);
     uint32_t base = ioapic->gsi_base;
     size_t index = irq - base;
     

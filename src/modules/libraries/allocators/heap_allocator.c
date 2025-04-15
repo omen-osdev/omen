@@ -7,13 +7,7 @@
 #include <omen/libraries/concurrency/mutex.h>
 
 void * kmalloc(uint64_t size) {
-    void * ptr = allocate_vmm(get_pml4(), size, VMM_REGION_K_IDENT, VMM_WRITE_BIT);
-    memset(ptr, 0, size);
-    return ptr;
-}
-
-void * kmalloc_standalone(uint64_t size) {
-    void * ptr = allocate_vmm(get_pml4(), size, VMM_REGION_K_HEAP, VMM_WRITE_BIT);
+    void * ptr = allocate_vmm(get_pml4(), size, VMM_REGION_K_HEAP, 0x0);
     memset(ptr, 0, size);
     return ptr;
 }
@@ -25,11 +19,11 @@ void kstackalloc(struct page_directory* pd, struct stack * stack, uint64_t lengt
         pages++;
     }
 
-    uint64_t base = allocate_vmm(pd, pages*0x1000, VMM_REGION_K_STACK, VMM_WRITE_BIT | VMM_USER_BIT);
+    uint64_t base = allocate_vmm(pd, pages*0x1000, VMM_REGION_K_STACK, VMM_WRITE_BIT);
     if (base == 0) {
         return NULL;
     }
-    memset((void*)to_identity_map(VMM_FROM_KERNEL_STACK(base)), 0, pages*0x1000);
+    memset((void*)to_identity_map(get_physical_address(pd, base)), 0, pages*0x1000);
     uint64_t top = (uint64_t)(base+pages*0x1000)-0x10;
     //if unaligned_alloc is not 16-byte aligned, align it by subtracting the difference
     if (top % 0x10) {
@@ -42,11 +36,11 @@ void kstackalloc(struct page_directory* pd, struct stack * stack, uint64_t lengt
 }
 
 void kstackfree(struct page_directory* pd, struct stack * stack) {
-    free_vmm(pd, stack->base);
+    unmap_range(pd, stack->base, (uint64_t)stack->top - (uint64_t)stack->base);
 }
 
 void kfree(void* address) {
-    free_vmm(get_pml4(), address);
+    free_vmm(get_pml4(), address); //In the future account for malloc size!!
 }
 
 void * malloc(struct page_directory* root, uint64_t size) {
@@ -87,5 +81,5 @@ void free(struct page_directory* root, void * address) {
 }
 
 void stackfree(struct page_directory* root, struct stack * stack) {
-    free_vmm(root, stack->base);
+    unmap_range(root, stack->base, stack->top - stack->base);
 }

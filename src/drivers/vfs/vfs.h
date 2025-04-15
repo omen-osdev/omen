@@ -33,6 +33,7 @@ struct vfs_file_system_type {
     int (*file_open)(int, const char*, int, int);
     int (*file_close)(int, int);
     int (*file_creat)(int, const char*, int);
+    int (*file_dup)(int, int, int);
     uint64_t (*file_read)(int, int, void*, uint64_t);
     uint64_t (*file_write)(int, int, void*, uint64_t);
     uint64_t (*file_seek)(int, int, uint64_t, int);

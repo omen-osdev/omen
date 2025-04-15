@@ -53,6 +53,24 @@ int vfs_socket_open(int family, int type, int protocol) {
 
 }
 
+int vfs_file_dup(int old, int new) {
+    vfs_print("vfs_file_dup(%d, %d)\n", old, new);
+    char * path = get_full_path_from_fd(old);
+    if (path == 0) {
+        return -1;
+    }
+    char * native_path_buffer = kmalloc(strlen(path) + 1);
+    struct vfs_mount* mount = get_mount_from_path(path, native_path_buffer);
+
+    int res = -1;
+    if (mount != 0) {
+        res = mount->fst->file_dup(mount->internal_index, old, new);
+    }
+    kfree(native_path_buffer);
+    kfree(path);
+    return res;
+}
+
 int vfs_file_open(char* path, int flags, int mode) {
     char * npath = kmalloc(strlen(path) + 1);
     strcpy(npath, path);

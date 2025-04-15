@@ -126,11 +126,17 @@ uint64_t open_syscall_handler(process_t*task, cpu_context_t* ctx) {
     int flags = SYSCALL_ARG1(ctx);
     int mode = SYSCALL_ARG2(ctx);
     kprintf("[PID: %d] OPEN_SYSCALL(%s,%d,%d)\n", task->pid, path, flags, mode);
+    
+    if (task->open_files_count >= MAX_OPEN_FILES) {
+        kprintf("Max open files reached\n");
+        return SYSCALL_ERROR;
+    }
+    
     int fd = vfs_file_open(path, flags, mode);
     if (fd < 0) {
         return SYSCALL_ERROR;
     }
-    
+
     task->open_files[task->open_files_count++] = fd;
     return fd;
 }
@@ -141,7 +147,8 @@ uint64_t close_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)fd;
     kprintf("[PID: %d] CLOSE_SYSCALL(%d)\n", task->pid, fd);
     
-    for (int i = 0; i < task->open_files_count; i++) {
+    int open_files_prev = task->open_files_count;
+    for (int i = 0; i < open_files_prev; i++) {
         if (task->open_files[i] == fd) {
             vfs_file_close(fd);
             task->open_files[i] = task->open_files[task->open_files_count - 1];
@@ -324,36 +331,49 @@ uint64_t mmap_syscall_handler(process_t*task, cpu_context_t*ctx) {
     kprintf("Found free area: %p\n", addr);
 
     if (flags & MAP_PRIVATE || flags & MAP_SHARED) {
-        allocate_at_vaddr(task->vmm, addr, length, vmm_flags);
-        create_vmarea(task, addr, (addr + length), vmm_flags, vma_flags, PAGE_SIZE_4KIB);
 
+        allocate_at_vaddr(task->vmm, addr, length, vmm_flags);
+
+        int newfd = -1;
         if (flags & MAP_ANONYMOUS) {
+            create_vmarea(task, addr, (addr + length), vmm_flags, vma_flags, PAGE_SIZE_4KIB, newfd, 0);
             return addr;
+        } else {
+            newfd = vfs_file_dup(fd, -1);
+            if (newfd < 0) {
+                goto cleanup_on_error;
+            }
         }
+
+        create_vmarea(task, addr, (addr + length), vmm_flags, vma_flags, PAGE_SIZE_4KIB, newfd, offset);
         
         //add write privilege to the buffer
         mprotect(task->vmm, addr, length, PROT_READ | PROT_WRITE);
 
         //Read the file into the memory
-        if (vfs_file_seek(fd, offset, SEEK_SET) < 0) {
+        if (vfs_file_seek(newfd, offset, SEEK_SET) < 0) {
             kprintf("Failed to seek file\n");
+            vfs_file_close(newfd);
             goto cleanup_on_error;
         }
 
-        int64_t bytes_read = vfs_file_read(fd, addr, length);
+        int64_t bytes_read = vfs_file_read(newfd, addr, length);
         if (bytes_read < 0) {
             kprintf("Failed to read file\n");
+            vfs_file_close(newfd);
             goto cleanup_on_error;
         } 
 
-        //Reset permissions
-        mprotect(task->vmm, addr, length, vmm_flags);
+        //Reset permissions but keep readonly so it page faults on a write
+        uint8_t roflags = vmm_flags & ~VMM_WRITE_BIT;
+        mprotect(task->vmm, addr, length, roflags);
         return addr;
     }
 
 cleanup_on_error:
-    panic("Failed to map memory\n");
-    unmap_memory(task->vmm, addr);
+    unmap_range(task->vmm, addr, length);
+    remove_vmarea(task, addr);
+    panic("MMAP ERROR\n");
     return SYSCALL_ERROR;
 }
 
@@ -365,7 +385,42 @@ uint64_t mprotect_syscall_handler(process_t*task, cpu_context_t* ctx) {
     int prot = SYSCALL_ARG2(ctx);
 
     kprintf("mprotect(%p,%d,%d)\n", addr, length, prot);
-    panic("Not implemented\n");
+    if (addr == NULL || length == 0) {
+        return SYSCALL_ERROR;
+    }
+
+    //Check that protections are valid
+    uint8_t vmm_flags = 0;
+    if (!(prot & PROT_READ) || prot & PROT_NONE) {
+        panic("Not implemented!");
+    }
+
+    if (prot & PROT_WRITE) {
+        vmm_flags |= VMM_WRITE_BIT;
+    }
+    if (!(prot & PROT_EXEC)) {
+        vmm_flags |= VMM_NX_BIT;
+    }
+    vmm_flags |= VMM_USER_BIT;
+    if (prot & PROT_NONE) {
+        vmm_flags |= VMM_NX_BIT;
+    }
+    
+    //Check if the address is in a vmarea
+    struct vm_area * vma = is_in_vmarea(task, addr);
+    if (vma == NULL) {
+        panic("Failed to find vmarea\n");
+    }
+
+    if (vma->start != addr) {
+        panic("Invalid address\n");
+    }
+
+    if (length > (uint64_t)(vma->end - vma->start)) {
+        panic("Length is greater than vmarea\n");
+    }
+
+    mprotect(task->vmm, addr, length, vmm_flags);
     return NULL;
 }
 
@@ -380,10 +435,104 @@ uint64_t munmap_syscall_handler(process_t*task, cpu_context_t* ctx) {
     }
     
     //Unmap the memory
-    panic("Not implemented\n");
-    //unmap_memory(task->context->cr3, addr);
+    struct vm_area * vma = is_in_vmarea(task, addr);
+    if (vma == NULL) {
+        panic("Failed to find vmarea\n");
+    }
+
+    if (vma->start != addr) {
+        panic("Invalid address\n");
+    }
+
+    if (vma->extended_flags & VMAREA_EXT_REQ_SYNC) {
+        task_sync_files(task, vma, 0);
+        //Write to the file if necessary
+    }
+
+    remove_vmarea(task, addr);
+    unmap_range(task->vmm, addr, length);
     return SYSCALL_SUCCESS;
 }
+
+#define MS_SYNC 0x0
+#define MS_ASYNC 0x1
+#define MS_INVALIDATE 0x2
+uint64_t msync_syscall_handler(process_t*task, cpu_context_t* ctx) {
+    void * addr = (void *)SYSCALL_ARG0(ctx);
+    size_t length = SYSCALL_ARG1(ctx);
+    int flags = SYSCALL_ARG2(ctx);
+    kprintf("[PID: %d] MSYNC_SYSCALL(%p,%d,%d)\n", task->pid, addr, length, flags);
+
+    if (flags & MS_ASYNC) {
+        panic("MS_ASYNC not implemented\n");
+    }
+    if (flags & MS_INVALIDATE) {
+        panic("MS_INVALIDATE not implemented\n");
+    }
+
+    if (addr == NULL || length == 0) {
+        return SYSCALL_ERROR;
+    }
+    //Unmap the memory
+    struct vm_area * vma = is_in_vmarea(task, addr);
+    if (vma == NULL) {
+        panic("Failed to find vmarea\n");
+    }
+
+    if (vma->start != addr) {
+        panic("Invalid address\n");
+    }
+
+    if (length > (uint64_t)(vma->end - vma->start)) {
+        panic("Length is greater than vmarea\n");
+    }
+
+    if (vma->extended_flags & VMAREA_EXT_REQ_SYNC) {
+        task_sync_files(task, vma, length);
+    }
+}
+
+uint64_t dup_syscall_handler(process_t*task, cpu_context_t* ctx) {
+    int fd = SYSCALL_ARG0(ctx);
+    kprintf("[PID: %d] DUP_SYSCALL(%d)\n", task->pid, fd);
+    if (fd < 0) {
+        return SYSCALL_ERROR;
+    }
+
+    if (task->open_files_count >= MAX_OPEN_FILES) {
+        kprintf("Max open files reached\n");
+        return SYSCALL_ERROR;
+    }
+
+    int newfd = vfs_file_dup(fd, -1);
+    if (newfd < 0) {
+        return SYSCALL_ERROR;
+    }
+    task->open_files[task->open_files_count++] = newfd;
+    return newfd;
+}
+
+uint64_t dup2_syscall_handler(process_t*task, cpu_context_t* ctx) {
+    int oldfd = SYSCALL_ARG0(ctx);
+    int newfd = SYSCALL_ARG1(ctx);
+    kprintf("[PID: %d] DUP2_SYSCALL(%d,%d)\n", task->pid, oldfd, newfd);
+    if (oldfd < 0 || newfd < 0) {
+        return SYSCALL_ERROR;
+    }
+
+    if (task->open_files_count >= MAX_OPEN_FILES) {
+        kprintf("Max open files reached\n");
+        return SYSCALL_ERROR;
+    }
+
+    int ret = vfs_file_dup(oldfd, newfd);
+    if (ret < 0) {
+        return SYSCALL_ERROR;
+    }
+    task->open_files[task->open_files_count++] = newfd;
+    return newfd;
+}
+
 
 uint64_t undefined_syscall_handler(process_t*task, cpu_context_t* ctx) {
     (void)task;
@@ -406,7 +555,12 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [16] = ioctl_syscall_handler,
     [17 ... 23] = undefined_syscall_handler,
     [24] = sched_yield_syscall_handler,
-    [25 ... 56] = undefined_syscall_handler,
+    [25] = undefined_syscall_handler,
+    [26] = msync_syscall_handler,
+    [27 ... 31] = undefined_syscall_handler,
+    [32] = dup_syscall_handler,
+    [33] = dup2_syscall_handler,
+    [34 ... 56] = undefined_syscall_handler,
     [57] = fork_syscall_handler,
     [58] = undefined_syscall_handler,
     [59] = execve_syscall_handler,
@@ -417,6 +571,7 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
 void global_syscall_handler(cpu_context_t* ctx) {
 
     process_t * current_task = get_current_process();
+    current_task->syscall_ready = 1;
     
     memcpy(current_task->context, ctx, sizeof(cpu_context_t));
     memcpy(current_task->context->info, ctx->info, sizeof(struct cpu_context_info));
@@ -433,11 +588,20 @@ void global_syscall_handler(cpu_context_t* ctx) {
     current_task = get_current_process();
 
     __asm__("fxrstor %0" : "=m" (current_task->fxsave_region));
-    memcpy(ctx, current_task->context, sizeof(cpu_context_t));
-    memcpy(ctx->info, current_task->context->info, sizeof(struct cpu_context_info));
+
     
     struct tss * tss = arch_get_cpu(current_task->core_id)->tss;
     tss_set_stack(tss, ctx->info->kstack, 0);
     tss_set_stack(tss, ctx->rsp, 3);
-    SYSRET(ctx, result);
+
+    memcpy(ctx, current_task->context, sizeof(cpu_context_t));
+    memcpy(ctx->info, current_task->context->info, sizeof(struct cpu_context_info));
+
+    if (current_task->syscall_ready) {
+        SYSRET(ctx, result);
+    } else {
+    __asm__("mov %0, %%rsp\n"
+            "mov %1, %%cr3\n"
+            "ret\n" : : "r" (current_task->ustack), "r" (current_task->context->cr3));
+    }
 }

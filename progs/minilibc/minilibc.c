@@ -68,3 +68,12 @@ void sys_mprotect(void * addr, size_t length, int prot) {
 void sys_munmap(void * addr, size_t length) {
     syscall(11, (int64_t)addr, (int64_t)length, 0, 0, 0, 0);
 }
+int sys_msync(void * addr, size_t length, int flags) {
+    return (int)syscall(26, (int64_t)addr, (int64_t)length, (int64_t)flags, 0, 0, 0);
+}
+int sys_dup(int fd) {
+    return (int)syscall(32, (int64_t)fd, 0, 0, 0, 0, 0);
+}
+int sys_dup2(int oldfd, int newfd) {
+    return (int)syscall(33, (int64_t)oldfd, (int64_t)newfd, 0, 0, 0, 0);
+}

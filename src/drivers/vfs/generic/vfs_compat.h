@@ -114,6 +114,7 @@ struct vfs_compatible {
     int (*file_open)(int, const char*, int, int);
     int (*file_close)(int, int);
     int (*file_creat)(int, const char*, int);
+    int (*file_dup)(int, int, int);
     uint64_t (*file_read)(int, int, void*, uint64_t);
     uint64_t (*file_write)(int, int, void*, uint64_t);
     uint64_t (*file_seek)(int, int, uint64_t, int);
@@ -145,6 +146,7 @@ struct file_descriptor_entry * vfs_compat_get_file_descriptor(int fd);
 
 int get_fd(const char* path, const char* mount, int flags, int mode);
 int get_dirfd(const char* path, const char* mount, int flags, int mode);
+int dup_fd(int oldfd, int newfd); //If newfd == -1 use dup, else use dup2
 
 uint8_t add_file_to_dirfd(int fd, const char* name, uint32_t inode, uint32_t type, uint32_t name_len);
 int release_dirfd(int fd);

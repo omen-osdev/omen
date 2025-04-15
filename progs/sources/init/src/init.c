@@ -31,21 +31,43 @@ void print_file() {
         }
     }
     printf("\n");
+    sys_munmap(file_buffer, file_stat.st_size);
     sys_close(fd);  
 }
 
-void test_fork() {
-    volatile short pid = sys_fork();
-    if (pid == 0) {
-        printf("I am the child\n");
-    } else {
-        printf("I am the parent\n");
-        sys_exit(0);
+void write_file(const char * text) {
+    int fd = sys_open("hdap2/data/lorem-ipsum.txt", 0);
+    if (fd < 0) {
+        printf("Failed to open file for writing\n");
+        return;
     }
+
+    struct stat file_stat;
+    memset(&file_stat, 0, sizeof(struct stat));
+    sys_fstat(fd, &file_stat);
+    printf("File size: %d\n", file_stat.st_size);
+    printf("File mode: %d\n", file_stat.st_mode);
+
+    char * file_buffer = sys_mmap(NULL, file_stat.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (file_buffer == NULL) {
+        printf("Failed to map file\n");
+        sys_close(fd);
+        return;
+    }
+    printf("File mapped at: %p\n", file_buffer);
+
+    //Write to the file
+    printf("Writing to file: %s\n", text);
+    for (uint64_t i = 0; i < strlen(text); i++) {
+        file_buffer[i] = text[i];
+    }
+
+    sys_munmap(file_buffer, file_stat.st_size);
+    sys_close(fd);
 }
 
 void test_cow() {
-    char * buffer = sys_mmap(NULL, 0x1000, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    char * buffer = sys_mmap(NULL, 0x1000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (buffer == NULL) {
         printf("Failed to map memory\n");
         return;
@@ -54,10 +76,10 @@ void test_cow() {
     volatile short pid = sys_fork();
     if (pid == 0) {
         printf("I am the child\n");
-        printf("Child buffer before: %s\n", buffer);
         buffer[0] = 'C';
-        printf("Child buffer after: %s\n", buffer);
+        printf("Child buffer before: %s\n", buffer);
         sys_sched_yield();
+        printf("Child buffer after: %s\n", buffer);
     } else {
         printf("I am the parent\n");
         buffer[0] = 'P';
@@ -65,37 +87,8 @@ void test_cow() {
         sys_sched_yield();
         printf("Parent buffer after: %s\n", buffer);
     }
-}
 
-void test_sched() {
-    volatile short pid = sys_fork();
-    if (pid == 0) {
-        printf("I am the child\n");
-        while (1) {
-            printf("Child is running\n");
-            sys_sched_yield();
-        }
-    } else {
-        printf("I am the parent\n");
-        while (1) {
-            printf("Parent is running\n");
-            sys_sched_yield();
-        }
-    }
-}
-
-//Create a test that spawns hundreds of processes and schedules them
-void test_sched_hundreds() {
-    for (int i = 0; i < 100; i++) {
-        volatile short pid = sys_fork();
-        if (pid == 0) {
-            printf("I am the child %d\n", i);
-            while (1) {
-                printf("Child %d is running\n", i);
-                sys_sched_yield();
-            }
-        }
-    }
+    sys_munmap(buffer, 0x1000);
 }
 
 int main(int argc, char* argv[]) {
@@ -104,12 +97,16 @@ int main(int argc, char* argv[]) {
     if (pid == 0) {
         printf("I am the child\n");
         print_file();
+        write_file("Hello from the child process!\n");
+        print_file();
     } else {
         sys_execve("hdap2/export/idle.elf", NULL, NULL);
     }
 
+    test_cow();
+
     while (1) {
-        printf("Init process is running\n");
+        //printf("Init process is running\n");
         sys_sched_yield();
     }
 }

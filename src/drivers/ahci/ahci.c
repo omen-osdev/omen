@@ -443,15 +443,12 @@ void init_ahci(uint32_t bar5) {
         panic("AHCI already initialized\n");
 
     abar = (struct hba_memory*)(uint64_t)(VMM_TO_DEVICE_MEMORY(bar5));
-    map_memory(get_pml4(), abar, bar5, 0x1000, VMM_CACHE_DISABLE_BIT | VMM_WRITE_BIT | VMM_NX_BIT);
     probe_ports(abar);
 
     for (int i = 0; i < port_count; i++) {
         struct ahci_port* port = &ahci_ports[i];
         configure_port(port);
         port->buffer = (uint8_t*)allocate_phys_page();
-        void * buffer_dev_addr = (void*)((uint64_t)(VMM_TO_DEVICE_MEMORY(port->buffer)));
-        map_memory(get_pml4(), buffer_dev_addr, port->buffer, 4096, VMM_WRITE_BIT | VMM_NX_BIT);
         memset(VMM_TO_DEVICE_MEMORY(port->buffer), 0, 4096);
     }
 }

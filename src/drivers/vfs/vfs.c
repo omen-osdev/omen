@@ -91,6 +91,7 @@ void register_filesystem(struct vfs_compatible * registrar) {
     fst->file_open = registrar->file_open;
     fst->file_close = registrar->file_close;
     fst->file_creat = registrar->file_creat;
+    fst->file_dup = registrar->file_dup;
     fst->file_read = registrar->file_read;
     fst->file_write = registrar->file_write;
     fst->file_seek = registrar->file_seek;

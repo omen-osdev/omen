@@ -68,6 +68,43 @@ int get_dirfd(const char* path, const char* mount, int flags, int mode) {
     return -1;
 }
 
+int dup2_fd(int oldfd, int newfd) {
+    if (oldfd >= VFS_COMPAT_MAX_OPEN_FILES) return -1;
+    if (newfd >= VFS_COMPAT_MAX_OPEN_FILES) return -1;
+    if (open_file_table[oldfd].loaded == 0) return -1;
+    if (open_file_table[newfd].loaded == 1) {
+        open_file_table[newfd].loaded = 0;
+    }
+    open_file_table[newfd].loaded = 1;
+    open_file_table[newfd].flags = open_file_table[oldfd].flags;
+    open_file_table[newfd].mode = open_file_table[oldfd].mode;
+    open_file_table[newfd].offset = open_file_table[oldfd].offset;
+    strncpy(open_file_table[newfd].name, open_file_table[oldfd].name, strlen(open_file_table[oldfd].name));
+    strncpy(open_file_table[newfd].mount, open_file_table[oldfd].mount, strlen(open_file_table[oldfd].mount));
+    return newfd;
+}
+
+int dup_fd(int oldfd, int newfd) {
+    //if newfd != -1 then apply dup2's logic
+    if (newfd != -1) return dup2_fd(oldfd, newfd);
+    //else behave like dup and ignore newfd
+    if (oldfd >= VFS_COMPAT_MAX_OPEN_FILES) return -1;
+    if (open_file_table[oldfd].loaded == 0) return -1;
+
+    for (int i = 0; i < VFS_COMPAT_MAX_OPEN_FILES; i++) {
+        if (open_file_table[i].loaded == 0) {
+            open_file_table[i].loaded = 1;
+            open_file_table[i].flags = open_file_table[oldfd].flags;
+            open_file_table[i].mode = open_file_table[oldfd].mode;
+            open_file_table[i].offset = open_file_table[oldfd].offset;
+            strncpy(open_file_table[i].name, open_file_table[oldfd].name, strlen(open_file_table[oldfd].name));
+            strncpy(open_file_table[i].mount, open_file_table[oldfd].mount, strlen(open_file_table[oldfd].mount));
+            return i;
+        }
+    }
+    return -1;
+}
+
 int is_open(const char* path) {
     for (int i = 0; i < VFS_COMPAT_MAX_OPEN_FILES; i++) {
         if (open_file_table[i].loaded == 1) {

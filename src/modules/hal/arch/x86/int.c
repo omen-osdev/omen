@@ -7,6 +7,7 @@
 #include <omen/apps/debug/debug.h>
 #include <omen/apps/panic/panic.h>
 #include <omen/managers/mem/vmm.h>
+#include <omen/managers/cpu/process.h>
 #include <omen/libraries/std/string.h>
 #include <omen/libraries/allocators/heap_allocator.h>
 
@@ -53,6 +54,13 @@ void PageFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {
     if (!task) panic("Page fault in kernel mode, no task detected!\n");
 
     struct vm_area* vma = is_in_vmarea(task, (void*)faulting_address);
+    if (task && vma && (vma->flags & VMM_WRITE_BIT) && (vma->extended_flags & VMAREA_EXT_SHARED)) {
+        kprintf("Page fault in shared area, allowing write and requesting sync\n");
+        vma->extended_flags |= VMAREA_EXT_REQ_SYNC;
+        mprotect(task->vmm, (void*)faulting_address, vma->page_size, vma->flags);
+        task->context->cr3 = from_identity_map(task->context->cr3);
+        return;
+    }
     if (task && vma && (vma->flags & VMM_WRITE_BIT) && (vma->extended_flags & VMAREA_EXT_COW)) {
         kprintf("Page fault in COW area, duplicating page\n");
         duplicate_vmarea_cow(task, vma);
@@ -160,12 +168,12 @@ void init_interrupts() {
     }
 
     idtr.limit = 256 * sizeof(struct idtdescentry) - 1;
-    idtr.offset = (uint64_t)kmalloc_standalone(256 * sizeof(struct idtdescentry));
+    idtr.offset = (uint64_t)kmalloc(256 * sizeof(struct idtdescentry));
     memset((void*)idtr.offset, 0, 256 * sizeof(struct idtdescentry));
 
-    struct page_directory* pml4 = get_pml4();
-
-    mprotect(pml4, (void*)idtr.offset, 256 * sizeof(struct idtdescentry), VMM_USER_BIT | VMM_WRITE_BIT);
+    //TODO: Maybe this has to be uncommented, i don't know if idt need to be user accessible!
+    //struct page_directory* pml4 = get_pml4();
+    //mprotect(pml4, (void*)idtr.offset, 256 * sizeof(struct idtdescentry), VMM_USER_BIT | VMM_WRITE_BIT);
 
     for (int i = 0; i < 256; i++) {
         set_idt_gate((uint64_t)interrupt_vector[i], i, IDT_TA_InterruptGate, 1, get_kernel_code_selector());

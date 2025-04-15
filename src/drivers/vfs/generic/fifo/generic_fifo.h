@@ -175,6 +175,7 @@ int fifo_compat_flush(int partno) {(void)partno; return -1;}
 int fifo_compat_dir_open(int partno, const char* path) {(void)partno; (void)path; return -1;}
 int fifo_compat_dir_close(int partno, int fd) {(void)partno; (void)fd; return -1;}
 int fifo_compat_file_creat(int partno, const char* path, int mode) {(void)partno; (void)path; (void)mode; return -1;}
+int fifo_compat_file_dup(int partno, int oldfd, int newfd) {(void)partno; (void)oldfd; (void)newfd; return -1;}
 int fifo_compat_dir_creat(int partno, const char* path, int mode) {(void)partno; (void)path; (void)mode; return -1;}
 int fifo_compat_dir_read(int partno, int fd, char* name, uint32_t * name_len, uint32_t * type) {(void)partno; (void)fd; (void)name_len; (void)type; return -1;}
 int fifo_compat_dir_load(int partno, int fd) {(void)partno; (void)fd; return -1;}
@@ -197,6 +198,7 @@ struct vfs_compatible fifo_register = {
     .file_open = fifo_compat_file_open,
     .file_close = fifo_compat_file_close,
     .file_creat = fifo_compat_file_creat,
+    .file_dup = fifo_compat_file_dup,
     .file_read = fifo_compat_file_read,
     .file_write = fifo_compat_file_write,
     .file_seek = fifo_compat_file_seek,
