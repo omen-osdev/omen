@@ -3,7 +3,6 @@
 
 #include <omen/libraries/std/stdint.h>
 #include <omen/managers/mem/vmm.h>
-#include <omen/managers/cpu/process.h>
 
 struct stack {
     void * base;

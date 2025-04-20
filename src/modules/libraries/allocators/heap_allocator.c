@@ -1,6 +1,5 @@
 #include <omen/libraries/allocators/heap_allocator.h>
 #include <omen/managers/mem/vmm.h>
-#include <omen/managers/cpu/process.h>
 #include <omen/libraries/std/string.h>
 #include <omen/apps/debug/debug.h>
 #include <omen/apps/panic/panic.h>

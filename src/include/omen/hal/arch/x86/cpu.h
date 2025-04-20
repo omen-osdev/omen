@@ -11,7 +11,7 @@ struct cpu_context_info {
     uint64_t thread;
 }__attribute__((packed));
 
-typedef struct context {
+typedef struct cpu_context {
     uint64_t cr3;
 
     struct cpu_context_info* info;

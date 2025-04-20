@@ -8,6 +8,7 @@
 #include <omen/apps/panic/panic.h>
 #include <omen/managers/mem/vmm.h>
 #include <omen/managers/cpu/process.h>
+#include <omen/managers/cpu/vmarea.h>
 #include <omen/libraries/std/string.h>
 #include <omen/libraries/allocators/heap_allocator.h>
 
@@ -49,22 +50,22 @@ void PageFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {
     __asm__ volatile("mov %%cr2, %0" : "=r" (faulting_address));
     kprintf("Page Fault Address: %lx\n", (uint64_t)faulting_address);
     kprintf("Error code: %lx\n", ctx->error_code);
-    process_t * task = get_current_process();
-    task->context->cr3 = to_identity_map(ctx->cr3);
-    if (!task) panic("Page fault in kernel mode, no task detected!\n");
+    thread_t * thread = get_current_thread();
+    if (!thread) panic("Page fault in kernel mode, no task detected!\n");
+    thread->context->cpu_context->cr3 = to_identity_map(ctx->cr3);
 
-    struct vm_area* vma = is_in_vmarea(task, (void*)faulting_address);
-    if (task && vma && (vma->flags & VMM_WRITE_BIT) && (vma->extended_flags & VMAREA_EXT_SHARED)) {
+    struct vm_area* vma = is_in_vmarea(thread->process, (void*)faulting_address);
+    if (thread->process && vma && (vma->flags & VMM_WRITE_BIT) && (vma->extended_flags & VMAREA_EXT_SHARED)) {
         kprintf("Page fault in shared area, allowing write and requesting sync\n");
         vma->extended_flags |= VMAREA_EXT_REQ_SYNC;
-        mprotect(task->vmm, (void*)faulting_address, vma->page_size, vma->flags);
-        task->context->cr3 = from_identity_map(task->context->cr3);
+        mprotect(thread->process->vmm, (void*)faulting_address, vma->page_size, vma->flags);
+        thread->context->cpu_context->cr3 = from_identity_map(thread->context->cpu_context->cr3);
         return;
     }
-    if (task && vma && (vma->flags & VMM_WRITE_BIT) && (vma->extended_flags & VMAREA_EXT_COW)) {
+    if (thread->process && vma && (vma->flags & VMM_WRITE_BIT) && (vma->extended_flags & VMAREA_EXT_COW)) {
         kprintf("Page fault in COW area, duplicating page\n");
-        duplicate_vmarea_cow(task, vma);
-        task->context->cr3 = from_identity_map(task->context->cr3);
+        duplicate_vmarea_cow(thread->process, vma);
+        thread->context->cpu_context->cr3 = from_identity_map(thread->context->cpu_context->cr3);
         return;
     }
 

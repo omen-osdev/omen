@@ -7,7 +7,6 @@
 #include <omen/libraries/std/string.h>
 #include <omen/libraries/std/stddef.h>
 #include <omen/libraries/std/stdbool.h>
-#include <omen/managers/cpu/process.h>
 #include <omen/managers/dev/devices.h>
 
 struct device * writer = NULL;

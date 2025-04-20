@@ -2,12 +2,13 @@
 #include <omen/hal/arch/x86/msr.h>
 #include <omen/hal/arch/x86/cpu.h>
 #include <omen/managers/cpu/process.h>
+#include <omen/managers/cpu/vmarea.h>
 #include <omen/libraries/std/string.h>
 #include <omen/apps/debug/debug.h>
 #include <omen/apps/panic/panic.h>
 #include <vfs/vfs.h>
 #include <vfs/vfs_interface.h>
-
+#include <errno.h>
 /*
 
 
@@ -81,7 +82,9 @@ kot's
 
 */
 
-#define SYSRET(ctx, val) ctx->rax = val; return;
+extern void setFsBase(uint64_t base);
+
+#define SYSRET(ctx, val) ctx->rax = (uint64_t)val; return;
 #define SYSCALL_ARG0(ctx) ctx->rdi
 #define SYSCALL_ARG1(ctx) ctx->rsi
 #define SYSCALL_ARG2(ctx) ctx->rdx
@@ -90,44 +93,40 @@ kot's
 #define SYSCALL_ARG5(ctx) ctx->r9
 extern void syscall_entry();
 
-uint64_t dummy_syscall_handler(process_t*task, cpu_context_t* ctx) {
-    (void)task;
-    kprintf("[PID: %d] DUMMY_SYSCALL(%d)\n", task->pid, ctx->rax);
+int64_t dummy_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    kprintf("[PID: %d | TID %d] DUMMY_SYSCALL(%d)\n", thread->process->pid, thread->id, ctx->rax);
     return SYSCALL_SUCCESS;
 }
 
-uint64_t read_syscall_handler(process_t*task, cpu_context_t* ctx) {
-    (void)task;
+int64_t read_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     uint64_t fd = SYSCALL_ARG0(ctx);
     uint64_t buffer = SYSCALL_ARG1(ctx);
     uint64_t size = SYSCALL_ARG2(ctx);
     (void)fd;
     (void)buffer;
     (void)size;
-    kprintf("[PID: %d] READ_SYSCALL(%d,%d,%d)\n", task->pid, fd, buffer, size);
+    kprintf("[PID: %d | TID %d] READ_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, buffer, size);
     return vfs_file_read(fd, (void*)buffer, size);
 }
 
-uint64_t write_syscall_handler(process_t*task, cpu_context_t* ctx) {
-    (void)task;
+int64_t write_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     uint64_t fd = SYSCALL_ARG0(ctx);
     uint64_t buffer = SYSCALL_ARG1(ctx);
     uint64_t size = SYSCALL_ARG2(ctx);
     (void)fd;
     (void)buffer;
     (void)size;
-    kprintf("[PID: %d] WRITE_SYSCALL(%d,%d,%d)\n", task->pid, fd, buffer, size);
+    kprintf("[PID: %d | TID %d] WRITE_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, buffer, size);
     return vfs_file_write(fd, (void*)buffer, size);
 }
 
-uint64_t open_syscall_handler(process_t*task, cpu_context_t* ctx) {
-    (void)task;
+int64_t open_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char* path = SYSCALL_ARG0(ctx);
     int flags = SYSCALL_ARG1(ctx);
     int mode = SYSCALL_ARG2(ctx);
-    kprintf("[PID: %d] OPEN_SYSCALL(%s,%d,%d)\n", task->pid, path, flags, mode);
+    kprintf("[PID: %d | TID %d] OPEN_SYSCALL(%s,%d,%d)\n", thread->process->pid, thread->id, path, flags, mode);
     
-    if (task->open_files_count >= MAX_OPEN_FILES) {
+    if (thread->process->open_files_count >= MAX_OPEN_FILES) {
         kprintf("Max open files reached\n");
         return SYSCALL_ERROR;
     }
@@ -137,32 +136,30 @@ uint64_t open_syscall_handler(process_t*task, cpu_context_t* ctx) {
         return SYSCALL_ERROR;
     }
 
-    task->open_files[task->open_files_count++] = fd;
+    thread->process->open_files[thread->process->open_files_count++] = fd;
     return fd;
 }
 
-uint64_t close_syscall_handler(process_t*task, cpu_context_t* ctx) {
-    (void)task;
+int64_t close_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     int fd = SYSCALL_ARG0(ctx);
-    (void)fd;
-    kprintf("[PID: %d] CLOSE_SYSCALL(%d)\n", task->pid, fd);
+    kprintf("[PID: %d | TID %d] CLOSE_SYSCALL(%d)\n", thread->process->pid, thread->id, fd);
     
-    int open_files_prev = task->open_files_count;
+    int open_files_prev = thread->process->open_files_count;
     for (int i = 0; i < open_files_prev; i++) {
-        if (task->open_files[i] == fd) {
+        if (thread->process->open_files[i] == fd) {
             vfs_file_close(fd);
-            task->open_files[i] = task->open_files[task->open_files_count - 1];
-            task->open_files_count--;
+            thread->process->open_files[i] = thread->process->open_files[thread->process->open_files_count - 1];
+            thread->process->open_files_count--;
             return SYSCALL_SUCCESS;
         }
     }
     return SYSCALL_ERROR;
 }
 
-uint64_t stat_syscall_handler(process_t*task, cpu_context_t* ctx) {
+int64_t stat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char * path = SYSCALL_ARG0(ctx);
     stat_t* stat = SYSCALL_ARG1(ctx);
-    kprintf("[PID: %d] STAT_SYSCALL(%d,%d)\n", task->pid, path, stat);
+    kprintf("[PID: %d | TID %d] STAT_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, path, stat);
 
     int fd = vfs_file_open((char*)path, O_RDONLY, 0);
     if (fd < 0) {
@@ -178,11 +175,11 @@ uint64_t stat_syscall_handler(process_t*task, cpu_context_t* ctx) {
     return SYSCALL_SUCCESS;
 }
 
-uint64_t fstat_syscall_handler(process_t*task, cpu_context_t* ctx) {
+int64_t fstat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     int fd = SYSCALL_ARG0(ctx);
     stat_t* stat = SYSCALL_ARG1(ctx);
 
-    kprintf("[PID: %d] FSTAT_SYSCALL(%d,%d)\n", task->pid, fd, stat);
+    kprintf("[PID: %d | TID %d] FSTAT_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, fd, stat);
     int ret = vfs_file_stat(fd, stat);
     if (ret < 0) {
         return SYSCALL_ERROR;
@@ -193,15 +190,11 @@ uint64_t fstat_syscall_handler(process_t*task, cpu_context_t* ctx) {
     return SYSCALL_SUCCESS;
 }
 
-uint64_t ioctl_syscall_handler(process_t*task, cpu_context_t* ctx) {
-    (void)task;
+int64_t ioctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     uint64_t fd = SYSCALL_ARG0(ctx);
     uint64_t request = SYSCALL_ARG1(ctx);
     uint64_t arg = SYSCALL_ARG2(ctx);
-    (void)fd;
-    (void)request;
-    (void)arg;
-    kprintf("[PID: %d] IOCTL_SYSCALL(%d,%d,%d)\n", task->pid, fd, request, arg);
+    kprintf("[PID: %d | TID %d] IOCTL_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, request, arg);
     int ret = vfs_file_ioctl(fd, request, arg);
     if (ret < 0) {
         return SYSCALL_ERROR;
@@ -211,25 +204,24 @@ uint64_t ioctl_syscall_handler(process_t*task, cpu_context_t* ctx) {
     return SYSCALL_SUCCESS;
 }
 
-uint64_t sched_yield_syscall_handler(process_t*task, cpu_context_t* ctx) {
-    (void)task;
+int64_t sched_yield_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
-    kprintf("[PID: %d] SCHED_YIELD_SYSCALL()\n", task->pid);
+    kprintf("[PID: %d | TID %d] SCHED_YIELD_SYSCALL()\n", thread->process->pid);
     kprintf("Yielding process %d\n", get_current_process()->pid);
     sched();
     kprintf("Resuming process %d\n", get_current_process()->pid);
     return SYSCALL_SUCCESS;
 }
 
-uint64_t fork_syscall_handler(process_t*task, cpu_context_t* ctx) {
+int64_t fork_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
-    kprintf("[PID: %d] FORK_SYSCALL()\n", task->pid);
-    uint64_t child_pid = (uint64_t)fork(task);
-    kprintf("Child PID: %d\n", child_pid);
+    kprintf("[PID: %d | TID %d] FORK_SYSCALL()\n", thread->process->pid);
+    uint64_t child_pid = (uint64_t)fork(thread);
+    kprintf("Child PID: %d | TID %d\n", child_pid);
     return child_pid;
 }
 
-uint64_t execve_syscall_handler(process_t*task, cpu_context_t* ctx) {
+int64_t execve_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
     const char * path = (const char *)SYSCALL_ARG0(ctx);
     const char * argv = (const char *)SYSCALL_ARG1(ctx);
@@ -238,19 +230,65 @@ uint64_t execve_syscall_handler(process_t*task, cpu_context_t* ctx) {
         kprintf("Invalid arguments for execve\n");
         return SYSCALL_ERROR;
     } else if (argv == NULL || envp == NULL) {
-        kprintf("[PID: %d] EXECVE_SYSCALL(%s,NULL,NULL)\n", task->pid, path);
+        kprintf("[PID: %d | TID %d] EXECVE_SYSCALL(%s,NULL,NULL)\n", thread->process->pid, thread->id, path);
     } else {
-        kprintf("[PID: %d] EXECVE_SYSCALL(%s,%s,%s)\n", task->pid, path, argv, envp);
+        kprintf("[PID: %d | TID %d] EXECVE_SYSCALL(%s,%s,%s)\n", thread->process->pid, thread->id, path, argv, envp);
     }
-    execve(task, path, argv, envp);
+    execve(thread->process, path, argv, envp);
     return SYSCALL_SUCCESS;
 }
 
-uint64_t exit_syscall_handler(process_t*task, cpu_context_t* ctx) {
+#define ARCH_SET_CPUID 0x0
+#define ARCH_GET_CPUID 0x1
+#define ARCH_SET_FS 0x2
+#define ARCH_GET_FS 0x3
+#define ARCH_SET_GS 0x4
+#define ARCH_GET_GS 0x5
+int64_t prctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    (void)ctx;
+    int option = SYSCALL_ARG0(ctx);
+    int arg2 = SYSCALL_ARG1(ctx);
+    kprintf("[PID: %d | TID %d] PRCTL_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, option, arg2);
+    switch (option) {
+        case ARCH_SET_CPUID:
+            return -ENODEV;
+        case ARCH_GET_CPUID:
+            return -ENODEV;
+        case ARCH_SET_FS:
+            thread->context->fs_base = (uint64_t)arg2;
+            break;
+        case ARCH_GET_FS: {
+            unsigned long * fs_base = (unsigned long *)(unsigned long)arg2;
+            if (fs_base == NULL) {
+                return -EINVAL;
+            }
+
+            *fs_base = (unsigned long)thread->context->fs_base;
+            break;
+        }
+        case ARCH_SET_GS:
+            thread->context->gs_base = (uint64_t)arg2;
+            break;
+        case ARCH_GET_GS: {
+            unsigned long * gs_base = (unsigned long *)(unsigned long)arg2;
+            if (gs_base == NULL) {
+                return -EINVAL;
+            }
+
+            *gs_base = (unsigned long)thread->context->gs_base;
+            break;
+        }
+        default:
+            return -EINVAL;
+    }
+    return SYSCALL_SUCCESS;
+}
+
+int64_t exit_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
     int error_code = SYSCALL_ARG0(ctx);
-    kprintf("[PID: %d] EXIT_SYSCALL(%d)\n", task->pid, error_code);
-    exit(task, error_code);
+    kprintf("[PID: %d | TID %d] EXIT_SYSCALL(%d)\n", thread->process->pid, thread->id, error_code);
+    exit(thread->process, error_code);
     return SYSCALL_SUCCESS;
 }
 
@@ -264,14 +302,14 @@ uint64_t exit_syscall_handler(process_t*task, cpu_context_t* ctx) {
 #define PROT_WRITE 0x2
 #define PROT_EXEC 0x4
 #define PROT_NONE 0x8
-uint64_t mmap_syscall_handler(process_t*task, cpu_context_t*ctx) {
+int64_t mmap_syscall_handler(thread_t*thread, cpu_context_t*ctx) {
     void * addr = (void *)SYSCALL_ARG0(ctx);
     size_t length = SYSCALL_ARG1(ctx);
     int prot = SYSCALL_ARG2(ctx);
     int flags = SYSCALL_ARG3(ctx);
     int fd = SYSCALL_ARG4(ctx);
     off_t offset = SYSCALL_ARG5(ctx);
-    kprintf("[PID: %d] MMAP_SYSCALL(%p,%d,%d,%d,%d,%d)\n", task->pid, addr, length, prot, flags, fd, offset);
+    kprintf("[PID: %d | TID %d] MMAP_SYSCALL(%p,%d,%d,%d,%d,%d)\n", thread->process->pid, thread->id, addr, length, prot, flags, fd, offset);
     
     //Validate the arguments
     if (length == 0) {
@@ -323,7 +361,7 @@ uint64_t mmap_syscall_handler(process_t*task, cpu_context_t*ctx) {
 
     if (addr != NULL && ((uint64_t)addr % PAGE_SIZE != 0))
         addr = (void *)((uint64_t)addr & ~(PAGE_SIZE - 1));
-    addr = find_shm_vmarea(task, addr, length);
+    addr = find_shm_vmarea(thread->process, addr, length);
     if (addr == NULL) {
         panic("Failed to find a free area\n");
         return SYSCALL_ERROR;
@@ -332,11 +370,11 @@ uint64_t mmap_syscall_handler(process_t*task, cpu_context_t*ctx) {
 
     if (flags & MAP_PRIVATE || flags & MAP_SHARED) {
 
-        allocate_at_vaddr(task->vmm, addr, length, vmm_flags);
+        allocate_at_vaddr(thread->process->vmm, addr, length, vmm_flags);
 
         int newfd = -1;
         if (flags & MAP_ANONYMOUS) {
-            create_vmarea(task, addr, (addr + length), vmm_flags, vma_flags, PAGE_SIZE_4KIB, newfd, 0);
+            create_vmarea(thread->process, addr, (addr + length), vmm_flags, vma_flags, PAGE_SIZE_4KIB, newfd, 0);
             return addr;
         } else {
             newfd = vfs_file_dup(fd, -1);
@@ -345,10 +383,10 @@ uint64_t mmap_syscall_handler(process_t*task, cpu_context_t*ctx) {
             }
         }
 
-        create_vmarea(task, addr, (addr + length), vmm_flags, vma_flags, PAGE_SIZE_4KIB, newfd, offset);
+        create_vmarea(thread->process, addr, (addr + length), vmm_flags, vma_flags, PAGE_SIZE_4KIB, newfd, offset);
         
         //add write privilege to the buffer
-        mprotect(task->vmm, addr, length, PROT_READ | PROT_WRITE);
+        mprotect(thread->process->vmm, addr, length, PROT_READ | PROT_WRITE);
 
         //Read the file into the memory
         if (vfs_file_seek(newfd, offset, SEEK_SET) < 0) {
@@ -366,25 +404,24 @@ uint64_t mmap_syscall_handler(process_t*task, cpu_context_t*ctx) {
 
         //Reset permissions but keep readonly so it page faults on a write
         uint8_t roflags = vmm_flags & ~VMM_WRITE_BIT;
-        mprotect(task->vmm, addr, length, roflags);
+        mprotect(thread->process->vmm, addr, length, roflags);
         return addr;
     }
 
 cleanup_on_error:
-    unmap_range(task->vmm, addr, length);
-    remove_vmarea(task, addr);
+    unmap_range(thread->process->vmm, addr, length);
+    remove_vmarea(thread->process, addr);
     panic("MMAP ERROR\n");
     return SYSCALL_ERROR;
 }
 
 //mprotect
-uint64_t mprotect_syscall_handler(process_t*task, cpu_context_t* ctx) {
-    (void)task;
+int64_t mprotect_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     void * addr = (void *)SYSCALL_ARG0(ctx);
     size_t length = SYSCALL_ARG1(ctx);
     int prot = SYSCALL_ARG2(ctx);
 
-    kprintf("mprotect(%p,%d,%d)\n", addr, length, prot);
+    kprintf("[PID: %d | TID %d] MPROTECT_SYSCALL(%p,%d,%d)\n", thread->process->pid, thread->id, addr, length, prot);
     if (addr == NULL || length == 0) {
         return SYSCALL_ERROR;
     }
@@ -407,7 +444,7 @@ uint64_t mprotect_syscall_handler(process_t*task, cpu_context_t* ctx) {
     }
     
     //Check if the address is in a vmarea
-    struct vm_area * vma = is_in_vmarea(task, addr);
+    struct vm_area * vma = is_in_vmarea(thread->process, addr);
     if (vma == NULL) {
         panic("Failed to find vmarea\n");
     }
@@ -420,22 +457,21 @@ uint64_t mprotect_syscall_handler(process_t*task, cpu_context_t* ctx) {
         panic("Length is greater than vmarea\n");
     }
 
-    mprotect(task->vmm, addr, length, vmm_flags);
+    mprotect(thread->process->vmm, addr, length, vmm_flags);
     return NULL;
 }
 
-uint64_t munmap_syscall_handler(process_t*task, cpu_context_t* ctx) {
-    (void)task;
+int64_t munmap_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     void * addr = (void *)SYSCALL_ARG0(ctx);
     size_t length = SYSCALL_ARG1(ctx);
-    kprintf("[PID: %d] MUNMAP_SYSCALL(%p,%d)\n", task->pid, addr, length);
+    kprintf("[PID: %d | TID %d] MUNMAP_SYSCALL(%p,%d)\n", thread->process->pid, thread->id, addr, length);
     
     if (addr == NULL || length == 0) {
         return SYSCALL_ERROR;
     }
     
     //Unmap the memory
-    struct vm_area * vma = is_in_vmarea(task, addr);
+    struct vm_area * vma = is_in_vmarea(thread->process, addr);
     if (vma == NULL) {
         panic("Failed to find vmarea\n");
     }
@@ -445,23 +481,23 @@ uint64_t munmap_syscall_handler(process_t*task, cpu_context_t* ctx) {
     }
 
     if (vma->extended_flags & VMAREA_EXT_REQ_SYNC) {
-        task_sync_files(task, vma, 0);
+        vmarea_sync(vma, 0);
         //Write to the file if necessary
     }
 
-    remove_vmarea(task, addr);
-    unmap_range(task->vmm, addr, length);
+    remove_vmarea(thread->process, addr);
+    unmap_range(thread->process->vmm, addr, length);
     return SYSCALL_SUCCESS;
 }
 
 #define MS_SYNC 0x0
 #define MS_ASYNC 0x1
 #define MS_INVALIDATE 0x2
-uint64_t msync_syscall_handler(process_t*task, cpu_context_t* ctx) {
+int64_t msync_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     void * addr = (void *)SYSCALL_ARG0(ctx);
     size_t length = SYSCALL_ARG1(ctx);
     int flags = SYSCALL_ARG2(ctx);
-    kprintf("[PID: %d] MSYNC_SYSCALL(%p,%d,%d)\n", task->pid, addr, length, flags);
+    kprintf("[PID: %d | TID %d] MSYNC_SYSCALL(%p,%d,%d)\n", thread->process->pid, thread->id, addr, length, flags);
 
     if (flags & MS_ASYNC) {
         panic("MS_ASYNC not implemented\n");
@@ -474,7 +510,7 @@ uint64_t msync_syscall_handler(process_t*task, cpu_context_t* ctx) {
         return SYSCALL_ERROR;
     }
     //Unmap the memory
-    struct vm_area * vma = is_in_vmarea(task, addr);
+    struct vm_area * vma = is_in_vmarea(thread->process, addr);
     if (vma == NULL) {
         panic("Failed to find vmarea\n");
     }
@@ -488,18 +524,18 @@ uint64_t msync_syscall_handler(process_t*task, cpu_context_t* ctx) {
     }
 
     if (vma->extended_flags & VMAREA_EXT_REQ_SYNC) {
-        task_sync_files(task, vma, length);
+        vmarea_sync(vma, length);
     }
 }
 
-uint64_t dup_syscall_handler(process_t*task, cpu_context_t* ctx) {
+int64_t dup_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     int fd = SYSCALL_ARG0(ctx);
-    kprintf("[PID: %d] DUP_SYSCALL(%d)\n", task->pid, fd);
+    kprintf("[PID: %d | TID %d] DUP_SYSCALL(%d)\n", thread->process->pid, thread->id, fd);
     if (fd < 0) {
         return SYSCALL_ERROR;
     }
 
-    if (task->open_files_count >= MAX_OPEN_FILES) {
+    if (thread->process->open_files_count >= MAX_OPEN_FILES) {
         kprintf("Max open files reached\n");
         return SYSCALL_ERROR;
     }
@@ -508,19 +544,19 @@ uint64_t dup_syscall_handler(process_t*task, cpu_context_t* ctx) {
     if (newfd < 0) {
         return SYSCALL_ERROR;
     }
-    task->open_files[task->open_files_count++] = newfd;
+    thread->process->open_files[thread->process->open_files_count++] = newfd;
     return newfd;
 }
 
-uint64_t dup2_syscall_handler(process_t*task, cpu_context_t* ctx) {
+int64_t dup2_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     int oldfd = SYSCALL_ARG0(ctx);
     int newfd = SYSCALL_ARG1(ctx);
-    kprintf("[PID: %d] DUP2_SYSCALL(%d,%d)\n", task->pid, oldfd, newfd);
+    kprintf("[PID: %d | TID %d] DUP2_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, oldfd, newfd);
     if (oldfd < 0 || newfd < 0) {
         return SYSCALL_ERROR;
     }
 
-    if (task->open_files_count >= MAX_OPEN_FILES) {
+    if (thread->process->open_files_count >= MAX_OPEN_FILES) {
         kprintf("Max open files reached\n");
         return SYSCALL_ERROR;
     }
@@ -529,14 +565,13 @@ uint64_t dup2_syscall_handler(process_t*task, cpu_context_t* ctx) {
     if (ret < 0) {
         return SYSCALL_ERROR;
     }
-    task->open_files[task->open_files_count++] = newfd;
+    thread->process->open_files[thread->process->open_files_count++] = newfd;
     return newfd;
 }
 
 
-uint64_t undefined_syscall_handler(process_t*task, cpu_context_t* ctx) {
-    (void)task;
-    kprintf("[PID: %d] UNDEFINED_SYSCALL(%d)\n", task->pid, ctx->rax);
+int64_t undefined_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    kprintf("[PID: %d | TID %d] UNDEFINED_SYSCALL(%d)\n", thread->process->pid, thread->id, ctx->rax);
     return SYSCALL_UNDEFINED;
 }
 
@@ -570,38 +605,39 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
 
 void global_syscall_handler(cpu_context_t* ctx) {
 
-    process_t * current_task = get_current_process();
-    current_task->syscall_ready = 1;
+    thread_t * current_thread = get_current_thread();
+    current_thread->syscall_ready = 1;
     
-    memcpy(current_task->context, ctx, sizeof(cpu_context_t));
-    memcpy(current_task->context->info, ctx->info, sizeof(struct cpu_context_info));
-    __asm__("fxsave %0" : : "m" (current_task->fxsave_region));
+    memcpy(current_thread->context->cpu_context, ctx, sizeof(cpu_context_t));
+    memcpy(current_thread->context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
 
-    uint64_t result = SYSCALL_SUCCESS;
+    __asm__("fxsave %0" : : "m" (current_thread->context->fxsave_region));
+
+    int64_t result = SYSCALL_SUCCESS;
     if (ctx->rax < SYSCALL_HANDLER_COUNT) {
-        result = syscall_handlers[ctx->rax](current_task, ctx);
+        result = syscall_handlers[ctx->rax](current_thread, ctx);
     } else {
         kprintf("Syscall number overflow %d\n", ctx->rax);
         result = SYSCALL_ERROR;
     }
 
-    current_task = get_current_process();
+    current_thread = get_current_thread();
 
-    __asm__("fxrstor %0" : "=m" (current_task->fxsave_region));
+    __asm__("fxrstor %0" : "=m" (current_thread->context->fxsave_region));
 
-    
-    struct tss * tss = arch_get_cpu(current_task->core_id)->tss;
+    memcpy(ctx, current_thread->context->cpu_context, sizeof(cpu_context_t));
+    memcpy(ctx->info, current_thread->context->cpu_context->info, sizeof(struct cpu_context_info));
+
+    struct tss * tss = arch_get_cpu(current_thread->core_id)->tss;
     tss_set_stack(tss, ctx->info->kstack, 0);
     tss_set_stack(tss, ctx->rsp, 3);
+    setFsBase(current_thread->context->fs_base);
 
-    memcpy(ctx, current_task->context, sizeof(cpu_context_t));
-    memcpy(ctx->info, current_task->context->info, sizeof(struct cpu_context_info));
-
-    if (current_task->syscall_ready) {
+    if (current_thread->syscall_ready) {
         SYSRET(ctx, result);
     } else {
     __asm__("mov %0, %%rsp\n"
             "mov %1, %%cr3\n"
-            "ret\n" : : "r" (current_task->ustack), "r" (current_task->context->cr3));
+            "ret\n" : : "r" (current_thread->ustack), "r" (current_thread->context->cpu_context->cr3));
     }
 }

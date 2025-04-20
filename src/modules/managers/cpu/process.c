@@ -12,6 +12,7 @@
 #include <omen/hal/arch/x86/msr.h>
 #include <omen/hal/arch/x86/syscall.h>
 #include <omen/apps/debug/debug.h>
+#include <omen/managers/cpu/vmarea.h>
 
 #include <vfs/vfs.h>
 #include <vfs/vfs_interface.h>
@@ -19,243 +20,113 @@
 //Always inlined
 extern void newuctxcreat(uint64_t rsp, uint64_t intro);
 extern void newctxcreat(uint64_t rsp, uint64_t intro);
-
 extern void reloadGsFs();
-extern void setGsBase(uint64_t base);
 extern void getGsBase(uint64_t * base);
+extern void getFsBase(uint64_t * base);
+extern void setGsBase(uint64_t base);
+extern void setFsBase(uint64_t base);
 extern void setKernelGsBase(uint64_t base);
+
+//Hardcoded functions
+void returnoexit() {panic("Returned from a process!\n");}
+void _idle() {panic("Stub running, exec failed!\n");}
 
 //TODO: Jonbardo modify this to use ur linked list :D
 process_t process_list[MAX_PROCESSES] = {0};
-process_t *current_process = process_list;
-uint32_t current_process_index = 0;
 uint32_t process_count = 0;
-//char init_path[0x1000] __attribute__((aligned(0x1000)));
-//char idle_path[0x1000] __attribute__((aligned(0x1000)));
+uint32_t current_process_index = 0;
 
-struct vm_area* is_in_vmarea(process_t* process, void * address) {
-    struct vm_area * current = process->vm_areas;
-    while (current) {
-        if (address >= current->start && address < current->end) {
-            return current;
-        }
-        current = current->next;
-    }
-    return 0;
-}
-
-void create_vmarea(process_t* process, void * start, void * end, uint8_t flags, uint8_t extended_flags, uint64_t page_size, int fd, off_t offset) {
-    struct vm_area * new_area = kmalloc(sizeof(struct vm_area));
-    new_area->start = start;
-    new_area->end = end;
-    new_area->flags = flags;
-    new_area->extended_flags = extended_flags;
-    new_area->page_size = page_size;
-    new_area->next = process->vm_areas;
-    new_area->fd = fd;
-    new_area->offset = offset;
-    process->vm_areas = new_area;
-}
-
-void remove_vmarea(process_t* process, void * start) {
-    struct vm_area * current = process->vm_areas;
-    struct vm_area * previous = 0;
-
-    while (current) {
-        if (current->start == start) {
-            if (previous) {
-                previous->next = current->next;
-            } else {
-                process->vm_areas = current->next;
-            }
-            kfree(current);
-            return;
-        }
-        previous = current;
-        current = current->next;
-    }
-}
-
-void duplicate_vmareas(process_t * old, process_t * new) {
-    struct vm_area * current = old->vm_areas;
-    new->vm_areas = 0;
-    while (current) {
-        create_vmarea(new, current->start, current->end, current->flags, current->extended_flags, current->page_size, current->fd, current->offset);
-        current = current->next;
-    }
-}
-
-void engrave_vmareas(process_t * child, process_t * parent) {
-    struct vm_area * current = child->vm_areas;
-    while (current) {
-        if (current->extended_flags & VMAREA_EXT_SHARED) {
-            //Map the area in the child process to the same address as the parent
-            void * parent_physical = get_physical_address(parent->vmm, current->start);
-            map_range(child->vmm, current->start, parent_physical, current->page_size, current->end - current->start, current->flags);
-        }
-        if (current->extended_flags & VMAREA_EXT_COW) {
-            uint8_t flags = current->flags;
-            if (flags & VMM_WRITE_BIT) {
-                flags &= ~VMM_WRITE_BIT;
-            }
-            mprotect(child->vmm, current->start, current->end - current->start, flags);
-        }
-        current = current->next;
-    }
-}
-
-void duplicate_vmarea_cow(process_t * task, struct vm_area* vma) {
-    kprintf("Duplicating page in COW area\n");
-    kprintf("VMA Start: %llx, VMA End: %llx\n", vma->start, vma->end);
-    kprintf("VMA Flags: %d, VMA Extended Flags: %d\n", vma->flags, vma->extended_flags);
-    kprintf("VMA Page Size: %d\n", vma->page_size);
-
-    remap_allocate_cow(task->vmm, vma->start, vma->end - vma->start, vma->page_size, vma->flags);
-    vma->extended_flags &= ~VMAREA_EXT_COW;
-}
-
-//Check if vma collides with any other vma in the process
-struct vm_area* vmarea_collides(process_t * task, struct vm_area * vma) {
-    struct vm_area * current = task->vm_areas;
-    while (current) {
-        if (current->start < vma->end && vma->start < current->end) {
-            return current;
-        }
-        current = current->next;
-    }
-    return 0;
-}
-
-
-void * find_shm_vmarea(process_t * task, void * hint, uint64_t size) {
-    if (hint == 0) hint = VMM_REGION_U_SHM_MMAP;
-    
-    struct vm_area desired_vma = {
-        .start = hint,
-        .end = hint + size,
-        .flags = VMM_USER_BIT,
-        .extended_flags = VMAREA_EXT_SHARED,
-        .page_size = PAGE_SIZE_4KIB,
-        .fd = -1,
-        .offset = 0,
-    };
-
-    struct vm_area * collision = vmarea_collides(task, &desired_vma);
-    uint8_t wrapped = 0;
-    uint64_t collision_end_aligned;
-    while(collision) {
-        //Align collision end to next page
-        collision_end_aligned = (uint64_t)collision->end;
-        collision_end_aligned = (collision_end_aligned + PAGE_SIZE_4KIB - 1) & ~(PAGE_SIZE_4KIB - 1);
-
-        desired_vma.start = collision_end_aligned;
-        desired_vma.end = collision_end_aligned + size;
-        if ((uint64_t)(desired_vma.start) > VMM_REGION_U_SHM_MMAP + VMM_REGION_SIZE) {
-            if (wrapped) {
-                return NULL;
-            }
-            desired_vma.start = VMM_REGION_U_SHM_MMAP;
-            desired_vma.end = VMM_REGION_U_SHM_MMAP + size;
-            wrapped = 1;
-        }
-        collision = vmarea_collides(task, &desired_vma);
-    }
-
-    return desired_vma.start;
-}
-
-
-void set_tty(process_t * task, char* tty) {
-    memset(task->regular_tty, 0, 32);
-    if (strlen(tty) > 32) {
-        panic("TTY name too long\n");
-    } else {
-        strncpy(task->regular_tty, tty, strlen(tty));
-        task->regular_tty[strlen(tty)] = '\0';
-        task->tty = task->regular_tty;
-    }
-}
-
-void init_stack(struct page_directory* pd, process_t * task, uint64_t size, uint8_t is_userland_stack) {
+void init_stacks(process_t * task, thread_t * thread, uint64_t size, uint64_t entry) {
     if (size % 0x1000) {
         size = (size + 0x1000) & ~0xfff;
     }
+    if (size > PROCESS_STACK_SIZE) {
+        size = PROCESS_STACK_SIZE & ~0xfff;
+    }
 
     struct stack stack;
-    if (is_userland_stack) {
-        if (size > PROCESS_STACK_SIZE) {
-            size = PROCESS_STACK_SIZE & ~0xfff;
-        }
-        stackalloc(pd, &stack, size);
-        task->ustack = stack.top;
-        task->ustack_base = stack.base;
-        create_vmarea(task, task->ustack_base, task->ustack, VMM_USER_BIT | VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
-    } else {
-        if (size > PROCESS_STACK_SIZE) {
-            size = PROCESS_STACK_SIZE & ~0xfff;
-        }
-        kstackalloc(pd, &stack, size);
-        task->kstack_base = stack.base;
-        task->kstack = stack.top;
-        create_vmarea(task, task->kstack_base, task->kstack, VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
-    }
-}
+    stackalloc(task->vmm, &stack, size);
+    thread->ustack = stack.top;
+    thread->ustack_base = stack.base;
+    create_vmarea(task, thread->ustack_base, thread->ustack, VMM_USER_BIT | VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
+    kstackalloc(task->vmm, &stack, size);
+    thread->kstack_base = stack.base;
+    thread->kstack = stack.top;
+    create_vmarea(task, thread->kstack_base, thread->kstack, VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
 
-void create_context(process_t * task, struct page_directory* pd, void * ustack, void * kstack, void * init) {
-    task->context = kmalloc(sizeof(cpu_context_t));
-    memset(task->context, 0, sizeof(cpu_context_t));
-    task->context->info = kmalloc(sizeof(struct cpu_context_info));
-    memset(task->context->info, 0, sizeof(struct cpu_context_info));
-    task->context->cr3 = from_identity_map(pd);
-    task->context->info->kstack = (uint64_t) kstack;
-    task->context->info->cs = get_user_code_selector();
-    task->context->info->ss = get_user_data_selector();
-    task->context->info->thread = 0;
-    task->context->rax = 1;
-    task->context->rbx = 2;
-    task->context->rcx = 3;
-    task->context->rdx = 4;
-    task->context->rsi = 5;
-    task->context->rdi = 6;
-    task->context->rbp = 7;
-    task->context->r8 = 8;
-    task->context->r9 = 9;
-    task->context->r10 = 10;
-    task->context->r11 = 11;
-    task->context->r12 = 12;
-    task->context->r13 = 13;
-    task->context->r14 = 14;
-    task->context->r15 = 15;
-    task->context->interrupt_number = 0;
-    task->context->error_code = 0;    
-    task->context->rip = (uint64_t)init;
-    task->context->rflags = PROCESS_STARTUP_RFLAGS;
-    task->context->cs = get_user_code_selector();
-    task->context->ss = get_user_data_selector();
-    task->context->rsp = (uint64_t)ustack;
-}
-
-void init_user_context(struct page_directory* pd, process_t * task, void * init, uint8_t trampoline) {
-
-    init_stack(pd, task, PROCESS_STACK_SIZE, 1);
-    init_stack(pd, task, PROCESS_STACK_SIZE, 0);
-    
-    if (get_pml4() != pd) {
-        void * stack_physical = get_physical_address(pd, task->ustack_base);
-        map_range(get_pml4(), task->ustack_base, (uint64_t)stack_physical, PAGE_SIZE_4KIB, PROCESS_STACK_SIZE, VMM_WRITE_BIT);
+    if (get_pml4() != task->vmm) {
+        void * stack_physical = get_physical_address(task->vmm, thread->ustack_base);
+        map_range(get_pml4(), thread->ustack_base, (uint64_t)stack_physical, PAGE_SIZE_4KIB, PROCESS_STACK_SIZE, VMM_WRITE_BIT);
     }
     
-    if (trampoline)
-        newuctxcreat((uint64_t)&(task->ustack), (uint64_t)init);
-    else
-        panic("Trampoline not implemented\n");
+    newuctxcreat((uint64_t)&(thread->ustack), (uint64_t)entry);
 
-    if (get_pml4() != pd)
-        unmap_range(get_pml4(), task->ustack_base, PROCESS_STACK_SIZE);
+    if (get_pml4() != task->vmm)
+        unmap_range(get_pml4(), thread->ustack_base, PROCESS_STACK_SIZE);
+}
 
-    create_context(task, pd, task->ustack, task->kstack, init);
-    
-    __asm__ volatile("fxsave %0" : "=m" (task->fxsave_region));
+context_t * create_context(void * cr3, void * ustack, void * kstack, void * init) {
+    context_t * context = kmalloc(sizeof(context_t));
+
+    context->fs_base = 0;
+    context->gs_base = 0;
+    __asm__ volatile("fxsave %0" : "=m" (context->fxsave_region));
+
+    cpu_context_t * cpu_context = kmalloc(sizeof(cpu_context_t));
+    memset(cpu_context, 0, sizeof(cpu_context_t));
+    cpu_context->info = kmalloc(sizeof(struct cpu_context_info));
+    memset(cpu_context->info, 0, sizeof(struct cpu_context_info));
+    cpu_context->cr3 = (uint64_t)cr3;
+    cpu_context->info->kstack = (uint64_t) kstack;
+    cpu_context->info->cs = get_user_code_selector();
+    cpu_context->info->ss = get_user_data_selector();
+    cpu_context->info->thread = 0;
+    cpu_context->rax = 1;
+    cpu_context->rbx = 2;
+    cpu_context->rcx = 3;
+    cpu_context->rdx = 4;
+    cpu_context->rsi = 5;
+    cpu_context->rdi = 6;
+    cpu_context->rbp = 7;
+    cpu_context->r8 = 8;
+    cpu_context->r9 = 9;
+    cpu_context->r10 = 10;
+    cpu_context->r11 = 11;
+    cpu_context->r12 = 12;
+    cpu_context->r13 = 13;
+    cpu_context->r14 = 14;
+    cpu_context->r15 = 15;
+    cpu_context->interrupt_number = 0;
+    cpu_context->error_code = 0;    
+    cpu_context->rip = (uint64_t)init;
+    cpu_context->rflags = PROCESS_STARTUP_RFLAGS;
+    cpu_context->cs = get_user_code_selector();
+    cpu_context->ss = get_user_data_selector();
+    cpu_context->rsp = (uint64_t)ustack;
+
+    context->cpu_context = cpu_context;
+
+    return context;
+}
+
+void init_thread(process_t * task, void * init) {
+    if (task->thread_count >= MAX_THREADS) {
+        panic("Too many threads\n");
+    }
+
+    thread_t * thread = &(task->threads[task->thread_count++]);
+    memset(thread, 0, sizeof(thread_t));
+
+    init_stacks(task, thread, task->stack_max_size, init);
+    thread->process = task;
+    thread->context = create_context(from_identity_map(task->vmm), thread->ustack, thread->kstack, init);
+    thread->entry = init;
+    thread->id = task->thread_count - 1;
+    thread->core_id = arch_get_bsp_cpu()->core_id;
+    thread->status = THREAD_STATUS_READY;
+    thread->syscall_ready = 0;
+
+    thread->pending_signal = 0;
 
 }
 
@@ -301,234 +172,97 @@ void open_stdfiles(process_t *task, char * tty) {
     task->open_files[task->open_files_count++] = stderr;
 }
 
-void task_sync_files(process_t *task, struct vm_area * vma, uint64_t size) {
-
-    uint64_t sync_size = (size) ? size : (uint64_t)(vma->end - vma->start);
-    if (vma->fd) {
-        vfs_file_seek(vma->fd, vma->offset, SEEK_SET);
-        vfs_file_write(vma->fd, vma->start, sync_size);
-        vfs_file_seek(vma->fd, vma->offset, SEEK_SET);
-        vma->extended_flags &= ~VMAREA_EXT_REQ_SYNC;
-    }
-}
-
-void task_sync_all_files(process_t *task) {
-    struct vm_area * current = task->vm_areas;
-    while (current) {
-        if (current->extended_flags & VMAREA_EXT_REQ_SYNC) { //MAYBE WE NEED TO FORCE THIS INSTEAD OF CHECKING IF REQ_SYNC
-            task_sync_files(task, current, 0);
-        }
-        current = current->next;
-    }    
-}
-
-process_t * create_user_process(void * init, char * tty) {
-    process_t * task = &(process_list[process_count++]);
-    memset(task, 0, sizeof(process_t));
-    task->status = PROCESS_STATUS_READY;
-    task->signal_pending = 0;
-    task->nice = 0;
-    task->privilege = 0;
-    task->core_id = arch_get_bsp_cpu()->core_id;
-    task->syscall_ready = 0;
-    task->cpu_time = 0;
-    task->last_scheduled = 0;
-    task->sleep_time = 0;
-    task->exit_code = 0;    
-    task->exit_signal = 0;
-    task->pdeath_signal = 0;
-    task->ustack_max_size = PROCESS_STACK_SIZE;
-    task->pid = get_next_pid();
-    if (task->pid < 0) {
+process_t * duplicate_process(thread_t * parent_thread) {
+    process_t * parent = parent_thread->process;
+    if (process_count >= MAX_PROCESSES) {
         panic("No more processes available\n");
     }
-    task->locks = 0;
-    memset(task->open_files, 0, sizeof(int)*MAX_OPEN_FILES);
-    task->open_files_count = 0;
-    open_stdfiles(task, tty);
-    task->entry_address = init;
-    set_tty(task, tty);
-    task->parent = current_process;
-    
-    if (task->parent) {
-        task->uid = task->parent->uid;
-        task->gid = task->parent->gid;
-        task->ppid = task->parent->pid;
-    } else {
-        task->uid = 0;
-        task->gid = 0;
-        task->ppid = 0;
-    }
-
-    task->vmm = vmm_copy_kernel(get_pml4());
-
-    init_user_context(task->vmm, task, init, 1);
-
-    kprintf("Process %d created\n", task->pid);
-    return task;
-}
-
-process_t * duplicate_process(process_t * parent) {
-    task_sync_all_files(parent);
-
     process_t * task = &(process_list[process_count++]);
+    vmarea_sync_all_files(parent);
     memcpy(task, parent, sizeof(process_t));
-    task->context = kmalloc(sizeof(cpu_context_t));
-    memcpy(task->context, parent->context, sizeof(cpu_context_t));
-    task->context->info = kmalloc(sizeof(struct cpu_context_info));
-    memcpy(task->context->info, parent->context->info, sizeof(struct cpu_context_info));
+    task->thread_count = 1;
+    task->current_thread = 0;
+    task->main_thread = 0;
+    task->pid = get_next_pid();
+    task->ppid = parent->pid;
+    memset(task->threads, 0, sizeof(thread_t) * MAX_THREADS);
+    memcpy(&(task->threads[0]), parent_thread, sizeof(thread_t));
+    
+    thread_t * main_thread = &(task->threads[0]);
+
+    main_thread->process = task;
+    main_thread->context = kmalloc(sizeof(context_t));
+    memcpy(main_thread->context, parent_thread->context, sizeof(context_t));
+    main_thread->context->cpu_context = kmalloc(sizeof(cpu_context_t));
+    memcpy(main_thread->context->cpu_context, parent_thread->context->cpu_context, sizeof(cpu_context_t));
+    main_thread->context->cpu_context->info = kmalloc(sizeof(struct cpu_context_info));
+    memcpy(main_thread->context->cpu_context->info, parent_thread->context->cpu_context->info, sizeof(struct cpu_context_info));
+
     duplicate_vmareas(parent, task);
     memcpy(task->open_files, parent->open_files, sizeof(int)*MAX_OPEN_FILES);
     task->open_files_count = parent->open_files_count;
-    memcpy(task->fxsave_region, parent->fxsave_region, 512);
+    memcpy(main_thread->context->fxsave_region, parent_thread->context->fxsave_region, 512);
 
-    task->pid = get_next_pid();
-    task->ppid = parent->pid;
+    main_thread->context->fs_base = parent_thread->context->fs_base;
+    main_thread->context->gs_base = parent_thread->context->gs_base;
+
     task->vmm = vmm_copy(parent->vmm);
-    task->context->cr3 = from_identity_map(task->vmm);
-    vmm_copy_stack(task->vmm, parent->ustack_base, PROCESS_STACK_SIZE, VMM_USER_BIT | VMM_WRITE_BIT);
-    vmm_copy_stack(task->vmm, parent->kstack_base, PROCESS_STACK_SIZE, VMM_WRITE_BIT);
+    main_thread->context->cpu_context->cr3 = from_identity_map(task->vmm);
+    vmm_copy_stack(task->vmm, parent_thread->ustack_base, task->stack_max_size, VMM_USER_BIT | VMM_WRITE_BIT);
+    vmm_copy_stack(task->vmm, parent_thread->kstack_base, task->stack_max_size, VMM_WRITE_BIT);
     engrave_vmareas(task, parent);
+
     kprintf("Process %d duplicated\n", task->pid);
     return task;
 }
 
-void returnoexit() {
-    panic("Returned from a process!\n");
-}
 
-uint64_t _internal_syscall(uint64_t syscall_number, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6) {
-    unsigned long long ret;
-    __asm__ volatile ("syscall" : "=a" (ret) : "a" (syscall_number), "D" (arg1), "S" (arg2), "d" (arg3), "r" (arg4), "r" (arg5), "r" (arg6) : "memory");
-    return ret;
-}
-
-void _idle() {
-    panic("Stub running, exec failed!\n");
-}
-
-void init_process(const char * _init_path, const char * _idle_path, char * tty) {
-    //mprotect_current(init_path, 0x1000, VMM_USER_BIT | VMM_WRITE_BIT);
-    //memset(init_path, 0, 0x1000);
-    //strcpy(init_path, _init_path);
-    //mprotect_current(idle_path, 0x1000, VMM_USER_BIT | VMM_WRITE_BIT);
-    //memset(idle_path, 0, 0x1000);
-    //strcpy(idle_path, _idle_path);
-
-    process_t * init_proc = create_user_process((void*)_idle, tty);
-    init_proc->pid = 0;
-    current_process = init_proc;
-    current_process_index = 0;
-    exec(init_proc, _init_path);
-
-    current_process = &process_list[0];
-    current_process_index = 0;
-    current_process->status = PROCESS_STATUS_RUNNING;
-
-    struct tss * tss = arch_get_cpu(current_process->core_id)->tss;
-    tss_set_stack(tss, current_process->kstack, 0);
-    tss_set_stack(tss, current_process->ustack, 3);
-    __asm__("mov %0, %%rsp\n"
-            "mov %1, %%cr3\n"
-            "fxrstor %2\n"
-            "ret\n" : : "r" (current_process->ustack), "r" (current_process->context->cr3), "m" (current_process->fxsave_region));
-    panic("Returned from init process\n");
-}
-
-process_t * sched() {
-    //We advance one to avoid the current process
-    current_process_index++;
-    if (current_process_index >= process_count) {
-        current_process_index = 0;
-    }
-
-    while (process_list[current_process_index].status != PROCESS_STATUS_READY && process_list[current_process_index].status != PROCESS_STATUS_RUNNING) {
-        current_process_index++;
-        if (current_process_index >= process_count) {
-            current_process_index = 0;
-        }
-    }
-
-    current_process = &process_list[current_process_index];
-    return current_process;
-}
-
-int16_t fork(process_t * ct) {   
-    process_t * child = duplicate_process(ct);
-    child->status = PROCESS_STATUS_READY;
-    child->context->rax = 0;
-    return child->pid;
-}
-
-void exit(process_t* task, int error_code) {
-    task->status = PROCESS_STATUS_ZOMBIE;
-    task->exit_code = error_code;
-    sched();
-}
-
-//TODO: This is awful
-process_t * get_current_process() {
-    return current_process;
-}
-
-void alter_process_on_exec(process_t * task, void * init, void * ustack_phys_base) {
+void alter_process_on_exec(process_t * task, void * init) {
     process_t saved_task;
     memcpy(&saved_task, task, sizeof(process_t));
     memset(task, 0, sizeof(process_t));
-    task->status = PROCESS_STATUS_READY;
-    task->signal_pending = 0;
+
+    task->vmm = saved_task.vmm;
+    task->vm_areas = 0;
+
+    memset(task->threads, 0, sizeof(thread_t) * MAX_THREADS);
+    task->thread_count = 0;
+    task->current_thread = 0;
+    task->main_thread = 0;
+
+    task->heap_base = 0;
+    task->heap_end = 0;
+    task->heap_max_size = 0;
+
     task->nice = 0;
     task->privilege = 0;
-    task->core_id = arch_get_bsp_cpu()->core_id;
-    task->cpu_time = 0;
-    task->syscall_ready = 0;
-    task->last_scheduled = 0;
-    task->sleep_time = 0;
-    task->exit_code = 0;    
+    task->current_nice = 0;
+    task->exit_code = 0;
     task->exit_signal = 0;
     task->pdeath_signal = 0;
-    task->pid = saved_task.pid;
-    if (task->pid < 0) {
-        panic("No more processes available\n");
-    }
+
+    task->sleep_time = 0;
+    task->cpu_time = 0;
+    task->last_scheduled = 0;
     task->locks = 0;
-    memcpy(task->open_files, saved_task.open_files, sizeof(int)*MAX_OPEN_FILES);
-    task->open_files_count = saved_task.open_files_count;
-    task->entry_address = init;
-    memcpy(task->regular_tty, saved_task.regular_tty, 32);
-    task->tty = task->regular_tty;
-    memcpy(task->io_tty, saved_task.io_tty, 32);
+
+    task->stack_max_size = PROCESS_STACK_SIZE;
+
+    task->pid = saved_task.pid;
     task->parent = saved_task.parent;
-    task->vm_areas = saved_task.vm_areas;
-    
     task->uid = saved_task.uid;
     task->gid = saved_task.gid;
     task->ppid = saved_task.ppid;
 
-    task->vmm = saved_task.vmm;
-    task->ustack_base = saved_task.ustack_base;
-    task->ustack = saved_task.ustack_base + PROCESS_STACK_SIZE;
-    task->kstack_base = saved_task.kstack_base;
-    task->kstack = saved_task.kstack_base + PROCESS_STACK_SIZE;
-
-    map_range(task->vmm, task->ustack_base, (uint64_t)ustack_phys_base, PAGE_SIZE_4KIB, PROCESS_STACK_SIZE, VMM_USER_BIT | VMM_WRITE_BIT);
-
-    if (get_pml4() != task->vmm) {
-        map_range(get_pml4(), task->ustack_base, (uint64_t)ustack_phys_base, PAGE_SIZE_4KIB, PROCESS_STACK_SIZE, VMM_WRITE_BIT);
-    }
-
-    memset(task->ustack_base, 0, PROCESS_STACK_SIZE);
-
-    newuctxcreat((uint64_t)&(task->ustack), (uint64_t)init);
-
-    if (get_pml4() != task->vmm) {
-        unmap_range(get_pml4(), task->ustack_base, PROCESS_STACK_SIZE);
-    }
-
-    create_context(task, task->vmm, task->ustack, task->kstack, init);
+    memcpy(task->open_files, saved_task.open_files, sizeof(int)*MAX_OPEN_FILES);
+    task->open_files_count = saved_task.open_files_count;
+    task->regular_tty = saved_task.regular_tty;
+    task->io_tty = saved_task.io_tty;
+    task->ctty = saved_task.ctty;
     
-    __asm__ volatile("fxsave %0" : "=m" (task->fxsave_region));
+    task->entry_address = init;
 
+    init_thread(task, init);
 
     kprintf("Exec: Process %d created\n", task->pid);
 }
@@ -566,10 +300,9 @@ int exec(process_t * task, char const *path) {
     elf_readelf(buf, size);
     kfree(md5_buffer);
 
-    void * user_stack_base = get_physical_address(task->vmm, task->ustack_base);
     vmm_unmap_userspace(task->vmm);
     void * entry = elf_load_elf(task->vmm, buf, size);
-    alter_process_on_exec(task, entry, user_stack_base);
+    alter_process_on_exec(task, entry);
     kfree(buf);
     return 0;
 }
@@ -580,10 +313,148 @@ void execve(process_t* task, const char * path, const char * argv, const char * 
     exec(task, path);
 }
 
-char * get_current_tty() {
-    return current_process->tty;
+uint8_t sched_thread(process_t * task) {
+    int current_thread_index = task->current_thread + 1;
+    if (current_thread_index >= task->thread_count) {
+        current_thread_index = 0;
+    }
+
+    while (task->threads[current_process_index].status != THREAD_STATUS_READY && task->threads[current_process_index].status != THREAD_STATUS_RUNNING) {
+        current_thread_index++;
+        if (current_thread_index >= task->thread_count) {
+            current_thread_index = 0;
+        }
+        if (current_thread_index == task->current_thread) {
+            return 0;
+        }
+    }
+
+    task->current_thread = current_thread_index;
+    thread_t * thread = &(task->threads[task->current_thread]);
+    thread->status = THREAD_STATUS_RUNNING;
+
+    return 1;
 }
 
-void set_current_tty(char * tty) {
-    set_tty(current_process, tty);
+process_t * sched() {
+    //We advance one to avoid the current process
+    current_process_index++;
+    if (current_process_index >= process_count) {
+        current_process_index = 0;
+    }
+
+    while (!sched_thread(&process_list[current_process_index])) {
+        current_process_index++;
+        if (current_process_index >= process_count) {
+            current_process_index = 0;
+        }
+    }
+    
+    process_signals(&process_list[current_process_index]);
+    return &process_list[current_process_index];
+}
+
+int16_t fork(thread_t * ct) {   
+    process_t * child = duplicate_process(ct);
+    thread_t * main_thread = &(child->threads[0]);
+    main_thread->status = THREAD_STATUS_READY;
+    main_thread->context->cpu_context->rax = 0;
+    return child->pid;
+}
+
+void exit(process_t* task, int error_code) {
+    for (int i = 0; i < task->thread_count; i++) {
+        thread_t * thread = &(task->threads[i]);
+        thread->status = THREAD_STATUS_ZOMBIE;
+    }
+    task->exit_code = error_code;
+    sched();
+}
+
+process_t * create_user_process(struct page_directory* pd, void * init, char * tty) {
+    process_t * task = &(process_list[process_count++]);
+    memset(task, 0, sizeof(process_t));
+
+    task->vmm = vmm_copy_kernel(pd);
+    task->vm_areas = 0;
+
+    memset(task->threads, 0, sizeof(thread_t) * MAX_THREADS);
+    task->thread_count = 0;
+    task->current_thread = 0;
+    task->main_thread = 0;
+    task->heap_base = 0;
+    task->heap_end = 0;
+    task->heap_max_size = 0;
+    
+    task->nice = 0;
+    task->privilege = 0;
+    task->current_nice = 0;
+    task->exit_code = 0;
+    task->exit_signal = 0;
+    task->pdeath_signal = 0;
+
+    task->sleep_time = 0;
+    task->cpu_time = 0;
+    task->last_scheduled = 0;
+    task->locks = 0;
+
+    task->stack_max_size = PROCESS_STACK_SIZE;
+
+    task->pid = get_next_pid();
+    if (task->pid < 0) {
+        panic("No more processes available\n");
+    }
+    task->parent = get_current_process();
+    if (task->parent) {
+        task->uid = task->parent->uid;
+        task->gid = task->parent->gid;
+        task->ppid = task->parent->pid;
+    } else {
+        task->uid = 0;
+        task->gid = 0;
+        task->ppid = 0;
+    }
+
+    memset(task->open_files, 0, sizeof(int)*MAX_OPEN_FILES);
+    task->open_files_count = 0;
+    open_stdfiles(task, tty);
+
+    task->regular_tty = task->open_files[PROCFILE_STDIN];
+    task->io_tty = task->open_files[PROCFILE_STDERR];
+    task->ctty = &(task->regular_tty);
+    
+    task->entry_address = init;
+
+    init_thread(task, init);
+
+    kprintf("Process %d created\n", task->pid);
+    return task;
+}
+
+void init_process(const char * _init_path, const char * _idle_path, char * tty) {
+    process_t * init_proc = create_user_process(get_pml4(), (void*)_idle, tty);
+    init_proc->pid = 0;
+    current_process_index = 0;
+    exec(init_proc, _init_path);
+
+    thread_t * main_thread = &(get_current_process()->threads[0]);
+    main_thread->status = THREAD_STATUS_RUNNING;
+
+    struct tss * tss = arch_get_cpu(main_thread->core_id)->tss;
+    tss_set_stack(tss, main_thread->kstack, 0);
+    tss_set_stack(tss, main_thread->ustack, 3);
+    __asm__("mov %0, %%rsp\n"
+            "mov %1, %%cr3\n"
+            "fxrstor %2\n"
+            "ret\n" : : "r" (main_thread->ustack), "r" (main_thread->context->cpu_context->cr3), "m" (main_thread->context->fxsave_region));
+    panic("Returned from init process\n");
+}
+
+thread_t * get_current_thread() {
+    process_t * current_process = get_current_process();
+    return &(current_process->threads[current_process->current_thread]);  
+}
+
+process_t * get_current_process() {
+    return &process_list[current_process_index];
 }

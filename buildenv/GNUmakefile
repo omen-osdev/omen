@@ -198,7 +198,8 @@ setup:
 	@mkdir -p $(PROGSSYMDIR)
 	@mkdir -p $(ISODIR)
 	@dd if=/dev/zero of=$(ISODIR)/$(IMG_RAW) bs=4096 count=102400
-	@git clone $(LMNREPO) --branch=$(LMNBRCH) --depth=1
+	@cp -r ~/limine_backup $(LMNDIR)
+#	@git clone $(LMNREPO) --branch=$(LMNBRCH) --depth=1
 	@cp -v $(LMNDIR)/limine-bios.sys $(LMNDIR)/limine-bios-cd.bin $(LMNDIR)/limine-uefi-cd.bin $(ISOBUILDDIR)
 	@echo file $(BUILDDIR)/$(KERNEL) > $(ABSDIR)/$(GDBCFG)
 	@echo target remote $(WSLHOSTIP):$(GDBPORT) >> $(ABSDIR)/$(GDBCFG)
