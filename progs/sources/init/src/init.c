@@ -4,9 +4,5 @@
 #include <cpuid.h>
 
 int main(int argc, char* argv[]) {
-    volatile short pid = sys_fork();
 
-    
-
-    }
 }

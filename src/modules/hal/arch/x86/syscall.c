@@ -32,33 +32,37 @@ dup, pipe
 kot's
 
 #define SYS_LOG                 0
-#define SYS_ARCH_PRCTL          1
-#define SYS_GET_TID             2
+#define SYS_ARCH_PRCTL          1 ok
+#define SYS_GET_TID             2 ok
 #define SYS_FUTEX_WAIT          3
 #define SYS_FUTEX_WAKE          4
-#define SYS_MMAP                5
-#define SYS_MUNMAP              6
-#define SYS_MPROTECT            7
+
+#define SYS_MMAP                5 ok
+#define SYS_MUNMAP              6 ok
+#define SYS_MPROTECT            7 ok
+
 #define SYS_EXIT                8
 #define SYS_THREAD_EXIT         9
 #define SYS_CLOCK_GET           10
 #define SYS_CLOCK_GETRES        11
 #define SYS_SLEEP               12
+
 #define SYS_SIGPROCMASK         13
 #define SYS_SIGACTION           14
 #define SYS_SIGRESTORE          15
-#define SYS_FORK                16
+#define SYS_FORK                16 ok
 #define SYS_WAITPID             17
-#define SYS_EXECVE              18
-#define SYS_GETPID              19
-#define SYS_GETPPID             20
-#define SYS_KILL                21
-#define SYS_FILE_OPEN           22
-#define SYS_FILE_READ           23
-#define SYS_FILE_WRITE          24
-#define SYS_FILE_SEEK           25
+#define SYS_EXECVE              18 ok
+#define SYS_GETPID              19 ok
+#define SYS_GETPPID             20 ok
+#define SYS_KILL                21 
+
+#define SYS_FILE_OPEN           22 ok
+#define SYS_FILE_READ           23 ok
+#define SYS_FILE_WRITE          24 ok
+#define SYS_FILE_SEEK           25 
 #define SYS_FILE_CLOSE          26
-#define SYS_FILE_IOCTL          27
+#define SYS_FILE_IOCTL          27 ok
 #define SYS_DIR_READ_ENTRIES    28
 #define SYS_DIR_REMOVE          29
 #define SYS_DIR_CREATE          30
@@ -69,6 +73,7 @@ kot's
 #define SYS_FCNTL               35
 #define SYS_GETCWD              36
 #define SYS_CHDIR               37
+
 #define SYS_SOCKET              38
 #define SYS_BIND                39
 #define SYS_CONNECT             40
@@ -244,18 +249,20 @@ int64_t execve_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 #define ARCH_GET_FS 0x3
 #define ARCH_SET_GS 0x4
 #define ARCH_GET_GS 0x5
-int64_t prctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+int64_t arch_prctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
-    int option = SYSCALL_ARG0(ctx);
-    int arg2 = SYSCALL_ARG1(ctx);
-    kprintf("[PID: %d | TID %d] PRCTL_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, option, arg2);
+    (void)thread;
+    thread_t * th = SYSCALL_ARG0(ctx);
+    int option = SYSCALL_ARG1(ctx);
+    int arg2 = SYSCALL_ARG2(ctx);
+    kprintf("[PID: %d | TID %d] PRCTL_SYSCALL(%d,%d)\n", th->process->pid, th->id, option, arg2);
     switch (option) {
         case ARCH_SET_CPUID:
             return -ENODEV;
         case ARCH_GET_CPUID:
             return -ENODEV;
         case ARCH_SET_FS:
-            thread->context->fs_base = (uint64_t)arg2;
+        th->context->fs_base = (uint64_t)arg2;
             break;
         case ARCH_GET_FS: {
             unsigned long * fs_base = (unsigned long *)(unsigned long)arg2;
@@ -263,11 +270,11 @@ int64_t prctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
                 return -EINVAL;
             }
 
-            *fs_base = (unsigned long)thread->context->fs_base;
+            *fs_base = (unsigned long)th->context->fs_base;
             break;
         }
         case ARCH_SET_GS:
-            thread->context->gs_base = (uint64_t)arg2;
+        th->context->gs_base = (uint64_t)arg2;
             break;
         case ARCH_GET_GS: {
             unsigned long * gs_base = (unsigned long *)(unsigned long)arg2;
@@ -275,7 +282,7 @@ int64_t prctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
                 return -EINVAL;
             }
 
-            *gs_base = (unsigned long)thread->context->gs_base;
+            *gs_base = (unsigned long)th->context->gs_base;
             break;
         }
         default:
@@ -290,6 +297,24 @@ int64_t exit_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     kprintf("[PID: %d | TID %d] EXIT_SYSCALL(%d)\n", thread->process->pid, thread->id, error_code);
     exit(thread->process, error_code);
     return SYSCALL_SUCCESS;
+}
+
+int64_t get_tid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    (void)ctx;
+    kprintf("[PID: %d | TID %d] GET_TID_SYSCALL(%d)\n", thread->process->pid, thread->id, error_code);
+    return thread->id;
+}
+
+int64_t getpid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    (void)ctx;
+    kprintf("[PID: %d | TID %d] GETPID_SYSCALL(%d)\n", thread->process->pid, thread->id, error_code);
+    return thread->process->pid;
+}
+
+int64_t getppid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    (void)ctx;
+    kprintf("[PID: %d | TID %d] GETPPID_SYSCALL(%d)\n", thread->process->pid, thread->id, error_code);
+    return thread->process->parent->pid;
 }
 
 //void * mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
@@ -595,12 +620,20 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [27 ... 31] = undefined_syscall_handler,
     [32] = dup_syscall_handler,
     [33] = dup2_syscall_handler,
-    [34 ... 56] = undefined_syscall_handler,
+    [34 ... 38] = undefined_syscall_handler,
+    [39] = getpid_syscall_handler,
+    [40 ... 56] = undefined_syscall_handler,
     [57] = fork_syscall_handler,
     [58] = undefined_syscall_handler,
     [59] = execve_syscall_handler,
     [60] = exit_syscall_handler,
-    [61 ... 255] = undefined_syscall_handler
+    [61 ... 109] = undefined_syscall_handler,
+    [110] = getppid_syscall_handler,
+    [111 ... 157] = undefined_syscall_handler,
+    [158] = arch_prctl_syscall_handler,
+    [159 ... 185] = undefined_syscall_handler,
+    [186] = get_tid_syscall_handler,
+    [187 ... 255] = undefined_syscall_handler
 };
 
 void global_syscall_handler(cpu_context_t* ctx) {

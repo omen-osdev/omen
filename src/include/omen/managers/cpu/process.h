@@ -84,8 +84,8 @@ typedef struct process {
     struct task_signal *signal_queue;
     sighandler_t signal_handlers[TASK_SIGNAL_MAX];
     int sigpending;
-    int exit_signal;
-    int pdeath_signal;
+    int sigprocmask;
+    int sigaction;
 
     unsigned int locks;
 
