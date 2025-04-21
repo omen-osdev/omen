@@ -2,6 +2,7 @@
 #include <omen/apps/debug/debug.h>
 #include <omen/apps/panic/panic.h>
 #include <omen/managers/mem/vmm.h>
+#include <omen/managers/cpu/process.h>
 #include <omen/libraries/allocators/heap_allocator.h>
 #include <omen/libraries/executables/loader.h>
 #include <vfs/vfs.h>
@@ -258,7 +259,7 @@ uint8_t elf_open_file(char * filename, uint8_t ** buffer, uint64_t * filesize) {
 }
 
 
-void* elf_load_elf(struct page_directory* root, uint8_t * buffer, uint64_t size) {
+struct loaded_elf* elf_load_elf(struct page_directory* root, uint8_t * buffer, uint64_t size) {
     if (!parse_elf_file(buffer)) return NULL;
 
     Elf64_Ehdr * elf_header = (Elf64_Ehdr *) buffer;
@@ -303,30 +304,31 @@ void* elf_load_elf(struct page_directory* root, uint8_t * buffer, uint64_t size)
             memcpy(pld.ld_path, buffer + program_header[i].p_offset, program_header[i].p_filesz);
         }
     }
-    /*
-    struct auxv vectors[5] = {
-        {
-            .a_type = AT_NULL,
-            .a_val = 0
-        },
-        {
-            .a_type = AT_ENTRY,
-            .a_val = (void*)elf_header->e_entry
-        },
-        {
-            .a_type = AT_PHDR,
-            .a_val = (void*)pld.at_phdr
-        },
-        {
-            .a_type = AT_PHENT,
-            .a_val = (void*)(uint64_t)elf_header->e_phentsize
-        },
-        {
-            .a_type = AT_PHNUM,
-            .a_val = (void*)(uint64_t)elf_header->e_phnum
-        }
-    };
-    */
+    
+    struct auxv *vectors = kmalloc(sizeof(struct auxv) * 7);
+    if (!vectors) {
+        panic("Could not allocate auxv\n");
+        return NULL;
+    }
+    memset(vectors, 0, sizeof(struct auxv) * 7);
+
+    vectors[0].a_type = AT_ENTRY;
+    vectors[0].a_val = (void*)elf_header->e_entry;
+    vectors[1].a_type = AT_PHDR;
+    vectors[1].a_val = (void*)pld.at_phdr;
+    vectors[2].a_type = AT_PHENT;
+    vectors[2].a_val = (void*)(uint64_t)elf_header->e_phentsize;
+    vectors[3].a_type = AT_PHNUM;
+    vectors[3].a_val = (void*)(uint64_t)elf_header->e_phnum;
+    vectors[4].a_type = AT_BASE;
+    vectors[4].a_val = (void*)(uint64_t)DYNAMIC_LINKER_BASE_ADDRESS;
+    vectors[5].a_type = AT_PAGESZ;
+    vectors[5].a_val = (void*)(uint64_t)0x1000;
+    vectors[6].a_type = AT_SYSINFO_EHDR;
+    vectors[6].a_val = (void*)(uint64_t)get_vdso_base();
+    vectors[7].a_type = AT_NULL;
+    vectors[7].a_val = 0;
+
     if (pld.ld_path) {
         kprintf("Dynamic linker path: %s\n", pld.ld_path);
 
@@ -358,8 +360,63 @@ void* elf_load_elf(struct page_directory* root, uint8_t * buffer, uint64_t size)
         }
 
         kfree(ld_buffer);
-        return (void*)(ld_elf_header->e_entry + (uint64_t)DYNAMIC_LINKER_BASE_ADDRESS);
+        struct loaded_elf * ld = kmalloc(sizeof(struct loaded_elf));
+        if (!ld) {
+            panic("Could not allocate loaded elf\n");
+            return NULL;
+        }
+
+        memset(ld, 0, sizeof(struct loaded_elf));
+        ld->entry = (uint64_t)ld_elf_header->e_entry + (uint64_t)DYNAMIC_LINKER_BASE_ADDRESS;
+        ld->auxv = vectors;
+        ld->auxv_size = sizeof(struct auxv) * 7;
+        ld->ld = &pld;
+        ld->ld_size = sizeof(struct proc_ld);
+        return ld;
     } else {
-        return (void*)elf_header->e_entry;
+
+        struct loaded_elf * ld = kmalloc(sizeof(struct loaded_elf));
+        if (!ld) {
+            panic("Could not allocate loaded elf\n");
+            return NULL;
+        }
+
+        memset(ld, 0, sizeof(struct loaded_elf));
+        ld->entry = (uint64_t)elf_header->e_entry;
+        ld->auxv = vectors;
+        ld->auxv_size = sizeof(struct auxv) * 7;
+        ld->ld = &pld;
+        ld->ld_size = sizeof(struct proc_ld);
+        return ld;
     }
+}
+
+char * get_auxv_string(uint64_t type) {
+    switch (type) {
+        case AT_NULL:
+            return "AT_NULL";
+        case AT_EXECFN:
+            return "AT_EXECFN";
+        case AT_PHDR:
+            return "AT_PHDR";
+        case AT_PHENT:
+            return "AT_PHENT";
+        case AT_PHNUM:
+            return "AT_PHNUM";
+        case AT_PAGESZ:
+            return "AT_PAGESZ";
+        case AT_BASE:
+            return "AT_BASE";
+        case AT_FLAGS:
+            return "AT_FLAGS";
+        case AT_ENTRY:
+            return "AT_ENTRY";
+        case AT_NOTELF:
+            return "AT_NOTELF";
+        case AT_SYSINFO_EHDR:
+            return "AT_SYSINFO_EHDR";
+        default:
+            return "Unknown auxv type";
+    }
+    return NULL;
 }

@@ -3,6 +3,7 @@
 #include <omen/managers/cpu/process.h>
 #include <omen/libraries/crypto/md5.h>
 #include <omen/managers/mem/vmm.h>
+#include <omen/apps/debug/debug.h>
 #include <omen/libraries/allocators/heap_allocator.h>
 #include <omen/libraries/std/string.h>
 #include <omen/libraries/std/stddef.h>
@@ -36,6 +37,90 @@ process_t process_list[MAX_PROCESSES] = {0};
 uint32_t process_count = 0;
 uint32_t current_process_index = 0;
 
+void * create_args_env_aux(void * protostack_buffer, uint64_t size, char ** argv, char ** envp, struct auxv* auxv) {
+    int argc = 0;
+    int envc = 0;
+    int auxc = 0;
+
+    // Count the number of arguments
+    uint64_t len = 0;
+    if (argv != 0)
+        for (argc = 0; argv[argc] != NULL; argc++) {len+= strlen(argv[argc]) + 1;}
+    if (envp != 0)
+        for (envc = 0; envp[envc] != NULL; envc++) {len+= strlen(envp[envc]) + 1;}
+    if (auxv != 0)
+        for (auxc = 0; (auxv[auxc].a_type != AT_NULL); auxc++) {len+= sizeof(struct auxv);}
+    len += 6*8;
+
+    if (len > size) {
+        panic("Protostack too big\n");
+    }
+
+    uint64_t * protostack = (uint64_t)((uint64_t)protostack_buffer - len);
+
+    memset(protostack, 0, len);
+
+    protostack[0] = argc;
+    //                                      argc args  null envs  null   auxv+null
+    uint64_t protostack_offset = (uint64_t)((1 + argc + 1 + envc + 1 + ((auxc+1)*2)) * 8);
+
+    // Copy the arguments to the protostack
+    for (int i = 0; i < argc; i++) {
+        protostack[i + 1] = (uint64_t)protostack + (uint64_t)protostack_offset;
+        kprintf("protostack[%d] Copying argv[%d] at %p (%s) to final addr:%p\n", i+1, i, argv[i], argv[i], protostack[i + 1]);
+        memcpy(protostack[i + 1], argv[i], strlen(argv[i]) + 1);
+        kprintf("Protostack string: %s argv string: %s\n", (char*)protostack[i + 1], argv[i]);
+        protostack_offset += (uint64_t)(strlen(argv[i]) + 1);
+    }
+    protostack[argc + 1] = 0;
+    // Copy the environment variables to the protostack
+    for (int i = 0; i < envc; i++) {
+        protostack[i + argc + 2] = (uint64_t)protostack + (uint64_t)protostack_offset;
+        kprintf("protostack[%d] Copying envp[%d] at %p (%s) to final addr:%p\n", i+argc+2, i, envp[i], envp[i], protostack[i + argc + 2]);
+        memcpy(protostack[i + argc + 2], envp[i], strlen(envp[i]) + 1);
+        kprintf("Protostack string: %s envp string: %s\n", (char*)protostack[i + argc + 2], envp[i]);
+        protostack_offset += (uint64_t)(strlen(envp[i]) + 1);
+    }
+    protostack[argc + envc + 2] = 0;
+    // Copy the auxv to the protostack
+    for (int i = 0; i < auxc; i++) {
+        struct auxv * aux = (struct auxv*)&(protostack[i*2 + argc + envc + 3]);
+        aux->a_type = auxv[i].a_type;
+        aux->a_val = auxv[i].a_val;
+        kprintf("protostack[%d] Copying auxv[%d] at %p (%s) to final addr:%p\n", (i*2)+argc+envc+3, i, auxv[i].a_val, get_auxv_string(auxv[i].a_type), &protostack[i*2 + argc + envc + 3]);
+        kprintf("Protostack type: %s value: %llx\n", get_auxv_string(auxv[i].a_type), auxv[i].a_val);
+    }
+    struct auxv * aux = (struct auxv*)&(protostack[argc + envc + 3 + auxc*2]);
+    aux->a_type = AT_NULL;
+    aux->a_val = 0;
+    //Add a NULL terminator to the protostack
+    protostack[argc + envc + auxc*2 + 4] = 0;
+
+    kprintf("protostack at %p size: %d\n", protostack, len);
+    kprintf("argc: %d envc: %d auxc: %d\n", argc, envc, auxc);
+    char ** argv_ptr = (char **)&(protostack[1]);
+    char ** envp_ptr = (char **)&(protostack[argc + 2]);
+    struct auxv * auxv_ptr = (struct auxv *)&(protostack[argc + envc + 3]);
+
+    for (int i = 0; i < argc; i++) {
+        kprintf("argv[%d]: %s\n", i, argv_ptr[i]);
+    }
+
+    for (int i = 0; i < envc; i++) {
+        kprintf("envp[%d]: %s\n", i, envp_ptr[i]);
+    }
+
+    for (int i = 0; i < auxc; i++) {
+        kprintf("auxv[%d]: TYPE: %s VAL: %llx\n", i, get_auxv_string(auxv_ptr[i].a_type), auxv_ptr[i].a_val);
+    }
+
+    return protostack;
+}
+
+void * get_vdso_base() {
+    return (void *)0x69;
+}
+
 void init_stacks(process_t * task, thread_t * thread, uint64_t size, uint64_t entry) {
     if (size % 0x1000) {
         size = (size + 0x1000) & ~0xfff;
@@ -59,6 +144,7 @@ void init_stacks(process_t * task, thread_t * thread, uint64_t size, uint64_t en
         map_range(get_pml4(), thread->ustack_base, (uint64_t)stack_physical, PAGE_SIZE_4KIB, PROCESS_STACK_SIZE, VMM_WRITE_BIT);
     }
     
+    thread->ustack = create_args_env_aux(thread->ustack, PROCESS_STACK_SIZE, task->argv, task->envp, task->auxv);
     newuctxcreat((uint64_t)&(thread->ustack), (uint64_t)entry);
 
     if (get_pml4() != task->vmm)
@@ -216,8 +302,7 @@ process_t * duplicate_process(thread_t * parent_thread) {
     return task;
 }
 
-
-void alter_process_on_exec(process_t * task, void * init) {
+void alter_process_on_exec(process_t * task, struct loaded_elf * ld, char const ** argv, char const ** envp) {
     process_t saved_task;
     memcpy(&saved_task, task, sizeof(process_t));
     memset(task, 0, sizeof(process_t));
@@ -238,8 +323,6 @@ void alter_process_on_exec(process_t * task, void * init) {
     task->privilege = 0;
     task->current_nice = 0;
     task->exit_code = 0;
-    task->exit_signal = 0;
-    task->pdeath_signal = 0;
 
     task->sleep_time = 0;
     task->cpu_time = 0;
@@ -260,14 +343,18 @@ void alter_process_on_exec(process_t * task, void * init) {
     task->io_tty = saved_task.io_tty;
     task->ctty = saved_task.ctty;
     
-    task->entry_address = init;
+    task->entry_address = ld->entry;
+    task->argv = (char**)argv;
+    task->envp = (char**)envp;
+    task->auxv = ld->auxv;
+    task->auxv_size = ld->auxv_size;
 
-    init_thread(task, init);
+    init_thread(task, ld->entry);
 
     kprintf("Exec: Process %d created\n", task->pid);
 }
 
-int exec(process_t * task, char const *path) {
+int exec(process_t * task, char const *path, char const **argv, char const **envp) {
 
     char * dynpath = kmalloc(256);
     strcpy(dynpath, path);
@@ -301,16 +388,14 @@ int exec(process_t * task, char const *path) {
     kfree(md5_buffer);
 
     vmm_unmap_userspace(task->vmm);
-    void * entry = elf_load_elf(task->vmm, buf, size);
-    alter_process_on_exec(task, entry);
+    struct loaded_elf * ld = elf_load_elf(task->vmm, buf, size);
+    alter_process_on_exec(task, ld, argv, envp);
     kfree(buf);
     return 0;
 }
 
-void execve(process_t* task, const char * path, const char * argv, const char * envp) {
-    (void)argv;
-    (void)envp;
-    exec(task, path);
+void execve(process_t* task, const char * path, const char ** argv, const char ** envp) {
+    exec(task, path, argv, envp);
 }
 
 uint8_t sched_thread(process_t * task) {
@@ -350,7 +435,6 @@ process_t * sched() {
         }
     }
     
-    process_signals(&process_list[current_process_index]);
     return &process_list[current_process_index];
 }
 
@@ -390,8 +474,6 @@ process_t * create_user_process(struct page_directory* pd, void * init, char * t
     task->privilege = 0;
     task->current_nice = 0;
     task->exit_code = 0;
-    task->exit_signal = 0;
-    task->pdeath_signal = 0;
 
     task->sleep_time = 0;
     task->cpu_time = 0;
@@ -424,6 +506,10 @@ process_t * create_user_process(struct page_directory* pd, void * init, char * t
     task->ctty = &(task->regular_tty);
     
     task->entry_address = init;
+    task->auxv = 0x0;
+    task->auxv_size = 0x0;
+    task->argv = 0x0;
+    task->envp = 0x0;
 
     init_thread(task, init);
 
@@ -435,7 +521,13 @@ void init_process(const char * _init_path, const char * _idle_path, char * tty) 
     process_t * init_proc = create_user_process(get_pml4(), (void*)_idle, tty);
     init_proc->pid = 0;
     current_process_index = 0;
-    exec(init_proc, _init_path);
+    const char ** argv = kmalloc(2 * sizeof(char*));
+    argv[0] = _init_path;
+    argv[1] = 0;
+    const char ** envp = kmalloc(2 * sizeof(char*));
+    envp[0] = 0;
+    
+    exec(init_proc, _init_path, argv, envp);
 
     thread_t * main_thread = &(get_current_process()->threads[0]);
     main_thread->status = THREAD_STATUS_RUNNING;
@@ -443,6 +535,7 @@ void init_process(const char * _init_path, const char * _idle_path, char * tty) 
     struct tss * tss = arch_get_cpu(main_thread->core_id)->tss;
     tss_set_stack(tss, main_thread->kstack, 0);
     tss_set_stack(tss, main_thread->ustack, 3);
+    disable_debugger();
     __asm__("mov %0, %%rsp\n"
             "mov %1, %%cr3\n"
             "fxrstor %2\n"

@@ -82,11 +82,11 @@ typedef struct siginfo {
 	int      si_trapno;    /* Trap number that caused
 							  hardware-generated signal
 							  (unused on most architectures) */
-	pid_t    si_pid;       /* Sending process ID */
-	uid_t    si_uid;       /* Real user ID of sending process */
+	int16_t    si_pid;       /* Sending process ID */
+	int16_t    si_uid;       /* Real user ID of sending process */
 	int      si_status;    /* Exit value or signal */
-	clock_t  si_utime;     /* User time consumed */
-	clock_t  si_stime;     /* System time consumed */
+	uint64_t  si_utime;     /* User time consumed */
+	uint64_t  si_stime;     /* System time consumed */
 	sigval_t si_value;     /* Signal value */
 	int      si_int;       /* POSIX.1b signal */
 	void    *si_ptr;       /* POSIX.1b signal */
@@ -123,6 +123,5 @@ struct sigaction {
 	sigset_t sa_mask;
 	int sa_restorer; //Always 0
 };
-
 
 #endif

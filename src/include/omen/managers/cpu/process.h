@@ -3,10 +3,10 @@
 
 #include <generic/config.h>
 #include <omen/hal/hal.h>
-#include <omen/managers/cpu/signal.h>
 #include <omen/libraries/std/stdint.h>
 #include <omen/managers/mem/vmm.h>
 #include <omen/libraries/allocators/heap_allocator.h>
+#include <omen/libraries/std/signal.h>
 
 #define THREAD_STATUS_READY 0
 #define THREAD_STATUS_RUNNING 1
@@ -82,7 +82,7 @@ typedef struct process {
     unsigned long long last_scheduled;
 
     struct task_signal *signal_queue;
-    sighandler_t signal_handlers[TASK_SIGNAL_MAX];
+    sighandler_t signal_handlers[PROCESS_SIGNAL_MAX];
     int sigpending;
     int sigprocmask;
     int sigaction;
@@ -103,6 +103,11 @@ typedef struct process {
     int io_tty;
     int *ctty;
 
+    char ** argv;
+    char ** envp;
+    struct auxv * auxv;
+    uint64_t auxv_size;
+
     void * entry_address;
 
     struct process *parent;
@@ -117,9 +122,9 @@ thread_t * get_current_thread();
 
 process_t * sched();
 int16_t fork(thread_t *thread);
-void execve(process_t *task, const char * path, const char * argv, const char * envp);
-int exec(process_t *task,char const *path);
+void execve(process_t *task, const char * path, const char ** argv, const char ** envp);
+int exec(process_t *task,char const *path, const char ** argv, const char ** envp);
 void exit(process_t *task, int error_code);
 void sync_files(thread_t *thread, struct vm_area * vma, uint64_t size);
-
+void * get_vdso_base();
 #endif

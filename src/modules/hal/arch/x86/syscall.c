@@ -41,7 +41,7 @@ kot's
 #define SYS_MUNMAP              6 ok
 #define SYS_MPROTECT            7 ok
 
-#define SYS_EXIT                8
+#define SYS_EXIT                8 ok
 #define SYS_THREAD_EXIT         9
 #define SYS_CLOCK_GET           10
 #define SYS_CLOCK_GETRES        11
@@ -229,8 +229,8 @@ int64_t fork_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 int64_t execve_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
     const char * path = (const char *)SYSCALL_ARG0(ctx);
-    const char * argv = (const char *)SYSCALL_ARG1(ctx);
-    const char * envp = (const char *)SYSCALL_ARG2(ctx);
+    const char ** argv = (const char **)SYSCALL_ARG1(ctx);
+    const char ** envp = (const char **)SYSCALL_ARG2(ctx);
     if (path == NULL) {
         kprintf("Invalid arguments for execve\n");
         return SYSCALL_ERROR;
@@ -301,19 +301,19 @@ int64_t exit_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 
 int64_t get_tid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
-    kprintf("[PID: %d | TID %d] GET_TID_SYSCALL(%d)\n", thread->process->pid, thread->id, error_code);
+    kprintf("[PID: %d | TID %d] GET_TID_SYSCALL()\n", thread->process->pid, thread->id);
     return thread->id;
 }
 
 int64_t getpid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
-    kprintf("[PID: %d | TID %d] GETPID_SYSCALL(%d)\n", thread->process->pid, thread->id, error_code);
+    kprintf("[PID: %d | TID %d] GETPID_SYSCALL()\n", thread->process->pid, thread->id);
     return thread->process->pid;
 }
 
 int64_t getppid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
-    kprintf("[PID: %d | TID %d] GETPPID_SYSCALL(%d)\n", thread->process->pid, thread->id, error_code);
+    kprintf("[PID: %d | TID %d] GETPPID_SYSCALL()\n", thread->process->pid, thread->id);
     return thread->process->parent->pid;
 }
 
