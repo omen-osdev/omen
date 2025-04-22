@@ -1,8 +1,5 @@
-#ifndef _LOADER_H
-#define _LOADER_H
-
-#include <omen/managers/mem/vmm.h>
-#include <omen/libraries/std/stdint.h>
+#ifndef _AUXV_H
+#define _AUXV_H
 
 #define AT_NULL   0	/* end of vector */
 #define AT_IGNORE 1	/* entry should be ignored */
@@ -34,25 +31,14 @@
 #define AT_EXECFN  31	/* filename of program */
 #define AT_SYSINFO_EHDR 33	/* sysinfo page */
 #define AT_MINSIGSTKSZ	51	/* minimal stack size for signal delivery */
-struct proc_ld {
-    void* at_phdr;
-    char* ld_path;
-};
 
 struct auxv{
-    uint64_t a_type;
+    unsigned long long a_type;
     void* a_val;
 };
 
-struct loaded_elf {
-    uint64_t entry;
-    struct auxv * auxv;
-    uint64_t auxv_size;
-    struct proc_ld * ld;
-    uint64_t ld_size;
-};
-
-char * get_auxv_string(uint64_t type);
-void elf_readelf(uint8_t * buffer, uint64_t size);
-struct loaded_elf* elf_load_elf(struct page_directory* root, uint8_t * buffer, uint64_t size);
+char * get_auxv_string(unsigned long long type);
+void load_auxv(char ** envp);
+unsigned long getauxval(unsigned long type);
+void dump_auxval();
 #endif

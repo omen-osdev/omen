@@ -81,9 +81,8 @@ typedef struct process {
     unsigned long long cpu_time;
     unsigned long long last_scheduled;
 
-    struct task_signal *signal_queue;
+    struct task_signal *signal_queue[PROCESS_SIGNAL_MAX];
     sighandler_t signal_handlers[PROCESS_SIGNAL_MAX];
-    int sigpending;
     int sigprocmask;
     int sigaction;
 
