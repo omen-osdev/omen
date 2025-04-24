@@ -211,7 +211,11 @@ void init_thread(process_t * task, void * init) {
     thread->core_id = arch_get_bsp_cpu()->core_id;
     thread->status = THREAD_STATUS_READY;
     thread->syscall_ready = 0;
-
+    thread->sigprocmask = 0;
+    thread->sigsuspend_mask = 0;
+    thread->altstack = 0;
+    thread->altstack_base = 0;
+    thread->altstack_flags = 0;
     thread->pending_signal = 0;
 
 }
@@ -296,6 +300,7 @@ process_t * duplicate_process(thread_t * parent_thread) {
     main_thread->context->cpu_context->cr3 = from_identity_map(task->vmm);
     vmm_copy_stack(task->vmm, parent_thread->ustack_base, task->stack_max_size, VMM_USER_BIT | VMM_WRITE_BIT);
     vmm_copy_stack(task->vmm, parent_thread->kstack_base, task->stack_max_size, VMM_WRITE_BIT);
+    vmm_copy_stack(task->vmm, parent_thread->altstack_base, (parent_thread->altstack - parent_thread->altstack_base), VMM_USER_BIT | VMM_WRITE_BIT);
     engrave_vmareas(task, parent);
 
     kprintf("Process %d duplicated\n", task->pid);
@@ -330,6 +335,11 @@ void alter_process_on_exec(process_t * task, struct loaded_elf * ld, char const 
     task->locks = 0;
 
     task->stack_max_size = PROCESS_STACK_SIZE;
+
+    for (int i = 1; i < NSIG; i++) {
+        task->signal_queue[i] = 0;
+        memset(&(task->signal_handlers[i]), 0, sizeof(struct sigaction));
+    }
 
     task->pid = saved_task.pid;
     task->parent = saved_task.parent;
@@ -428,7 +438,7 @@ process_t * sched() {
         current_process_index = 0;
     }
 
-    while (!sched_thread(&process_list[current_process_index])) {
+    while (!sched_suspend(&process_list[current_process_index])) {
         current_process_index++;
         if (current_process_index >= process_count) {
             current_process_index = 0;
@@ -481,6 +491,11 @@ process_t * create_user_process(struct page_directory* pd, void * init, char * t
     task->locks = 0;
 
     task->stack_max_size = PROCESS_STACK_SIZE;
+
+    for (int i = 1; i < NSIG; i++) {
+        task->signal_queue[i] = 0;
+        memset(&(task->signal_handlers[i]), 0, sizeof(struct sigaction));
+    }
 
     task->pid = get_next_pid();
     if (task->pid < 0) {

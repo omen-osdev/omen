@@ -180,6 +180,76 @@ int64_t stat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     return SYSCALL_SUCCESS;
 }
 
+int64_t sigprocmask_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
+    int how = SYSCALL_ARG0(ctx);
+    sigset_t* set = (sigset_t*)SYSCALL_ARG1(ctx);
+    sigset_t* oldset = (sigset_t*)SYSCALL_ARG2(ctx);
+    kprintf("[PID: %d | TID %d] SIGPROCMASK_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, how, set, oldset);
+    if (set == NULL) {
+        kprintf("Invalid set\n");
+        return SYSCALL_ERROR;
+    }
+    if (how != SIG_BLOCK && how != SIG_UNBLOCK && how != SIG_SETMASK) {
+        kprintf("Invalid how value\n");
+        return SYSCALL_ERROR;
+    }
+    return sigprocmask(thread->process, how, set, oldset);
+}
+
+int64_t sigaction_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
+    int signum = SYSCALL_ARG0(ctx);
+    struct sigaction* act = (struct sigaction*)SYSCALL_ARG1(ctx);
+    struct sigaction* oldact = (struct sigaction*)SYSCALL_ARG2(ctx);
+    kprintf("[PID: %d | TID %d] SIGACTION_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, signum, act, oldact);
+    if (signum < 0 || signum >= NSIG) {
+        kprintf("Invalid signal number\n");
+        return SYSCALL_ERROR;
+    }
+    return sigaction(thread->process, signum, act, oldact);
+}
+
+int64_t sigsuspend_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
+    sigset_t* mask = (sigset_t*)SYSCALL_ARG0(ctx);
+    kprintf("[PID: %d | TID %d] SIGSUSPEND_SYSCALL(%d)\n", thread->process->pid, thread->id, mask);
+    if (mask == NULL) {
+        kprintf("Invalid mask\n");
+        return SYSCALL_ERROR;
+    }
+    return sigsuspend(thread->process, mask);
+}
+
+int64_t sigpending_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
+    sigset_t* set = (sigset_t*)SYSCALL_ARG0(ctx);
+    kprintf("[PID: %d | TID %d] SIGPENDING_SYSCALL(%d)\n", thread->process->pid, thread->id, set);
+    if (set == NULL) {
+        kprintf("Invalid set\n");
+        return SYSCALL_ERROR;
+    }
+    return sigpending(thread->process, set);
+}
+
+int64_t sigaltstack_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
+    struct stack* ss = (struct stack*)SYSCALL_ARG0(ctx);
+    struct stack* old_ss = (struct stack*)SYSCALL_ARG1(ctx);
+    kprintf("[PID: %d | TID %d] SIGALTSTACK_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, ss, old_ss);
+    if (ss == NULL) {
+        kprintf("Invalid stack\n");
+        return SYSCALL_ERROR;
+    }
+    return sigaltstack(thread->process, ss, old_ss);
+}
+
+int64_t kill_syscall_hanlder(thread_t* thread, cpu_context_t* ctx) {
+    int pid = SYSCALL_ARG0(ctx);
+    int signal = SYSCALL_ARG1(ctx);
+    kprintf("[PID: %d | TID %d] KILL_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, pid, signal);
+    if (pid < 0 || signal < 0 || signal >= NSIG) {
+        kprintf("Invalid pid or signal\n");
+        return SYSCALL_ERROR;
+    }
+    return kill(thread->process, pid, signal);
+}
+
 int64_t fstat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     int fd = SYSCALL_ARG0(ctx);
     stat_t* stat = SYSCALL_ARG1(ctx);
@@ -611,7 +681,10 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [9] = mmap_syscall_handler,
     [10] = mprotect_syscall_handler,
     [11] = munmap_syscall_handler,
-    [12 ... 15] = undefined_syscall_handler,
+    [12] = undefined_syscall_handler,
+    [13] = sigaction_syscall_handler,
+    [14] = sigprocmask_syscall_handler,
+    [15] = sigreturn_syscall_handler,
     [16] = ioctl_syscall_handler,
     [17 ... 23] = undefined_syscall_handler,
     [24] = sched_yield_syscall_handler,
@@ -627,9 +700,16 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [58] = undefined_syscall_handler,
     [59] = execve_syscall_handler,
     [60] = exit_syscall_handler,
-    [61 ... 109] = undefined_syscall_handler,
+    [61] = undefined_syscall_handler,
+    [62] = kill_syscall_hanlder,
+    [63 ... 109] = undefined_syscall_handler,
     [110] = getppid_syscall_handler,
-    [111 ... 157] = undefined_syscall_handler,
+    [111 ... 126] = undefined_syscall_handler,
+    [127] = sigpending_syscall_handler,
+    [128 ... 129] = undefined_syscall_handler,
+    [130] = sigsuspend_syscall_handler,
+    [131] = sigaltstack_syscall_handler,
+    [132 ... 157] = undefined_syscall_handler,
     [158] = arch_prctl_syscall_handler,
     [159 ... 185] = undefined_syscall_handler,
     [186] = get_tid_syscall_handler,
@@ -655,6 +735,7 @@ void global_syscall_handler(cpu_context_t* ctx) {
     }
 
     current_thread = get_current_thread();
+    process_signals(current_thread->process);
 
     __asm__("fxrstor %0" : "=m" (current_thread->context->fxsave_region));
 

@@ -48,6 +48,13 @@ typedef struct thread {
     void * kstack;
     void * kstack_base;
 
+    void * altstack;
+    void * altstack_base;
+    int altstack_flags;
+
+    sigset_t sigprocmask;
+    sigset_t sigsuspend_mask;
+
     int id;
     uint8_t core_id;
     void* entry;
@@ -56,7 +63,7 @@ typedef struct thread {
 
     int pending_signal;
     //signal_queue_t *signal_queue;
-    //signal_handler_t signal_handlers[PROCESS_SIGNAL_MAX];
+    //signal_handler_t signal_handlers[NSIG];
 } thread_t;
 
 typedef struct process {
@@ -81,10 +88,8 @@ typedef struct process {
     unsigned long long cpu_time;
     unsigned long long last_scheduled;
 
-    struct task_signal *signal_queue[PROCESS_SIGNAL_MAX];
-    sighandler_t signal_handlers[PROCESS_SIGNAL_MAX];
-    int sigprocmask;
-    int sigaction;
+    struct task_signal *signal_queue[NSIG];
+    struct sigaction signal_handlers[NSIG];
 
     unsigned int locks;
 

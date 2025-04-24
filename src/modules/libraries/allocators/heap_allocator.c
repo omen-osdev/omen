@@ -31,6 +31,7 @@ void kstackalloc(struct page_directory* pd, struct stack * stack, uint64_t lengt
     top -= 0x8;
     
     stack->base = (void*)(base);
+    stack->flags = 0;
     stack->top = (void*)(top);
 }
 
@@ -72,6 +73,7 @@ void * stackalloc(struct page_directory* root, struct stack * stack, uint64_t le
     top -= 0x8;
     
     stack->base = (void*)(base);
+    stack->flags = 0;
     stack->top = (void*)(top);
 }
 

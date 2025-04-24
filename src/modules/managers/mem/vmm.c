@@ -674,6 +674,7 @@ uint64_t vmm_is_present(struct page_directory* root, void * vmm_address) {
 
 void * vmm_copy_stack(struct page_directory* stack_root, void * stack_base, uint64_t stack_size, uint8_t flags)
 {
+    if (stack_size == 0) return NULL;
     stack_size = (stack_size + 0xfff) & ~0xfff;
 
     void * new_stack_phys = pmm_alloc(stack_size);

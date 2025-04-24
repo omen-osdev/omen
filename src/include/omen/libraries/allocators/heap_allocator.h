@@ -6,6 +6,7 @@
 
 struct stack {
     void * base;
+    int flags;
     void * top;
 };
 
