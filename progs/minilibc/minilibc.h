@@ -1,5 +1,6 @@
 
 #include <stdint.h>
+#include <signal.h>
 
 #define MAP_SHARED 0x1
 #define MAP_PRIVATE 0x2
@@ -30,8 +31,16 @@ struct stat {
     uint64_t st_ctime;
 };
 
+typedef struct stack {
+    void * base;
+    int flags;
+    void * top;
+} stack_t;
+
 typedef struct stat stat_t;
 
+void minilibc_init();
+void * get_vdso_signal_trampoline();
 void sys_read(int fd, char * buffer, int size);
 void sys_write(int fd, char * buffer, int size);
 int sys_open(const char * path, int flags);
@@ -49,3 +58,13 @@ void sys_mprotect(void * addr, size_t length, int prot);
 void sys_munmap(void * addr, size_t length);
 int sys_dup(int fd);
 int sys_dup2(int oldfd, int newfd);
+int sys_getpid();
+int sys_geppid();
+
+
+int sys_sigaction(int signum, struct sigaction * act, struct sigaction * oldact);
+int sys_sigsuspend(sigset_t* sigsuspend_mask, const sigset_t *mask);
+int sys_sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
+int sys_sigpending(sigset_t *set);
+int sys_kill(int pid, int sig);
+int sys_sigaltstack(const stack_t *ss, stack_t *oss);

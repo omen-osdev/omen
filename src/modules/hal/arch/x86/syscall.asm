@@ -111,3 +111,11 @@ syscall_entry:
     mov rsp, [rsp + 0x28]
     swapgs
     o64 sysret
+
+; RDI signal_handler
+; RSI siginfo_t
+; RDX cpu_context_t
+signal_trampoline:
+    
+    swapgs
+    o64 sysret

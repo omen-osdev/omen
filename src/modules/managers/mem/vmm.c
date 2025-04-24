@@ -338,7 +338,7 @@ void unmap_memory(struct page_directory* root, void* virtual_address)
 
 void * allocate_vmm(struct page_directory * pml4, uint64_t size, uint64_t region, uint8_t flags)
 {
-    if (region != VMM_REGION_U_STACK && region != VMM_REGION_U_HEAP && region != VMM_REGION_U_SHM_MMAP && region != VMM_REGION_K_STACK && region != VMM_REGION_K_IDENT && region != VMM_REGION_DEVICES && region != VMM_REGION_K_HEAP)
+    if (region != VMM_REGION_U_STACK && region != VMM_REGION_U_HEAP && region != VMM_REGION_U_SHM_MMAP && region != VMM_REGION_K_STACK && region != VMM_REGION_K_IDENT && region != VMM_REGION_DEVICES && region != VMM_REGION_K_HEAP && region != VMM_REGION_U_VDSO)
     {
         panic("Invalid region for allocation\n");
         return NULL;
@@ -612,10 +612,12 @@ void* get_physical_address(struct page_directory* root, void* virtual_address)
 
 void init_vmm()
 {
+    extern uint64_t VDSO_START;
+    extern uint64_t VDSO_END;
     map_range(get_current_cr3(), (void*)VMM_REGION_K_IDENT, (void*)0, PAGE_SIZE_1GIB, PHYSICAL_MEMORY_SIZE, VMM_WRITE_BIT);
     map_range(get_current_cr3(), (void*)VMM_REGION_K_HEAP, (void*)0, PAGE_SIZE_1GIB, PHYSICAL_MEMORY_SIZE, VMM_WRITE_BIT);
     map_range(get_current_cr3(), (void*)VMM_REGION_DEVICES, (void*)0, PAGE_SIZE_1GIB, PHYSICAL_MEMORY_SIZE, VMM_WRITE_BIT | VMM_CACHE_DISABLE_BIT | VMM_NX_BIT);
-
+    map_range(get_current_cr3(), (void*)VDSO_START, (void*)0, PAGE_SIZE_1GIB, (VDSO_END-VDSO_START), VMM_USER_BIT);
     struct page_directory * cr3 = get_current_cr3();
     vm_entry * vme = (vm_entry*)&(cr3->entries[2]);
     vme->directory.P = 1;

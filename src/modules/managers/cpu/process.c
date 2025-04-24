@@ -3,6 +3,7 @@
 #include <omen/managers/cpu/process.h>
 #include <omen/libraries/crypto/md5.h>
 #include <omen/managers/mem/vmm.h>
+#include <omen/managers/cpu/signal.h>
 #include <omen/apps/debug/debug.h>
 #include <omen/libraries/allocators/heap_allocator.h>
 #include <omen/libraries/std/string.h>
@@ -118,7 +119,7 @@ void * create_args_env_aux(void * protostack_buffer, uint64_t size, char ** argv
 }
 
 void * get_vdso_base() {
-    return (void *)0x69;
+    return (void*)VMM_REGION_U_VDSO;
 }
 
 void init_stacks(process_t * task, thread_t * thread, uint64_t size, uint64_t entry) {
@@ -216,7 +217,6 @@ void init_thread(process_t * task, void * init) {
     thread->altstack = 0;
     thread->altstack_base = 0;
     thread->altstack_flags = 0;
-    thread->pending_signal = 0;
 
 }
 
@@ -408,13 +408,43 @@ void execve(process_t* task, const char * path, const char ** argv, const char *
     exec(task, path, argv, envp);
 }
 
+int sched_sigsuspend_check(thread_t * task) {
+    if (task->sigsuspend_mask) {
+        //Check if there is any pending signal allowed by the sigprocmask
+        for (int i = 1; i < NSIG; i++) {
+            if (task->process->signal_queue[i] && (task->sigprocmask & (1 << i))) {
+                task->unsuspend_signal = i;
+                return i; //There is a sigsuspend signal pending, we can schedule
+            }
+        }
+
+        //Check if there is any signal that will kill the process
+        //We don't check the sigprocmask here, as we want to kill the process
+        if (task->process->signal_queue[SIGKILL]) {
+            task->unsuspend_signal = SIGKILL;
+            return SIGKILL; //We can kill the process
+        }
+        if (task->process->signal_queue[SIGSTOP]) {
+            task->unsuspend_signal = SIGSTOP;
+            return SIGSTOP; //We can stop the process
+        }
+    } else {
+        return 0; //No sigsuspend, we can schedule
+    }
+
+    return -1; //Can't resume
+}
+
 uint8_t sched_thread(process_t * task) {
     int current_thread_index = task->current_thread + 1;
     if (current_thread_index >= task->thread_count) {
         current_thread_index = 0;
     }
 
-    while (task->threads[current_process_index].status != THREAD_STATUS_READY && task->threads[current_process_index].status != THREAD_STATUS_RUNNING) {
+    while (
+        task->threads[current_process_index].status != THREAD_STATUS_READY && 
+        task->threads[current_process_index].status != THREAD_STATUS_RUNNING && 
+        (sched_sigsuspend_check(&(task->threads[current_thread_index])) >= 0)) {
         current_thread_index++;
         if (current_thread_index >= task->thread_count) {
             current_thread_index = 0;
@@ -438,7 +468,7 @@ process_t * sched() {
         current_process_index = 0;
     }
 
-    while (!sched_suspend(&process_list[current_process_index])) {
+    while (!sched_thread(&process_list[current_process_index])) {
         current_process_index++;
         if (current_process_index >= process_count) {
             current_process_index = 0;
@@ -446,6 +476,47 @@ process_t * sched() {
     }
     
     return &process_list[current_process_index];
+}
+
+struct sigaction * select_signal(thread_t * thread) {
+    process_t * process = thread->process;
+    sigset_t thread_signal_mask = thread->sigprocmask;
+    sigset_t thread_sigsuspend_mask = thread->sigsuspend_mask;
+    struct task_signal chosen_signal = {.signo = 0, .next = 0};
+    if (thread->unsuspend_signal) {
+        if (thread->process->signal_queue[thread->unsuspend_signal] == 0x0)
+            panic("Scheduler error: unsuspend signal not set\n");
+        if (!dequeue_signal(process->signal_queue, &chosen_signal, thread->unsuspend_signal))
+            panic("Scheduler error: unsuspend signal not found\n");
+        thread->unsuspend_signal = 0;
+        thread->sigprocmask = thread_sigsuspend_mask;
+        thread->sigsuspend_mask = 0;
+    } else {
+        for (int i = 1; i < NSIG; i++) {
+            if (process->signal_queue[i] != 0) {
+                if ((thread_signal_mask & (1 << i)) == 0) {
+                    if (!dequeue_signal(process->signal_queue, &chosen_signal, i))
+                        panic("Scheduler error: signal not found\n");
+                    break;
+                }
+            }
+        }
+    }
+
+    if (chosen_signal.signo != 0x0) {
+        return &(process->signal_handlers[chosen_signal.signo]);
+    } else {
+        return 0x0;
+    }
+}
+
+process_t *get_process_by_pid(int pid) {
+    for (uint64_t i = 0; i < process_count; i++) {
+        if (process_list[i].pid == pid) {
+            return &(process_list[i]);
+        }
+    }
+    return 0;
 }
 
 int16_t fork(thread_t * ct) {   
@@ -471,7 +542,7 @@ process_t * create_user_process(struct page_directory* pd, void * init, char * t
 
     task->vmm = vmm_copy_kernel(pd);
     task->vm_areas = 0;
-
+    
     memset(task->threads, 0, sizeof(thread_t) * MAX_THREADS);
     task->thread_count = 0;
     task->current_thread = 0;
@@ -515,6 +586,8 @@ process_t * create_user_process(struct page_directory* pd, void * init, char * t
     memset(task->open_files, 0, sizeof(int)*MAX_OPEN_FILES);
     task->open_files_count = 0;
     open_stdfiles(task, tty);
+    task->vdso = vdso_init(task->vmm);
+    vdso_set_data(task->vdso, VDSO_ENTRY_SIGNAL_TRAMP, signal_trampoline, 8);
 
     task->regular_tty = task->open_files[PROCFILE_STDIN];
     task->io_tty = task->open_files[PROCFILE_STDERR];
@@ -530,6 +603,12 @@ process_t * create_user_process(struct page_directory* pd, void * init, char * t
 
     kprintf("Process %d created\n", task->pid);
     return task;
+}
+
+void * get_signal_trampoline(process_t * task) {
+    void * trampoline = 0;
+    vdso_get_data(task->vdso, VDSO_ENTRY_SIGNAL_TRAMP, &trampoline, 0);
+    return trampoline;
 }
 
 void init_process(const char * _init_path, const char * _idle_path, char * tty) {
@@ -565,4 +644,18 @@ thread_t * get_current_thread() {
 
 process_t * get_current_process() {
     return &process_list[current_process_index];
+}
+
+void process_signals(thread_t * thread) {
+    process_t * process = thread->process;
+    for (int i = 0; i < NSIG; i++) {
+        if (process->signal_queue[i] != 0) {
+            struct task_signal * signal = process->signal_queue[i];
+            process->signal_queue[i] = 0;
+            if (process->signal_handlers[i].sa_handler != SIG_IGN) {
+                process->signal_handlers[i].sa_handler(signal);
+            }
+            kfree(signal);
+        }
+    }
 }

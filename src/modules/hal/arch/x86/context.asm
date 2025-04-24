@@ -156,7 +156,7 @@ userspace_trampoline:
     xor r14, r14
     xor r15, r15
 
-    iretq
+    iretq    
 
 ; RDI stack pointer
 ; RSI init function

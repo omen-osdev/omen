@@ -6,7 +6,8 @@
 #include <omen/libraries/std/stdint.h>
 #include <omen/managers/mem/vmm.h>
 #include <omen/libraries/allocators/heap_allocator.h>
-#include <omen/libraries/std/signal.h>
+#include <omen/managers/cpu/signal.h>
+#include <omen/managers/mem/vdso.h>
 
 #define THREAD_STATUS_READY 0
 #define THREAD_STATUS_RUNNING 1
@@ -54,21 +55,19 @@ typedef struct thread {
 
     sigset_t sigprocmask;
     sigset_t sigsuspend_mask;
+    int unsuspend_signal;
 
     int id;
     uint8_t core_id;
     void* entry;
     thread_status_t status;
     uint8_t syscall_ready; //A thread has to have called sycall_entry to return from a syscall
-
-    int pending_signal;
-    //signal_queue_t *signal_queue;
-    //signal_handler_t signal_handlers[NSIG];
 } thread_t;
 
 typedef struct process {
     struct page_directory * vmm;
     struct vm_area *vm_areas;
+    vdso_t * vdso;
 
     thread_t threads[MAX_THREADS];
     int thread_count;
@@ -123,12 +122,14 @@ void returnoexit();
 void init_process(const char * init_path, const char * idle_path, char * tty);
 process_t * get_current_process();
 thread_t * get_current_thread();
-
+void * get_signal_trampoline(process_t * task);
+struct sigaction * select_signal(thread_t * thread);
 process_t * sched();
 int16_t fork(thread_t *thread);
 void execve(process_t *task, const char * path, const char ** argv, const char ** envp);
 int exec(process_t *task,char const *path, const char ** argv, const char ** envp);
 void exit(process_t *task, int error_code);
 void sync_files(thread_t *thread, struct vm_area * vma, uint64_t size);
+process_t *get_process_by_pid(int pid);
 void * get_vdso_base();
 #endif

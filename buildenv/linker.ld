@@ -22,6 +22,12 @@ SECTIONS
         *(.text .text.*)
     } :text
 
+    VDSO_START = .;
+    .vdso : ALIGN(CONSTANT(MAXPAGESIZE)) {
+        *(.vdso .vdso.*)
+    } :text
+    VDSO_END = .;
+
     .data : ALIGN(CONSTANT(MAXPAGESIZE)){
         *(.data .data.*)
         KEEP(*(.requests_start_marker))

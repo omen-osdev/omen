@@ -1,6 +1,27 @@
 
 #include <stdint.h>
 #include <minilibc.h>
+#include <signal.h>
+#include <auxv.h>
+#include <vdso.h>
+
+struct minilibc_data {
+    vdso_t * vdso;
+};
+
+struct minilibc_data minilibc_data;
+
+void minilibc_init() {
+    // Initialize the mini libc
+    minilibc_data.vdso = (vdso_t*)getauxval(AT_SYSINFO_EHDR);
+}
+
+void * get_vdso_signal_trampoline() {
+    void * trampoline;
+    uint64_t size;
+    vdso_get_data(minilibc_data.vdso, VDSO_ENTRY_SIGNAL_TRAMP, &trampoline, &size);
+    return trampoline;
+}
 
 static inline int64_t syscall(int64_t function, int64_t arg1, int64_t arg2, int64_t arg3, int64_t arg4, int64_t arg5, int64_t arg6)
 {
@@ -76,4 +97,36 @@ int sys_dup(int fd) {
 }
 int sys_dup2(int oldfd, int newfd) {
     return (int)syscall(33, (int64_t)oldfd, (int64_t)newfd, 0, 0, 0, 0);
+}
+
+int sys_sigaction(int signum, struct sigaction * act, struct sigaction * oldact) {
+    return (int)syscall(13, (int64_t)signum, (int64_t)act, (int64_t)oldact, 0, 0, 0);
+}
+
+int sys_sigsuspend(sigset_t* sigsuspend_mask, const sigset_t *mask) {
+    return (int)syscall(130, (int64_t)sigsuspend_mask, (int64_t)mask, 0, 0, 0, 0);
+}
+
+int sys_sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
+    return (int)syscall(14, (int64_t)how, (int64_t)set, (int64_t)oldset, 0, 0, 0);
+}
+
+int sys_sigpending(sigset_t *set) {
+    return (int)syscall(127, (int64_t)set, 0, 0, 0, 0, 0);
+}
+
+int sys_kill(int pid, int sig) {
+    return (int)syscall(62, (int64_t)pid, (int64_t)sig, 0, 0, 0, 0);
+}
+
+int sys_sigaltstack(const stack_t *ss, stack_t *oss) {
+    return (int)syscall(131, (int64_t)ss, (int64_t)oss, 0, 0, 0, 0);
+}
+
+int sys_getpid() {
+    return (int)syscall(39, 0, 0, 0, 0, 0, 0);
+}
+
+int sys_geppid() {
+    return (int)syscall(110, 0, 0, 0, 0, 0, 0);
 }
