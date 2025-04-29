@@ -165,6 +165,7 @@ int64_t close_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 int64_t sigreturn_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
     kprintf("[PID: %d | TID %d] SIGRETURN_SYSCALL()\n", thread->process->pid, thread->id);
+    restore_signal_context(thread, ctx);
 }
 
 int64_t stat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
@@ -253,7 +254,7 @@ int64_t sigaltstack_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
     return ret;
 }
 
-int64_t kill_syscall_hanlder(thread_t* thread, cpu_context_t* ctx) {
+int64_t kill_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
     int pid = SYSCALL_ARG0(ctx);
     int signal = SYSCALL_ARG1(ctx);
     kprintf("[PID: %d | TID %d] KILL_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, pid, signal);
@@ -720,7 +721,7 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [59] = execve_syscall_handler,
     [60] = exit_syscall_handler,
     [61] = undefined_syscall_handler,
-    [62] = kill_syscall_hanlder,
+    [62] = kill_syscall_handler,
     [63 ... 109] = undefined_syscall_handler,
     [110] = getppid_syscall_handler,
     [111 ... 126] = undefined_syscall_handler,
@@ -734,25 +735,6 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [186] = get_tid_syscall_handler,
     [187 ... 255] = undefined_syscall_handler
 };
-
-void prepare_a_signal(thread_t * thread, cpu_context_t* ctx, struct sigaction * sigact) {
-    void * vdso_signal_trampoline = get_signal_trampoline(thread->process);
-    if (vdso_signal_trampoline == NULL) {
-        kprintf("Failed to get vdso signal trampoline\n");
-        return;
-    }
-
-    kprintf("vdso_signal_trampoline: %p\n", vdso_signal_trampoline);
-    uint64_t * rsp_pointer = (uint64_t *)ctx->rsp;
-    rsp_pointer -= 8;
-    *(rsp_pointer) = sigact;
-    rsp_pointer -= 8;
-    *(rsp_pointer) = ctx->rbp;
-    rsp_pointer -= 8;
-    *(rsp_pointer) = vdso_signal_trampoline;
-
-    ctx->rsp = (uint64_t)rsp_pointer;
-}
 
 void global_syscall_handler(cpu_context_t* ctx) {
 
@@ -773,14 +755,7 @@ void global_syscall_handler(cpu_context_t* ctx) {
     }
 
     current_thread = get_current_thread();
-    struct sigaction * sigact = select_signal(current_thread);
-    if (sigact == NULL) {
-        kprintf("No signal to handle\n");
-    } else {
-        kprintf("Signal ready to be handled [HANDLER: %p | SIGACTION: %p | MASK: %llx | FLAGS: %x | RESTORER: %p]\n", sigact->sa_handler, sigact->sa_sigaction, sigact->sa_mask, sigact->sa_flags, sigact->sa_restorer);
-    }
     __asm__("fxrstor %0" : "=m" (current_thread->context->fxsave_region));
-
     memcpy(ctx, current_thread->context->cpu_context, sizeof(cpu_context_t));
     memcpy(ctx->info, current_thread->context->cpu_context->info, sizeof(struct cpu_context_info));
 
@@ -790,6 +765,16 @@ void global_syscall_handler(cpu_context_t* ctx) {
     setFsBase(current_thread->context->fs_base);
 
     if (current_thread->syscall_ready) {
+
+        int signo;
+        struct sigaction * sigact = select_signal(current_thread, &signo);
+        if (sigact == NULL) {
+            kprintf("No signal to handle\n");
+        } else {
+            kprintf("Signal ready to be handled [HANDLER: %p | SIGACTION: %p | MASK: %llx | FLAGS: %x | RESTORER: %p]\n", sigact->sa_handler, sigact->sa_sigaction, sigact->sa_mask, sigact->sa_flags, sigact->sa_restorer);
+            create_signal_context(current_thread, signo, sigact, ctx);
+        }
+
         SYSRET(ctx, result);
     } else {
     __asm__("mov %0, %%rsp\n"

@@ -19,6 +19,7 @@
 #include <omen/managers/cpu/cpu.h>
 #include <omen/managers/dev/fb.h>
 #include <omen/managers/dev/pit.h>
+#include <omen/managers/mem/vdso.h>
 
 #include <omen/apps/debug/dshell.h>
 #include <omen/apps/debug/debug.h>
@@ -108,6 +109,7 @@ void boot_startup() {
     init_pit(50);
     init_interrupts();
     init_cpus();
+    vdso_init();
     init_acpi();
     struct madt_header* madt = get_acpi_madt();
     if (madt != 0) {

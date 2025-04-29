@@ -51,6 +51,8 @@
 #define VMM_FROM_USER_STACK(addr) ((uint64_t)(addr) - (uint64_t)VMM_REGION_U_STACK)
 #define VMM_TO_USER_HEAP(addr) ((uint64_t)(addr) + (uint64_t)VMM_REGION_U_HEAP)
 #define VMM_FROM_USER_HEAP(addr) ((uint64_t)(addr) - (uint64_t)VMM_REGION_U_HEAP)
+#define VMM_TO_VDSO(addr) ((uint64_t)(addr) + (uint64_t)VMM_REGION_U_VDSO)
+#define VMM_FROM_VDSO(addr) ((uint64_t)(addr) - (uint64_t)VMM_REGION_U_VDSO)
 
 #define TO_IDENTITY_MAP(addr) (uint64_t)(((uint64_t)addr) + (uint64_t)physical_memory_offset)
 #define FROM_IDENTITY_MAP(addr) (uint64_t)(((uint64_t)addr) - (uint64_t)physical_memory_offset)
@@ -70,8 +72,6 @@ void * from_identity_map(void * address);
 void * allocate_at_vaddr(struct page_directory * root, void * virtual_address, uint64_t size, uint8_t flags);
 struct page_directory * vmm_copy(struct page_directory* root);
 
-void map_memory(struct page_directory * pml4, void * address, void * physical, uint64_t page_size, uint8_t flags);
-void unmap_memory(struct page_directory* root, void* virtual_address);
 void mprotect(struct page_directory *, void*, uint64_t, uint8_t);
 void mprotect_current(void*, uint64_t, uint8_t);
 uint8_t is_user_access(struct page_directory* pml4, void * address);

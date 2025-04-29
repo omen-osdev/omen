@@ -6,6 +6,7 @@ ENTRY(_start)
 PHDRS
 {
     text    PT_LOAD FLAGS((1 << 0) | (1 << 2));
+    vdso    PT_LOAD FLAGS((1 << 0) | (1 << 2));
     rodata  PT_LOAD FLAGS((1 << 2));
     data    PT_LOAD FLAGS((1 << 1) | (1 << 2));
 }
@@ -15,18 +16,21 @@ SECTIONS
     USER_START = 0x0000000000000000;
     USER_END = 0x00007fffffffffff;
 
-    . = 0xffffffff80000000;
+    . = 0xffffffff90000000;
+
     KERNEL_START = .;
+
+    . = ALIGN(CONSTANT(MAXPAGESIZE));
+    VDSO_START = .;
+    .vdso : ALIGN(CONSTANT(MAXPAGESIZE)) {
+        *(.vdso .vdso.*)
+    } :vdso
+    VDSO_END = .;
+    . = 0xffffffffa0000000;
 
     .text : ALIGN(CONSTANT(MAXPAGESIZE)) {
         *(.text .text.*)
     } :text
-
-    VDSO_START = .;
-    .vdso : ALIGN(CONSTANT(MAXPAGESIZE)) {
-        *(.vdso .vdso.*)
-    } :text
-    VDSO_END = .;
 
     .data : ALIGN(CONSTANT(MAXPAGESIZE)){
         *(.data .data.*)

@@ -108,6 +108,11 @@ void * check_k_regions(uint64_t address) {
         return (void*)((uint64_t)address - VMM_REGION_DEVICES);
     }
 
+    if (address > VMM_REGION_U_VDSO && address < VMM_REGION_U_VDSO + VMM_REGION_SIZE)
+    {
+        return (void*)((uint64_t)address - VMM_REGION_U_VDSO);
+    }
+
     return 0x0;
 }
 
@@ -360,6 +365,8 @@ void * allocate_vmm(struct page_directory * pml4, uint64_t size, uint64_t region
             return VMM_TO_KERNEL_HEAP(buffer);
         case VMM_REGION_DEVICES:
             return VMM_TO_DEVICE_MEMORY(buffer);
+        case VMM_REGION_U_VDSO:
+            return VMM_TO_VDSO(buffer);
     }
 
     void * vaddr = (void*)((uint64_t)region + (uint64_t)buffer);
@@ -614,10 +621,19 @@ void init_vmm()
 {
     extern uint64_t VDSO_START;
     extern uint64_t VDSO_END;
+
+    uint64_t vds = ((uint64_t)&VDSO_START) & ~0xfff;
+    uint64_t vde = ((uint64_t)&VDSO_END + 0xfff) & ~0xfff;
+    if (vds == 0 || vde == 0)
+    {
+        panic("VDSO_START or VDSO_END not defined\n");
+    }
+
     map_range(get_current_cr3(), (void*)VMM_REGION_K_IDENT, (void*)0, PAGE_SIZE_1GIB, PHYSICAL_MEMORY_SIZE, VMM_WRITE_BIT);
     map_range(get_current_cr3(), (void*)VMM_REGION_K_HEAP, (void*)0, PAGE_SIZE_1GIB, PHYSICAL_MEMORY_SIZE, VMM_WRITE_BIT);
     map_range(get_current_cr3(), (void*)VMM_REGION_DEVICES, (void*)0, PAGE_SIZE_1GIB, PHYSICAL_MEMORY_SIZE, VMM_WRITE_BIT | VMM_CACHE_DISABLE_BIT | VMM_NX_BIT);
-    map_range(get_current_cr3(), (void*)VDSO_START, (void*)0, PAGE_SIZE_1GIB, (VDSO_END-VDSO_START), VMM_USER_BIT);
+    map_range(get_current_cr3(), (void*)VMM_REGION_U_VDSO, (void*)0, PAGE_SIZE_1GIB, PHYSICAL_MEMORY_SIZE, VMM_WRITE_BIT | VMM_CACHE_DISABLE_BIT | VMM_USER_BIT);
+    mprotect(get_current_cr3(), (void*)vds, (vde-vds), VMM_USER_BIT);
     struct page_directory * cr3 = get_current_cr3();
     vm_entry * vme = (vm_entry*)&(cr3->entries[2]);
     vme->directory.P = 1;
@@ -720,16 +736,8 @@ uint8_t compare_entries(vm_entry* entry1, vm_entry* entry2)
            entry1->directory.XD == entry2->directory.XD;
 }
 
-void map_memory(struct page_directory * pml4, void * address, void * physical, uint64_t page_size, uint8_t flags) {
-    map_address(pml4, address, physical, page_size, flags);
-}
-
 void mprotect_current(void* address, uint64_t size, uint8_t flags) {
     mprotect(get_current_cr3(), address, size, flags);
-}
-
-void map_current_memory(void * address, void * physical, uint64_t page_size, uint8_t flags) {
-    map_memory(get_current_cr3(), address, physical, page_size, flags);
 }
 
 void * to_identity_map(void * address) {

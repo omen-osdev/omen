@@ -391,6 +391,10 @@ struct loaded_elf* elf_load_elf(struct page_directory* root, uint8_t * buffer, u
     }
 }
 
+void set_vector_vdso(struct auxv* vectors, void * vdso_address) {
+    vectors[6].a_val = (void*)(uint64_t)vdso_address;
+}
+
 char * get_auxv_string(uint64_t type) {
     switch (type) {
         case AT_NULL:

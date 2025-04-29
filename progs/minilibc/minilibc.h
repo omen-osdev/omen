@@ -59,7 +59,7 @@ void sys_munmap(void * addr, size_t length);
 int sys_dup(int fd);
 int sys_dup2(int oldfd, int newfd);
 int sys_getpid();
-int sys_geppid();
+int sys_getppid();
 
 
 int sys_sigaction(int signum, struct sigaction * act, struct sigaction * oldact);

@@ -54,5 +54,6 @@ struct loaded_elf {
 
 char * get_auxv_string(uint64_t type);
 void elf_readelf(uint8_t * buffer, uint64_t size);
+void set_vector_vdso(struct auxv* vectors, void * vdso_address);
 struct loaded_elf* elf_load_elf(struct page_directory* root, uint8_t * buffer, uint64_t size);
 #endif

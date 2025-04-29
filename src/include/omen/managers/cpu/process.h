@@ -51,6 +51,9 @@ typedef struct thread {
 
     void * altstack;
     void * altstack_base;
+    void * altstack_saved_stack;
+    void * altstack_saved_base;
+    context_t *signal_context;
     int altstack_flags;
 
     sigset_t sigprocmask;
@@ -122,8 +125,10 @@ void returnoexit();
 void init_process(const char * init_path, const char * idle_path, char * tty);
 process_t * get_current_process();
 thread_t * get_current_thread();
+void create_signal_context(thread_t * thread, int signo, struct sigaction * sigact, cpu_context_t * ctx);
+void restore_signal_context(thread_t * thread, cpu_context_t * ctx);
 void * get_signal_trampoline(process_t * task);
-struct sigaction * select_signal(thread_t * thread);
+struct sigaction * select_signal(thread_t * thread, int * signo);
 process_t * sched();
 int16_t fork(thread_t *thread);
 void execve(process_t *task, const char * path, const char ** argv, const char ** envp);

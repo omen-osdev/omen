@@ -1,8 +1,31 @@
 #include <omen/managers/cpu/signal.h>
 #include <omen/libraries/std/stdint.h>
 #include <omen/apps/panic/panic.h>
+#include <omen/hal/arch/x86/cpu.h>
 
-void __attribute__((__section__(".vdso"))) signal_trampoline() {
+void __attribute__((__section__(".vdso"))) signal_trampoline(int signo, struct sigaction * sigact, cpu_context_t* ctx) {
+    siginfo_t siginfo;
+    void (* handler)(int) = sigact->sa_handler;
+    siginfo.si_signo = signo;
+    siginfo.si_errno = 0;
+
+    handler(signo);
+
+    int sigreturn_syscall_number = 15;
+    int64_t result;
+
+    __asm__ volatile (
+        "syscall"
+        : "=a"(result)
+        : "a"(sigreturn_syscall_number),
+          "D"(ctx),
+          "S"(&siginfo),
+          "d"(0),
+          "r"(0),
+          "r"(0)
+        : "memory"
+    );
+    panic("Signal trampoline returned\n");
 
 }
 

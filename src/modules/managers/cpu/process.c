@@ -22,6 +22,8 @@
 //Always inlined
 extern void newuctxcreat(uint64_t rsp, uint64_t intro);
 extern void newctxcreat(uint64_t rsp, uint64_t intro);
+extern void newsctxcreat(uint64_t rsp, uint64_t intro, uint64_t signo, void * sigact, void * uctx);
+extern void _signal_trampoline();
 extern void reloadGsFs();
 extern void getGsBase(uint64_t * base);
 extern void getFsBase(uint64_t * base);
@@ -196,6 +198,109 @@ context_t * create_context(void * cr3, void * ustack, void * kstack, void * init
     return context;
 }
 
+void restore_signal_context(thread_t * thread, cpu_context_t * ctx) {
+    thread->ustack = thread->altstack_saved_stack;
+    thread->ustack_base = thread->altstack_saved_base;
+    thread->altstack_saved_stack = 0;
+    thread->altstack_saved_base = 0;
+
+    uint64_t vdso_signo_region;
+    uint64_t vdso_sigctxt_region;
+    uint64_t vdso_sigact_region;
+    int64_t size;
+    vdso_get_data(thread->process->vdso, VDSO_ENTRY_SIGNAL_SIGNO, (void**)&vdso_signo_region, &size);
+    vdso_get_data(thread->process->vdso, VDSO_ENTRY_SIGNAL_SIGCTXT, (void**)&vdso_sigctxt_region, &size);
+    vdso_get_data(thread->process->vdso, VDSO_ENTRY_SIGNAL_SIGACTION, (void**)&vdso_sigact_region, &size);
+    if (vdso_signo_region == 0 || vdso_sigctxt_region == 0 || vdso_sigact_region == 0) {
+        kprintf("Failed to get vdso signal regions\n");
+        return;
+    }
+    vdso_free_region(thread->process->vdso, vdso_signo_region);
+    vdso_free_region(thread->process->vdso, vdso_sigctxt_region);
+    vdso_free_region(thread->process->vdso, vdso_sigact_region);
+    vdso_set_data(thread->process->vdso, VDSO_ENTRY_SIGNAL_SIGNO, NULL, 0);
+    vdso_set_data(thread->process->vdso, VDSO_ENTRY_SIGNAL_SIGCTXT, NULL, 0);
+    vdso_set_data(thread->process->vdso, VDSO_ENTRY_SIGNAL_SIGACTION, NULL, 0);
+
+    thread->context = kmalloc(sizeof(context_t));
+    memcpy(thread->context, thread->signal_context, sizeof(context_t));
+    thread->context->cpu_context = kmalloc(sizeof(cpu_context_t));
+    memcpy(thread->context->cpu_context, thread->signal_context->cpu_context, sizeof(cpu_context_t));
+    thread->context->cpu_context->info = kmalloc(sizeof(struct cpu_context_info));
+    memcpy(thread->context->cpu_context->info, thread->signal_context->cpu_context->info, sizeof(struct cpu_context_info));
+
+    kfree(thread->signal_context->cpu_context->info);
+    kfree(thread->signal_context->cpu_context);
+    kfree(thread->signal_context);
+
+    thread->signal_context = NULL;
+    
+}
+
+void create_signal_context(thread_t * thread, int signo, struct sigaction * sigact, cpu_context_t * ctx) {
+
+    void * vdso_signal_trampoline = get_signal_trampoline(thread->process);
+    if (vdso_signal_trampoline == NULL) {
+        kprintf("Failed to get vdso signal trampoline\n");
+        return;
+    }
+
+    thread->signal_context = kmalloc(sizeof(context_t));
+    memcpy(thread->signal_context, thread->context, sizeof(context_t));
+    thread->signal_context->cpu_context = kmalloc(sizeof(cpu_context_t));
+    memcpy(thread->signal_context->cpu_context, thread->context->cpu_context, sizeof(cpu_context_t));
+    thread->signal_context->cpu_context->info = kmalloc(sizeof(struct cpu_context_info));
+    memcpy(thread->signal_context->cpu_context->info, thread->context->cpu_context->info, sizeof(struct cpu_context_info));
+
+    uint64_t size = PROCESS_STACK_SIZE;
+    if (thread->altstack == 0) {
+        struct stack stack;
+        stackalloc(thread->process->vmm, &stack, size);
+        thread->altstack = stack.top;
+        thread->altstack_base = stack.base;
+        create_vmarea(thread->process, thread->ustack_base, thread->ustack, VMM_USER_BIT | VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
+    } else {
+        size = (uint64_t)thread->altstack - (uint64_t)thread->altstack_base;
+        if (size % 0x1000) {
+            size = (size + 0x1000) & ~0xfff;
+        }
+    }
+
+    thread->altstack_saved_stack = thread->ustack;
+    thread->altstack_saved_base = thread->ustack_base;
+    thread->ustack = thread->altstack;
+    thread->ustack_base = thread->altstack_base;
+
+    if (get_pml4() != thread->process->vmm) {
+        void * stack_physical = get_physical_address(thread->process->vmm, thread->ustack_base);
+        map_range(get_pml4(), thread->ustack_base, (uint64_t)stack_physical, PAGE_SIZE_4KIB, size, VMM_WRITE_BIT);
+    }
+    
+    int * uaccess_signo = vdso_allocate_region(thread->process->vdso, sizeof(int));
+    memcpy(uaccess_signo, &signo, sizeof(int));
+    cpu_context_t * uaccess_ctx = vdso_allocate_region(thread->process->vdso, sizeof(cpu_context_t));
+    memcpy(uaccess_ctx, ctx, sizeof(cpu_context_t));
+    uaccess_ctx->info = vdso_allocate_region(thread->process->vdso, sizeof(struct cpu_context_info));
+    memcpy(uaccess_ctx->info, ctx->info, sizeof(struct cpu_context_info));
+    struct sigaction * uaccess_sigact = vdso_allocate_region(thread->process->vdso, sizeof(struct sigaction));
+    memcpy(uaccess_sigact, sigact, sizeof(struct sigaction));
+
+    if (vdso_set_data(thread->process->vdso, VDSO_ENTRY_SIGNAL_SIGNO, (void*)uaccess_signo, VDSO_REGION_SIZE(8)))
+        panic("Failed to set vdso signal signo\n");
+    if (vdso_set_data(thread->process->vdso, VDSO_ENTRY_SIGNAL_SIGCTXT, (void*)uaccess_ctx, VDSO_REGION_SIZE(8)))
+        panic("Failed to set vdso signal context\n");
+    if (vdso_set_data(thread->process->vdso, VDSO_ENTRY_SIGNAL_SIGACTION, (void*)uaccess_sigact, VDSO_REGION_SIZE(8)))
+        panic("Failed to set vdso signal action\n");
+
+    newsctxcreat((uint64_t)&(thread->ustack), (uint64_t)vdso_signal_trampoline, (uint64_t)*uaccess_signo, (void*)uaccess_sigact, (void *)uaccess_ctx);
+
+    if (get_pml4() != thread->process->vmm)
+        unmap_range(get_pml4(), thread->ustack_base, size);
+
+    ctx->rip = (uint64_t)_signal_trampoline;
+    ctx->rsp = (uint64_t)thread->ustack;
+}
+
 void init_thread(process_t * task, void * init) {
     if (task->thread_count >= MAX_THREADS) {
         panic("Too many threads\n");
@@ -271,6 +376,7 @@ process_t * duplicate_process(thread_t * parent_thread) {
     vmarea_sync_all_files(parent);
     memcpy(task, parent, sizeof(process_t));
     task->thread_count = 1;
+    task->vdso = get_vdso();
     task->current_thread = 0;
     task->main_thread = 0;
     task->pid = get_next_pid();
@@ -301,6 +407,7 @@ process_t * duplicate_process(thread_t * parent_thread) {
     vmm_copy_stack(task->vmm, parent_thread->ustack_base, task->stack_max_size, VMM_USER_BIT | VMM_WRITE_BIT);
     vmm_copy_stack(task->vmm, parent_thread->kstack_base, task->stack_max_size, VMM_WRITE_BIT);
     vmm_copy_stack(task->vmm, parent_thread->altstack_base, (parent_thread->altstack - parent_thread->altstack_base), VMM_USER_BIT | VMM_WRITE_BIT);
+    //vdso_remap(task->vmm, task->vdso);
     engrave_vmareas(task, parent);
 
     kprintf("Process %d duplicated\n", task->pid);
@@ -314,6 +421,10 @@ void alter_process_on_exec(process_t * task, struct loaded_elf * ld, char const 
 
     task->vmm = saved_task.vmm;
     task->vm_areas = 0;
+
+    task->vdso = get_vdso();
+    vdso_set_data(task->vdso, VDSO_ENTRY_SIGNAL_TRAMP, signal_trampoline, VDSO_REGION_SIZE(8));
+    set_vector_vdso(ld->auxv, (void*)task->vdso);
 
     memset(task->threads, 0, sizeof(thread_t) * MAX_THREADS);
     task->thread_count = 0;
@@ -478,7 +589,7 @@ process_t * sched() {
     return &process_list[current_process_index];
 }
 
-struct sigaction * select_signal(thread_t * thread) {
+struct sigaction * select_signal(thread_t * thread, int * signo) {
     process_t * process = thread->process;
     sigset_t thread_signal_mask = thread->sigprocmask;
     sigset_t thread_sigsuspend_mask = thread->sigsuspend_mask;
@@ -504,8 +615,10 @@ struct sigaction * select_signal(thread_t * thread) {
     }
 
     if (chosen_signal.signo != 0x0) {
+        *signo = chosen_signal.signo;
         return &(process->signal_handlers[chosen_signal.signo]);
     } else {
+        *signo = 0;
         return 0x0;
     }
 }
@@ -542,6 +655,7 @@ process_t * create_user_process(struct page_directory* pd, void * init, char * t
 
     task->vmm = vmm_copy_kernel(pd);
     task->vm_areas = 0;
+    task->vdso = 0;
     
     memset(task->threads, 0, sizeof(thread_t) * MAX_THREADS);
     task->thread_count = 0;
@@ -586,8 +700,8 @@ process_t * create_user_process(struct page_directory* pd, void * init, char * t
     memset(task->open_files, 0, sizeof(int)*MAX_OPEN_FILES);
     task->open_files_count = 0;
     open_stdfiles(task, tty);
-    task->vdso = vdso_init(task->vmm);
-    vdso_set_data(task->vdso, VDSO_ENTRY_SIGNAL_TRAMP, signal_trampoline, 8);
+    task->vdso = get_vdso();
+    vdso_set_data(task->vdso, VDSO_ENTRY_SIGNAL_TRAMP, signal_trampoline, VDSO_REGION_SIZE(8));
 
     task->regular_tty = task->open_files[PROCFILE_STDIN];
     task->io_tty = task->open_files[PROCFILE_STDERR];

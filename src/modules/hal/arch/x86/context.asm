@@ -2,7 +2,9 @@
 global newctxswtch
 global newctxsave
 global newctxcreat
+global newsctxcreat
 global newuctxcreat
+global _signal_trampoline
 extern returnoexit
 
 ; Inputs:
@@ -186,6 +188,27 @@ newuctxcreat:
     push rsi ; Init function
     push qword [rdi] ; Stack pointer
     push userspace_trampoline
+
+    mov [rdi], rsp
+    mov rsp, rbx
+    pop rbx
+    ret
+
+; RDI stack pointer
+; RSI init function
+; RDX signal number
+; RCX sigact
+; r8 uctx
+newsctxcreat:
+    push rbx
+    mov rbx, rsp
+    mov rsp, [rdi]
+
+    push rdx
+    push rcx
+    push r8
+    push rsi
+    push qword [rdi] ; Stack pointer
 
     mov [rdi], rsp
     mov rsp, rbx

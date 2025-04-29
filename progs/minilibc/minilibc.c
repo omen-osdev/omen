@@ -4,6 +4,7 @@
 #include <signal.h>
 #include <auxv.h>
 #include <vdso.h>
+#include <stdio.h>
 
 struct minilibc_data {
     vdso_t * vdso;
@@ -11,14 +12,30 @@ struct minilibc_data {
 
 struct minilibc_data minilibc_data;
 
+void default_signal_handler(int signum) {
+    printf("[MINILIBC] Signal %d received\n", signum);
+}
+
 void minilibc_init() {
     // Initialize the mini libc
     minilibc_data.vdso = (vdso_t*)getauxval(AT_SYSINFO_EHDR);
+    struct sigaction sa;
+    sa.sa_handler = default_signal_handler;
+    sa.sa_sigaction = 0;
+    sa.sa_flags = 0;
+    sa.sa_mask = 0;
+    sa.sa_restorer = NULL;
+
+    for (int i = 0; i < NSIG; i++) {
+        if (i != SIGKILL && i != SIGSTOP) {
+            sys_sigaction(i, &sa, NULL);
+        }
+    }
 }
 
 void * get_vdso_signal_trampoline() {
     void * trampoline;
-    uint64_t size;
+    int64_t size;
     vdso_get_data(minilibc_data.vdso, VDSO_ENTRY_SIGNAL_TRAMP, &trampoline, &size);
     return trampoline;
 }
@@ -100,6 +117,8 @@ int sys_dup2(int oldfd, int newfd) {
 }
 
 int sys_sigaction(int signum, struct sigaction * act, struct sigaction * oldact) {
+    act->sa_flags |= SA_RESTORER;
+    *(void**) &(act->sa_restorer) = get_vdso_signal_trampoline();
     return (int)syscall(13, (int64_t)signum, (int64_t)act, (int64_t)oldact, 0, 0, 0);
 }
 
@@ -127,6 +146,6 @@ int sys_getpid() {
     return (int)syscall(39, 0, 0, 0, 0, 0, 0);
 }
 
-int sys_geppid() {
+int sys_getppid() {
     return (int)syscall(110, 0, 0, 0, 0, 0, 0);
 }
