@@ -1,5 +1,6 @@
 #ifndef _SIGNAL_STD_H
 #define _SIGNAL_STD_H
+#include <stdint.h>
 
 #define NSIG		32
 typedef unsigned long sigset_t;
@@ -106,5 +107,11 @@ typedef struct task_signal {
     int signo;
     struct task_signal *next;
 } signal_t;
+
+int sigemptyset(sigset_t *set);
+int sigfillset(sigset_t *set);
+int sigaddset(sigset_t *set, int signo);
+int sigdelset(sigset_t *set, int signo);
+int sigismember(sigset_t *set, int signo);
 
 #endif

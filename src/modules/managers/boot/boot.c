@@ -106,7 +106,7 @@ void boot_startup() {
     pmm_init();
     init_paging();
     create_gdt();
-    init_pit(50);
+    init_pit(1000); // 1ms
     init_interrupts();
     init_cpus();
     vdso_init();
@@ -154,10 +154,8 @@ void boot_startup() {
     kprintf("Booting kernel...\n");
     kprintf("Active subsystems: APIC, ACPI, VMM, PMM, HEAP, SERIAL, TTY, FIFO, EXT2, VFS\n");
     kprintf("Enabling interrupts...\n");
-    mask_interrupt(PIT_IRQ);
-    __asm__ volatile("sti");
-
-    kprintf("Entering uspace...\n");
+    __asm__("cli");
+    unmask_interrupt(PIT_IRQ);
     init_process("hdap2/export/init.elf", "hdap2/export/idle.elf", vfs_tty);
     
     panic("¡Returned from the scheduler!\n");

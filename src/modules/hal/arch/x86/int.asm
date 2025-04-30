@@ -1,6 +1,6 @@
 ; Based on Kot's code: https://github.com/kot-org/Kot/blob/main/sources/core/kernel/source/arch/amd64/interrupts.s
 
-extern global_interrupt_handler
+extern int_hardcore_wrapper
 global interrupt_vector
 
 %macro swapgs_if_necessary 1
@@ -39,7 +39,7 @@ NO_SWAPGS%1:
     mov rdi, rsp
     mov rsi, [gs:0x0]
 
-    call global_interrupt_handler
+    call int_hardcore_wrapper
     
     pop    rax
     mov    cr3, rax

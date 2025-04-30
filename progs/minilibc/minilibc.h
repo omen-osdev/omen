@@ -1,6 +1,9 @@
 
 #include <stdint.h>
 #include <signal.h>
+#include <time.h>
+
+#define MAP_FAILED ((void *)-1)
 
 #define MAP_SHARED 0x1
 #define MAP_PRIVATE 0x2
@@ -51,8 +54,9 @@ int sys_stat(const char * path, struct stat * buf);
 int sys_msync(void * addr, size_t length, int flags);
 void sys_sched_yield();
 short sys_fork();
+int sys_nanosleep(struct timespec * req, struct timespec * rem);
 void sys_exit(int error_code);
-void sys_execve(const char * path, const char * argv, const char * envp);
+void sys_execve(const char * path, char ** argv, char ** envp);
 void * sys_mmap(void * addr, size_t length, int prot, int flags, int fd, off_t offset);
 void sys_mprotect(void * addr, size_t length, int prot);
 void sys_munmap(void * addr, size_t length);

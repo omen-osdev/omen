@@ -5,6 +5,7 @@
 #include <auxv.h>
 #include <vdso.h>
 #include <stdio.h>
+#include <time.h>
 
 struct minilibc_data {
     vdso_t * vdso;
@@ -94,7 +95,7 @@ short sys_fork() {
 void sys_exit(int error_code) {
     syscall(60, (int64_t)error_code, 0, 0, 0, 0, 0);
 }
-void sys_execve(const char * path, const char * argv, const char * envp) {
+void sys_execve(const char * path, char ** argv, char ** envp) {
     syscall(59, (int64_t)path, (int64_t)argv, (int64_t)envp, 0, 0, 0);
 }
 void * sys_mmap(void * addr, size_t length, int prot, int flags, int fd, off_t offset) {
@@ -109,6 +110,11 @@ void sys_munmap(void * addr, size_t length) {
 int sys_msync(void * addr, size_t length, int flags) {
     return (int)syscall(26, (int64_t)addr, (int64_t)length, (int64_t)flags, 0, 0, 0);
 }
+
+int sys_nanosleep(struct timespec * req, struct timespec * rem) {
+    return (int)syscall(35, (int64_t)req, (int64_t)rem, 0, 0, 0, 0);
+}
+
 int sys_dup(int fd) {
     return (int)syscall(32, (int64_t)fd, 0, 0, 0, 0, 0);
 }

@@ -138,7 +138,8 @@ userspace_trampoline:
 
     push (4 * 8) | 3 ; CS
     push rsi ; Stack pointer
-    push 0x200 ; RFLAGS
+    push 0x200 ; RFLAGS 0010 0000 0000 
+    ; this means 
     push (5 * 8) | 3 ; CS
     push rdi ; Init function
 

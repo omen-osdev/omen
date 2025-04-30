@@ -29,39 +29,33 @@ void print_args(int argc, char* argv[], char* envp[]) {
     printf("\n");
 }
 
-void test_signals() {
-
-    int original_pid = sys_getpid();
+void test_sleep() {
     int pid = sys_fork();
-    struct sigaction sa;
-    sa.sa_sigaction = NULL;
-    sa.sa_flags = 0;
-    sa.sa_mask = 0;
-    sa.sa_restorer = NULL;
-
     if (pid == 0) {
-        // Child process
-        sa.sa_handler = signal_handler_child;
-        pid = sys_getppid();
+        while (1) {
+            struct timespec req = {7, 0};
+            sys_nanosleep(&req, NULL);
+            printf("[child]Woke up from sleep\n");
+        }
     } else {
-        // Parent process
-        sa.sa_handler = signal_handler_parent;
+        while (1) {
+            struct timespec req = {3, 0};
+            sys_nanosleep(&req, NULL);
+            printf("[parent]Woke up from sleep\n");
+        }
     }
-
-    printf("[%d] Sending signal to process %d\n", original_pid, pid);
-    sys_sigaction(SIGUSR1, &sa, NULL);
-    sys_sched_yield(); //Give them a chance to install the signal handler
-    sys_kill(pid, SIGUSR1);
 }
 
 int main(int argc, char* argv[], char* envp[]) {
     minilibc_init();
     print_args(argc, argv, envp);
 
-    test_signals();
-
-    while (1) {
-        sys_sched_yield();
+    int pid = sys_fork();
+    if (pid == 0) {
+        test_sleep();
+    } else {
+        while (1) {
+            sys_sched_yield();
+        }
     }
-    return 0;
 }

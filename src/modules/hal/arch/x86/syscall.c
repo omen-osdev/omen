@@ -5,7 +5,9 @@
 #include <omen/managers/cpu/vmarea.h>
 #include <omen/managers/cpu/signal.h>
 #include <omen/libraries/std/string.h>
+#include <omen/libraries/std/time.h>
 #include <omen/apps/debug/debug.h>
+#include <omen/managers/cpu/sline.h>
 #include <omen/apps/panic/panic.h>
 #include <vfs/vfs.h>
 #include <vfs/vfs_interface.h>
@@ -13,22 +15,24 @@
 /*
 
 
-mmap
-munmap
-
-exit
-fork
+log 
+thread_exit
+clock_get
+sleep
+sigrestore ?¿
 waitpid
-exec
 
-mount
-write, read, open, close okey
-opendir, readdir, closedir, chdir, getcwd, mkdir
+dir_read_entries
+dir_remove
+dir_create
+unlink_at
+path_stat
+fd_stat
+getcwd
+chdir
 
-stat, lseek, getfsstat
-
-dup, pipe
-
+ppoll
+pselect
 
 kot's
 
@@ -48,22 +52,23 @@ kot's
 #define SYS_CLOCK_GETRES        11
 #define SYS_SLEEP               12
 
-#define SYS_SIGPROCMASK         13
-#define SYS_SIGACTION           14
-#define SYS_SIGRESTORE          15
+#define SYS_SIGPROCMASK         13 ok
+#define SYS_SIGACTION           14 ok
+#define SYS_SIGRESTORE          15 no
 #define SYS_FORK                16 ok
 #define SYS_WAITPID             17
 #define SYS_EXECVE              18 ok
 #define SYS_GETPID              19 ok
 #define SYS_GETPPID             20 ok
-#define SYS_KILL                21 
+#define SYS_KILL                21 ok
 
 #define SYS_FILE_OPEN           22 ok
 #define SYS_FILE_READ           23 ok
 #define SYS_FILE_WRITE          24 ok
-#define SYS_FILE_SEEK           25 
-#define SYS_FILE_CLOSE          26
+#define SYS_FILE_SEEK           25 ok
+#define SYS_FILE_CLOSE          26 ok
 #define SYS_FILE_IOCTL          27 ok
+
 #define SYS_DIR_READ_ENTRIES    28
 #define SYS_DIR_REMOVE          29
 #define SYS_DIR_CREATE          30
@@ -168,6 +173,23 @@ int64_t sigreturn_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     restore_signal_context(thread, ctx);
 }
 
+int64_t seek_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    int fd = SYSCALL_ARG0(ctx);
+    int offset = SYSCALL_ARG1(ctx);
+    int whence = SYSCALL_ARG2(ctx);
+    kprintf("[PID: %d | TID %d] SEEK_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, offset, whence);
+    
+    if (fd < 0) {
+        return SYSCALL_ERROR;
+    }
+    
+    int ret = vfs_file_seek(fd, offset, whence);
+    if (ret < 0) {
+        return SYSCALL_ERROR;
+    }
+    return ret;
+}
+
 int64_t stat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char * path = SYSCALL_ARG0(ctx);
     stat_t* stat = SYSCALL_ARG1(ctx);
@@ -222,7 +244,9 @@ int64_t sigsuspend_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
         kprintf("Invalid mask\n");
         return SYSCALL_ERROR;
     }
-    return sigsuspend(&(thread->sigsuspend_mask), mask);
+    int64_t ret = sigsuspend(&(thread->sigsuspend_mask), mask);
+    sched();
+    return ret;
 }
 
 int64_t sigpending_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
@@ -301,7 +325,7 @@ int64_t ioctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 
 int64_t sched_yield_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
-    kprintf("[PID: %d | TID %d] SCHED_YIELD_SYSCALL()\n", thread->process->pid);
+    kprintf("[PID: %d | TID %d] SCHED_YIELD_SYSCALL()\n", thread->process->pid, thread->id);
     kprintf("Yielding process %d\n", get_current_process()->pid);
     sched();
     kprintf("Resuming process %d\n", get_current_process()->pid);
@@ -643,6 +667,19 @@ int64_t msync_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     }
 }
 
+int64_t nanosleep_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    struct timespec *duration = SYSCALL_ARG0(ctx);
+    struct timespec *rem = SYSCALL_ARG1(ctx);
+    kprintf("[PID: %d | TID %d] NANOSLEEP_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, duration, rem);
+    if (duration == NULL) {
+        kprintf("Invalid duration\n");
+        return SYSCALL_ERROR;
+    }
+
+    nanosleep(thread, duration, rem);
+    sched();
+}
+
 int64_t dup_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     int fd = SYSCALL_ARG0(ctx);
     kprintf("[PID: %d | TID %d] DUP_SYSCALL(%d)\n", thread->process->pid, thread->id, fd);
@@ -697,7 +734,8 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [3] = close_syscall_handler,
     [4] = stat_syscall_handler,
     [5] = fstat_syscall_handler,
-    [6 ... 8] = undefined_syscall_handler,
+    [6 ... 7] = undefined_syscall_handler,
+    [8] = seek_syscall_handler,
     [9] = mmap_syscall_handler,
     [10] = mprotect_syscall_handler,
     [11] = munmap_syscall_handler,
@@ -713,7 +751,9 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [27 ... 31] = undefined_syscall_handler,
     [32] = dup_syscall_handler,
     [33] = dup2_syscall_handler,
-    [34 ... 38] = undefined_syscall_handler,
+    [34] = undefined_syscall_handler,
+    [35] = nanosleep_syscall_handler,
+    [36 ... 38] = undefined_syscall_handler,
     [39] = getpid_syscall_handler,
     [40 ... 56] = undefined_syscall_handler,
     [57] = fork_syscall_handler,
@@ -740,7 +780,7 @@ void global_syscall_handler(cpu_context_t* ctx) {
 
     thread_t * current_thread = get_current_thread();
     current_thread->syscall_ready = 1;
-    
+    kprintf("[PID: %d | TID %d] SYSCALL(%d)\n", current_thread->process->pid, current_thread->id, ctx->rax);    
     memcpy(current_thread->context->cpu_context, ctx, sizeof(cpu_context_t));
     memcpy(current_thread->context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
 
@@ -755,6 +795,7 @@ void global_syscall_handler(cpu_context_t* ctx) {
     }
 
     current_thread = get_current_thread();
+    kprintf("[PID: %d | TID %d] SYSCALL(%d) RETURNED %d\n", current_thread->process->pid, current_thread->id, ctx->rax, result);
     __asm__("fxrstor %0" : "=m" (current_thread->context->fxsave_region));
     memcpy(ctx, current_thread->context->cpu_context, sizeof(cpu_context_t));
     memcpy(ctx->info, current_thread->context->cpu_context->info, sizeof(struct cpu_context_info));

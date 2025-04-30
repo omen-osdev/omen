@@ -9,12 +9,14 @@
 #include <omen/managers/mem/vmm.h>
 #include <omen/managers/cpu/process.h>
 #include <omen/managers/cpu/vmarea.h>
+#include <omen/managers/dev/pit.h>
 #include <omen/libraries/std/string.h>
 #include <omen/libraries/allocators/heap_allocator.h>
 
 #define __UNDEFINED_HANDLER __asm__("cli"); kprintf(__func__); (void)frame; panic("Undefined interrupt handler");
 #define IS_EXCEPTION(ctx)(ctx->interrupt_number < 32)
-
+#define IS_EXCEPTION_INUM(inum)(inum < 32)
+extern void setFsBase(uint64_t base);
 extern void* interrupt_vector[IDT_ENTRY_COUNT];
 char io_tty[32] = "default\0";
 char saved_tty[32];
@@ -98,9 +100,10 @@ void Syscall_Handler(cpu_context_t* ctx, uint8_t cpuid) {
 
 //you may need save_all here
 void PitInt_Handler(cpu_context_t* ctx, uint8_t cpuid) {
-    (void)ctx;
-    (void)cpuid;
-    panic("PitInt_Handler Not implemented\n");
+    tick();
+    if (requires_preemption()) {
+        sched();
+    }
 }
 
 void Serial1Int_Handler(cpu_context_t* ctx, uint8_t cpuid) {
@@ -209,11 +212,32 @@ const char * get_io_tty() {
     return io_tty;
 }
 
-void global_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
-    if (!IS_EXCEPTION(ctx)) notify_eoi_required(ctx->interrupt_number);
-    void (*handler)(cpu_context_t* ctx, uint8_t cpu_id) = (void*)dynamic_interrupt_handlers[ctx->interrupt_number];
+uint8_t global_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
+    //Get rflags
+    uint64_t interrupt_number = ctx->interrupt_number;
+    uint64_t rflags;
+    __asm__ volatile("pushfq; pop %0" : "=r"(rflags));
+    //If interrupts are enabled panic
+    if (rflags & 0x200) {
+        kprintf("Interrupts enabled in handler\n");
+        panic("Interrupts enabled in handler\n");
+    }
+
+    if (!IS_EXCEPTION_INUM(interrupt_number)) notify_eoi_required(interrupt_number);
+
+    //TODO: Get current proces
+    thread_t * current_thread = get_current_thread();
+    if (!current_thread) {
+        panic("No current thread\n");
+    }
     
-    if (ctx->interrupt_number == DYNAMIC_HANDLER) {
+    //kprintf("[PID: %d | TID %d] Interrupt %d on CPU %d\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
+    memcpy(current_thread->context->cpu_context, ctx, sizeof(cpu_context_t));
+    memcpy(current_thread->context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
+    __asm__("fxsave %0" : : "m" (current_thread->context->fxsave_region));
+
+    void (*handler)(cpu_context_t* ctx, uint8_t cpu_id) = (void*)dynamic_interrupt_handlers[interrupt_number];
+    if (interrupt_number == DYNAMIC_HANDLER) {
         if (dynamic_interrupt != 0 && dynamic_interrupt != DYNAMIC_HANDLER) {   
             handler = (void*)dynamic_interrupt_handlers[dynamic_interrupt];
             dynamic_interrupt = 0;
@@ -222,35 +246,49 @@ void global_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
         }
     }
 
-    //TODO: Get current proces
-
     //kprintf("Interrupt %d received on CPU %d\n", ctx->interrupt_number, cpu_id);
 
     if (handler == 0) {
         kprintf("No handler for interrupt ");
-        kprintf("%d", ctx->interrupt_number);
+        kprintf("%d", interrupt_number);
         kprintf("\n");
         panic("No handler for interrupt !\n");
     }
 
     handler(ctx, cpu_id);
 
-    if (IS_EXCEPTION(ctx)) return;
-    
-    if (ctx->interrupt_number == PIT_IRQ) {
-        //if (requires_wakeup()) {
-        //    wakeup();
-        //    local_apic_eoi(cpu_id, ctx->interrupt_number);
-        //} else if (requires_preemption()) {
-        //    local_apic_eoi(cpu_id, ctx->interrupt_number);
-        //    //YIELD
-        //} else {
-        //    local_apic_eoi(cpu_id, ctx->interrupt_number);
-        //}
-        //TODO: Context switch
-        local_apic_eoi(cpu_id, ctx->interrupt_number);
-    } else {
-        local_apic_eoi(cpu_id, ctx->interrupt_number);
+    current_thread = get_current_thread();
+    if (!current_thread) {
+        panic("No current thread\n");
+    }
+    //kprintf("[PID: %d | TID %d] Interrupt %d on CPU %d returning\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
+    __asm__("fxrstor %0" : "=m" (current_thread->context->fxsave_region));
+    memcpy(ctx, current_thread->context->cpu_context, sizeof(cpu_context_t));
+    memcpy(ctx->info, current_thread->context->cpu_context->info, sizeof(struct cpu_context_info));
+    struct tss * tss = arch_get_cpu(cpu_id)->tss;
+    tss_set_stack(tss, ctx->info->kstack, 0);
+    tss_set_stack(tss, ctx->rsp, 3);
+    setFsBase(current_thread->context->fs_base);
+
+    if (IS_EXCEPTION_INUM(interrupt_number)) return 1;
+    local_apic_eoi(cpu_id, interrupt_number);
+    return 0;
+}
+
+void int_hardcore_wrapper(cpu_context_t* ctx, uint8_t cpu_id) {
+
+    if (eoi_pending()) {
+        kprintf("Interrupt %d pending EOI\n", ctx->interrupt_number);
+        panic("EOI pending entering interrupt handler\n");
+    }
+
+    uint8_t res = global_interrupt_handler(ctx, cpu_id);
+    if (eoi_pending()) {
+        if (res == 1) {
+            panic("EOI pending returning from exception\n");
+        } else {
+            panic("EOI pending returning from interrupt\n");
+        }
     }
 }
 

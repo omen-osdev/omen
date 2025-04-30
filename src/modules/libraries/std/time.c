@@ -1,4 +1,4 @@
-#include "time.h"
+#include <omen/libraries/std/time.h>
 #include <omen/managers/dev/pit.h>
 #include <omen/apps/debug/debug.h>
 #include <omen/libraries/std/string.h>

@@ -5,6 +5,7 @@
 #include <omen/managers/mem/vmm.h>
 #include <omen/managers/cpu/signal.h>
 #include <omen/apps/debug/debug.h>
+#include <omen/managers/dev/pit.h>
 #include <omen/libraries/allocators/heap_allocator.h>
 #include <omen/libraries/std/string.h>
 #include <omen/libraries/std/stddef.h>
@@ -524,7 +525,6 @@ int sched_sigsuspend_check(thread_t * task) {
         //Check if there is any pending signal allowed by the sigprocmask
         for (int i = 1; i < NSIG; i++) {
             if (task->process->signal_queue[i] && (task->sigprocmask & (1 << i))) {
-                task->unsuspend_signal = i;
                 return i; //There is a sigsuspend signal pending, we can schedule
             }
         }
@@ -539,8 +539,6 @@ int sched_sigsuspend_check(thread_t * task) {
             task->unsuspend_signal = SIGSTOP;
             return SIGSTOP; //We can stop the process
         }
-    } else {
-        return 0; //No sigsuspend, we can schedule
     }
 
     return -1; //Can't resume
@@ -553,9 +551,28 @@ uint8_t sched_thread(process_t * task) {
     }
 
     while (
-        task->threads[current_process_index].status != THREAD_STATUS_READY && 
-        task->threads[current_process_index].status != THREAD_STATUS_RUNNING && 
-        (sched_sigsuspend_check(&(task->threads[current_thread_index])) >= 0)) {
+        task->threads[current_thread_index].status != THREAD_STATUS_READY && 
+        task->threads[current_thread_index].status != THREAD_STATUS_RUNNING) {
+        
+        if (task->threads[current_thread_index].status == THREAD_STATUS_INTERRUPTIBLE_SLEEP) {
+            int signal_check = sched_sigsuspend_check(&(task->threads[current_thread_index]));
+            if (signal_check == SIGKILL) {
+                task->threads[current_thread_index].status = THREAD_STATUS_ZOMBIE;
+                break;
+            }
+            if (signal_check == SIGSTOP) {
+                task->threads[current_thread_index].status = THREAD_STATUS_STOPPED;
+                break;
+            }
+            if (signal_check > 0) {
+                task->threads[current_thread_index].status = THREAD_STATUS_READY;
+                task->threads[current_thread_index].sigprocmask = task->threads[current_thread_index].sigsuspend_mask;
+                task->threads[current_thread_index].sigsuspend_mask = 0;
+                task->threads[current_thread_index].unsuspend_signal = signal_check;
+                break;
+            }
+        }
+
         current_thread_index++;
         if (current_thread_index >= task->thread_count) {
             current_thread_index = 0;
@@ -743,7 +760,16 @@ void init_process(const char * _init_path, const char * _idle_path, char * tty) 
     struct tss * tss = arch_get_cpu(main_thread->core_id)->tss;
     tss_set_stack(tss, main_thread->kstack, 0);
     tss_set_stack(tss, main_thread->ustack, 3);
+
+#ifdef PREEMPTION_TICKS
+    if (PREEMPTION_TICKS != 0) {
+        set_preeption_ticks(PREEMPTION_TICKS);
+        enable_preemption();
+    }
+#endif
+
     disable_debugger();
+
     __asm__("mov %0, %%rsp\n"
             "mov %1, %%cr3\n"
             "fxrstor %2\n"

@@ -2,18 +2,21 @@ override PROGRAM := idle.elf
 
 CC := /usr/bin/cc
 LD := /usr/bin/ld
+ASMC := nasm
 
-PROGRAM_ENTRY := main
+PROGRAM_ENTRY := _start
 
 CFLAGS ?= -O2 -g -Wall -Wextra -Wpedantic -pipe -std=c11
 LDFLAGS ?=
+NASMFLAGS ?= -F dwarf -g
 
 ABSDIR := $(shell pwd)
+LIBCDIR := $(ABSDIR)/../../minilibc
 SRCDIR := src
 BUILDHOME := build
 BUILDDIR := build/bin
 OBJDIR := build/lib
-LIBCDIR := $(ABSDIR)/../../minilibc
+SYMDIR := build/sym
 
 DIRS := $(wildcard $(SRCDIR)/*)
 
@@ -43,6 +46,9 @@ override CFLAGS +=       \
     -fno-pic             \
     -m64                 \
     -march=x86-64        \
+    -nostartfiles        \
+    -nodefaultlibs       \
+    -nostdlib            \
     -mabi=sysv           \
     -mno-80387           \
     -mno-red-zone        \
@@ -56,13 +62,28 @@ override LDFLAGS +=         \
     -z max-page-size=0x1000 \
     -T linker.ld
 
-override LIBCFILES :=$(call rwildcard,$(LIBCDIR),*.c)
-override LIBCOBJS := $(patsubst $(LIBCDIR)/%.c, $(OBJDIR)/%.o, $(LIBCFILES))
-override LIBCHEADER_DEPS := $(LIBCFILES:.c=.d)
+override NASMFLAGS += \
+    -f elf64
 
-override CFILES :=$(call rwildcard,$(SRCDIR),*.c)        
-override OBJS := $(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o, $(CFILES))
-override HEADER_DEPS := $(CFILES:.c=.d)
+override LIBC_CFILES :=$(call rwildcard,$(LIBCDIR),*.c)
+override LIBC_ASFILES := $(call rwildcard,$(LIBCDIR),*.S)
+override LIBC_NASMFILES := $(call rwildcard,$(LIBCDIR),*.asm)
+
+override OBJS := $(patsubst $(LIBCDIR)/%.c, $(OBJDIR)/%.o, $(LIBC_CFILES))
+override OBJS += $(patsubst $(LIBCDIR)/%.S, $(OBJDIR)/%_s.o, $(LIBC_ASFILES))
+override OBJS += $(patsubst $(LIBCDIR)/%.asm, $(OBJDIR)/%_asm.o, $(LIBC_NASMFILES))
+
+override LIBC_HEADER_DEPS := $(LIBC_CFILES:.c=.d) $(LIBC_ASFILES:.S=.d) $(LIBC_NASMFILES:.asm=.d)
+
+override SRC_CFILES :=$(call rwildcard,$(SRCDIR),*.c)        
+override SRC_ASFILES := $(call rwildcard,$(SRCDIR),*.S)
+override SRC_NASMFILES := $(call rwildcard,$(SRCDIR),*.asm)
+
+override OBJS += $(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o, $(SRC_CFILES))
+override OBJS += $(patsubst $(SRCDIR)/%.S, $(OBJDIR)/%_s.o, $(SRC_ASFILES))
+override OBJS += $(patsubst $(SRCDIR)/%.asm, $(OBJDIR)/%_asm.o, $(SRC_NASMFILES))
+
+override SRC_HEADER_DEPS := $(SRC_CFILES:.c=.d) $(SRC_ASFILES:.S=.d) $(SRC_NASMFILES:.asm=.d)
 
 # You may comment @make run in this target if you intend
 # to use virtualbox or real hardware.
@@ -70,25 +91,50 @@ all:
 	@echo "Building program..."
 	@echo "Absdir: $(ABSDIR)"
 	@make program
+	@echo "Generating symbol table..."
+	@mkdir -p $(SYMDIR)
+# Create symbol table for entering in gdb
+	@objcopy --only-keep-debug $(BUILDDIR)/$(PROGRAM) $(SYMDIR)/$(PROGRAM).sym
+	@echo "Done."
 
-program: $(LIBCOBJS) $(OBJS) link
-
-$(OBJDIR)/%.o: $(LIBCDIR)/%.c
-#	@ echo !==== COMPILING $^
-	@ mkdir -p $(@D)
-	@$(CC) $(CFLAGS) -c $^ -o $@
+program: $(OBJS) link
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
 #	@ echo !==== COMPILING $^
 	@ mkdir -p $(@D)
 	@$(CC) $(CFLAGS) -c $^ -o $@
 
+$(OBJDIR)/%_asm.o: $(SRCDIR)/%.asm
+#	@ echo !==== COMPILING $^
+	@ mkdir -p $(@D)
+	@$(ASMC) $^ -felf64 -o $@
+
+$(OBJDIR)/%_s.o: $(SRCDIR)/%.S
+#	@ echo !==== COMPILING $^
+	@ mkdir -p $(@D)
+	@$(ASMC) $(NASMFLAGS) $^ -f elf64 -o $@
+
+$(OBJDIR)/%.o: $(LIBCDIR)/%.c
+#	@ echo !==== COMPILING $^
+	@ mkdir -p $(@D)
+	@$(CC) $(CFLAGS) -c $^ -o $@
+
+$(OBJDIR)/%_asm.o: $(LIBCDIR)/%.asm
+#	@ echo !==== COMPILING $^
+	@ mkdir -p $(@D)
+	@$(ASMC) $^ -felf64 -o $@
+
+$(OBJDIR)/%_s.o: $(LIBCDIR)/%.S
+#	@ echo !==== COMPILING $^
+	@ mkdir -p $(@D)
+	@$(ASMC) $(NASMFLAGS) $^ -f elf64 -o $@
+
 link: 
 #	@ echo !==== LINKING $^
-	@ mkdir -p $(BUILDDIR)
-	@$(LD) $(LDFLAGS) -o $(BUILDDIR)/$(PROGRAM) $(OBJS) $(LIBCOBJS)
+	@$(LD) $(LDFLAGS) -o $(BUILDDIR)/$(PROGRAM) $(OBJS)
 
 clean:
 	@rm -rf $(OBJDIR)/*
 	@rm -rf $(OBJS)
 	@rm -rf $(BUILDDIR)/*
+	@rm -rf $(SYMDIR)
