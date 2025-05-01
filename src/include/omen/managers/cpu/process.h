@@ -9,6 +9,12 @@
 #include <omen/managers/cpu/signal.h>
 #include <omen/managers/mem/vdso.h>
 
+#define PROCESS_PRIORITIES 20
+#define PROCESS_PQUEUE_DELTA_UP 0x1
+#define PROCESS_PQUEUE_DELTA_SAME 0x0
+#define PROCESS_PQUEUE_DELTA_DOWN (-1)
+#define PROCESS_PQUEUE_DELTA_RESET 0x50 //This need to be bigger than PROCESS_PRIORITIES
+
 #define THREAD_STATUS_READY 0
 #define THREAD_STATUS_RUNNING 1
 #define THREAD_STATUS_UNINTERRUPTIBLE_SLEEP 2
@@ -66,6 +72,11 @@ typedef struct thread {
     uint8_t syscall_ready; //A thread has to have called sycall_entry to return from a syscall
 } thread_t;
 
+struct pqueue {
+    process_t *task;
+    struct pqueue *next;
+};
+
 typedef struct process {
     struct page_directory * vmm;
     struct vm_area *vm_areas;
@@ -80,7 +91,6 @@ typedef struct process {
     void * heap_end;
     void * heap_max_size;
 
-    uint8_t privilege;
     long nice;
     long current_nice;
     int exit_code;
@@ -116,6 +126,7 @@ typedef struct process {
     void * entry_address;
 
     struct process *parent;
+    struct pqueue *pqueue;
 
 } process_t;
 

@@ -127,7 +127,7 @@ int64_t write_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)fd;
     (void)buffer;
     (void)size;
-    kprintf("[PID: %d | TID %d] WRITE_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, buffer, size);
+    //kprintf("[PID: %d | TID %d] WRITE_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, buffer, size);
     return vfs_file_write(fd, (void*)buffer, size);
 }
 
