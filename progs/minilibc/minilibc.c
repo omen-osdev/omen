@@ -86,6 +86,11 @@ int sys_fstat(int fd, struct stat * buf) {
 int sys_stat(const char * path, struct stat * buf) {
     return (int)syscall(4, (int64_t)path, (int64_t)buf, 0, 0, 0, 0);
 }
+
+int sys_seek(int fd, int offset, int whence) {
+    return (int)syscall(8, (int64_t)fd, (int64_t)offset, (int64_t)whence, 0, 0, 0);
+}
+
 void sys_sched_yield() {
     syscall(24, 0, 0, 0, 0, 0, 0);
 }
@@ -154,4 +159,36 @@ int sys_getpid() {
 
 int sys_getppid() {
     return (int)syscall(110, 0, 0, 0, 0, 0, 0);
+}
+
+int sys_gettimeofday(struct timeval *tv, struct timezone *tz) {
+    return (int)syscall(96, (int64_t)tv, (int64_t)tz, 0, 0, 0, 0);
+}
+
+int sys_arch_prctl(int code, unsigned long *addr) {
+    return (int)syscall(158, (int64_t)code, (int64_t)addr, 0, 0, 0, 0);
+}
+
+int sys_gettid() {
+    return (int)syscall(186, 0, 0, 0, 0, 0, 0);
+}
+
+int sys_clock_settime(int clock_id, const struct timespec *tp) {
+    return (int)syscall(227, (int64_t)clock_id, (int64_t)tp, 0, 0, 0, 0);
+}
+
+int sys_clock_gettime(int clock_id, struct timespec *tp) {
+    return (int)syscall(228, (int64_t)clock_id, (int64_t)tp, 0, 0, 0, 0);
+}
+
+int sys_clock_getres(int clock_id, struct timespec *tp) {
+    return (int)syscall(229, (int64_t)clock_id, (int64_t)tp, 0, 0, 0, 0);
+}
+
+int sys_waitpid(int pid, int *status, int options) {
+    return (int)syscall(61, (int64_t)pid, (int64_t)status, (int64_t)options, 0, 0, 0);
+}
+
+int sys_thread_exit() {
+    return (int)syscall(336, 0, 0, 0, 0, 0, 0);
 }

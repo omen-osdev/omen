@@ -3,6 +3,8 @@
 
 #define SQUEUE_MAX 64
 
+#define SLEEP_WAITPID 0x1
+
 #include <omen/managers/cpu/process.h>
 #include <omen/libraries/std/time.h>
 void sleep(thread_t * thread, int condition);

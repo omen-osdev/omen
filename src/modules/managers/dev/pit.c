@@ -172,6 +172,11 @@ uint64_t ns_to_ticks(uint64_t ns) {
     return ticks;
 }
 
+uint64_t get_resolution() {
+    return 1000000;
+    
+}
+
 uint64_t ticks_to_ns(uint64_t ticks) {
     if (pit.hertz == 0) return 0;
     if (ticks == 0) return 0;

@@ -33,7 +33,7 @@ void test_sleep() {
     int pid = sys_fork();
     if (pid == 0) {
         while (1) {
-            struct timespec req = {7, 0};
+            struct timespec req = {1, 0};
             sys_nanosleep(&req, NULL);
             printf("[child]Woke up from sleep\n");
         }
@@ -48,14 +48,12 @@ void test_sleep() {
 
 int main(int argc, char* argv[], char* envp[]) {
     minilibc_init();
-    print_args(argc, argv, envp);
+    //print_args(argc, argv, envp);
+    struct timespec ts, res;
+    sys_clock_gettime(CLOCK_MONOTONIC, &ts);
+    printf("Current time: %ld.%09ld\n", ts.tv_sec, ts.tv_nsec);
+    sys_clock_getres(CLOCK_MONOTONIC, &res);
+    printf("Clock resolution: %ld.%09ld\n", res.tv_sec, res.tv_nsec);
 
-    int pid = sys_fork();
-    if (pid == 0) {
-        test_sleep();
-    } else {
-        while (1) {
-            sys_sched_yield();
-        }
-    }
+    while (1) {}
 }

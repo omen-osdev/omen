@@ -1,6 +1,8 @@
 #ifndef _TIME_H_
 #define _TIME_H_
 
+#define CLOCK_MONOTONIC 0
+
 #define DST_NONE    0   /* not on dst */
 #define DST_USA     1   /* USA style dst */
 #define DST_AUST    2   /* Australian style dst */
@@ -59,4 +61,7 @@ struct itimerspec {
 	(tv)->tv_usec = (ts)->tv_nsec / 1000;				\
 } while (0)
 
+struct timeval * timeval_now(struct timeval *tv);
+struct timespec * timespec_now(struct timespec *ts);
+struct timespec * clock_res(struct timespec *ts);
 #endif

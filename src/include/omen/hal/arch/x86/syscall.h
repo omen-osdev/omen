@@ -10,7 +10,7 @@
 #define SYSCALL_ERROR (-1)
 #define SYSCALL_UNDEFINED (-2)
 
-#define SYSCALL_HANDLER_COUNT 256
+#define SYSCALL_HANDLER_COUNT 512
 
 typedef int64_t (*syscall_handler)(thread_t*caller_thread, cpu_context_t* ctx);
 extern void syscall_enable(uint16_t kernel_segment, uint16_t user_segment);

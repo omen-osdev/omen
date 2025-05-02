@@ -21,12 +21,21 @@ struct squeue {
 
 struct squeue * squeue_head = 0x0;
 
+void fuckup_detector(struct squeue * deleted_queue) {
+    struct squeue * current = squeue_head;
+    while (current != NULL) {
+        if (current == deleted_queue) {
+            panic("Fuckup detected\n");
+        }
+        current = current->next;
+    }
+}
+
 struct squeue * create_squeue(int id) {
     // Create a new squeue and add it to the list
     struct squeue * new_squeue = (struct squeue *)kmalloc(sizeof(struct squeue));
     if (new_squeue == NULL) {
-        kprintf("Failed to create squeue\n");
-        return NULL;
+        panic("Failed to create squeue\n");
     }
     memset(new_squeue, 0, sizeof(struct squeue));
     new_squeue->head = NULL;
@@ -67,7 +76,7 @@ struct snode * create_snode(thread_t * thread, const struct timespec *duration, 
 }
 
 void destroy_snode(struct snode * node) {
-    if (node == NULL) return;
+    if (node == NULL) panic("Node is NULL\n");
     if (node->duration != NULL) {
         kfree(node->duration);
     }
@@ -75,22 +84,31 @@ void destroy_snode(struct snode * node) {
 }
 
 void destroy_squeue(struct squeue * queue) {
-    if (queue == NULL) return;
-    struct snode * current = queue->head;
+    //Remove the queue from the queue list, then deallocate it
+    if (queue == NULL) panic("Queue is NULL\n");
+    struct squeue * current = squeue_head;
+    struct squeue * prev = NULL;
     while (current != NULL) {
-        struct snode * next = current->next;
-        destroy_snode(current);
-        current = next;
-    }
-
-    if (squeue_head == queue) {
-        if (queue->next != NULL) {
-            squeue_head = queue->next;
-        } else {
-            squeue_head = NULL;
+        if (current == queue) {
+            if (prev == NULL) {
+                squeue_head = current->next;
+            } else {
+                prev->next = current->next;
+            }
+            struct snode * node = current->head;
+            while (node != NULL) {
+                struct snode * temp = node;
+                node = node->next;
+                destroy_snode(temp);
+            }
+            kfree(current);
+            fuckup_detector(current);
+            return;
         }
+        prev = current;
+        current = current->next;
     }
-    kfree(queue);
+    panic("Queue not found\n");
 }
 
 struct squeue * find_squeue(int id) {
@@ -132,7 +150,6 @@ struct snode * find_snode(struct squeue * queue, thread_t * thread) {
 
 void __sleep(thread_t * thread, int condition, struct timespec * rem, struct timespec * duration) {
     // Check if the thread is already sleeping
-
     thread->status = THREAD_STATUS_INTERRUPTIBLE_SLEEP;
     // Add the thread to the squeue
     struct squeue * queue = find_squeue(condition);

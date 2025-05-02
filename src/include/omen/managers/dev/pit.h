@@ -32,8 +32,9 @@ void tick();
 void set_preeption_ticks(uint64_t ticks);
 void enable_preemption();
 uint8_t requires_preemption();
-
+uint64_t get_ticks_since_boot();
 uint64_t get_epoch();
+uint64_t get_resolution();
 
 void remove_alarm(int alarm_id);
 int add_alarm(int64_t ticks, int rearm, void (*callback)(int, uint64_t, int64_t));

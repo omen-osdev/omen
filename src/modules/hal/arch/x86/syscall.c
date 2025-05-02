@@ -36,7 +36,7 @@ pselect
 
 kot's
 
-#define SYS_LOG                 0
+#define SYS_LOG                 0 no, unnecessary
 #define SYS_ARCH_PRCTL          1 ok
 #define SYS_GET_TID             2 ok
 #define SYS_FUTEX_WAIT          3
@@ -47,14 +47,14 @@ kot's
 #define SYS_MPROTECT            7 ok
 
 #define SYS_EXIT                8 ok
-#define SYS_THREAD_EXIT         9
-#define SYS_CLOCK_GET           10
-#define SYS_CLOCK_GETRES        11
-#define SYS_SLEEP               12
+#define SYS_THREAD_EXIT         9 ok
+#define SYS_CLOCK_GET           10 ok (gettimeofday)
+#define SYS_CLOCK_GETRES        11 ok
+#define SYS_SLEEP               12 ok
 
 #define SYS_SIGPROCMASK         13 ok
 #define SYS_SIGACTION           14 ok
-#define SYS_SIGRESTORE          15 no
+#define SYS_SIGRESTORE          15 no, we use sigreturn
 #define SYS_FORK                16 ok
 #define SYS_WAITPID             17
 #define SYS_EXECVE              18 ok
@@ -323,6 +323,75 @@ int64_t ioctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     return SYSCALL_SUCCESS;
 }
 
+int64_t clock_gettime_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    uint64_t clock_id = SYSCALL_ARG0(ctx);
+    struct timespec * ts = (struct timespec *)SYSCALL_ARG1(ctx);
+
+    if (clock_id != CLOCK_MONOTONIC) {
+        kprintf("Invalid clock id\n");
+        return SYSCALL_ERROR;
+    }
+    kprintf("[PID: %d | TID %d] CLOCK_GETTIME_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, clock_id, ts);
+    if (ts != NULL) {
+        timespec_now(ts);
+    }
+}
+
+int64_t clock_settime_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    (void)ctx;
+    (void)thread;
+    kprintf("Not implemented yet\n");
+    return SYSCALL_ERROR;
+}
+
+int64_t clock_getres_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    uint64_t clock_id = SYSCALL_ARG0(ctx);
+    struct timespec * ts = (struct timespec *)SYSCALL_ARG1(ctx);
+
+    if (clock_id != CLOCK_MONOTONIC) {
+        kprintf("Invalid clock id\n");
+        return SYSCALL_ERROR;
+    }
+    kprintf("[PID: %d | TID %d] CLOCK_GETRES_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, clock_id, ts);
+    if (ts != NULL) {
+        clock_res(ts);
+    }
+    return SYSCALL_SUCCESS;
+}
+
+
+
+int64_t gettimeofday_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    struct timeval *tv = (struct timeval *)SYSCALL_ARG0(ctx);
+    struct timezone *tz = (struct timezone *)SYSCALL_ARG1(ctx);
+    kprintf("[PID: %d | TID %d] GETTIMEOFDAY_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, tv, tz);
+    if (tv != NULL) {
+        timeval_now(tv);
+    }
+    return SYSCALL_SUCCESS;
+}
+
+int64_t waitpid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    (void)ctx;
+    int pid = SYSCALL_ARG0(ctx);
+    int * status = (int *)SYSCALL_ARG1(ctx);
+    int options = SYSCALL_ARG2(ctx);
+    kprintf("[PID: %d | TID %d] WAITPID_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, pid, status, options);
+    
+    if (pid < -1) {
+        kprintf("Invalid pid\n");
+        return SYSCALL_ERROR;
+    }
+
+    if (pid == 0) {
+        kprintf("Invalid pid\n");
+        return SYSCALL_ERROR;
+    }
+
+    return waitpid(thread, pid, status, options);
+
+}   
+
 int64_t sched_yield_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
     kprintf("[PID: %d | TID %d] SCHED_YIELD_SYSCALL()\n", thread->process->pid, thread->id);
@@ -334,7 +403,7 @@ int64_t sched_yield_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 
 int64_t fork_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
-    kprintf("[PID: %d | TID %d] FORK_SYSCALL()\n", thread->process->pid);
+    kprintf("[PID: %d | TID %d] FORK_SYSCALL()\n", thread->process->pid, thread->id);
     uint64_t child_pid = (uint64_t)fork(thread);
     kprintf("Child PID: %d | TID %d\n", child_pid);
     return child_pid;
@@ -402,6 +471,13 @@ int64_t arch_prctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
         default:
             return -EINVAL;
     }
+    return SYSCALL_SUCCESS;
+}
+
+int64_t thread_exit_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    (void)ctx;
+    kprintf("[PID: %d | TID %d] THREAD_EXIT_SYSCALL()\n", thread->process->pid, thread->id);
+    thread_exit(thread);
     return SYSCALL_SUCCESS;
 }
 
@@ -760,9 +836,11 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [58] = undefined_syscall_handler,
     [59] = execve_syscall_handler,
     [60] = exit_syscall_handler,
-    [61] = undefined_syscall_handler,
+    [61] = waitpid_syscall_handler,
     [62] = kill_syscall_handler,
-    [63 ... 109] = undefined_syscall_handler,
+    [63 ... 95] = undefined_syscall_handler,
+    [96] = gettimeofday_syscall_handler,
+    [97 ... 109] = undefined_syscall_handler,
     [110] = getppid_syscall_handler,
     [111 ... 126] = undefined_syscall_handler,
     [127] = sigpending_syscall_handler,
@@ -773,7 +851,13 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [158] = arch_prctl_syscall_handler,
     [159 ... 185] = undefined_syscall_handler,
     [186] = get_tid_syscall_handler,
-    [187 ... 255] = undefined_syscall_handler
+    [187 ... 226] = undefined_syscall_handler,
+    [227] = clock_settime_syscall_handler,
+    [228] = clock_gettime_syscall_handler,
+    [229] = clock_getres_syscall_handler,
+    [230 ... 335] = undefined_syscall_handler,
+    [336] = thread_exit_syscall_handler,
+    [337 ... 511] = undefined_syscall_handler
 };
 
 void global_syscall_handler(cpu_context_t* ctx) {

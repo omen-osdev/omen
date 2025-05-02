@@ -2,6 +2,9 @@
 #define _TIME_H
 typedef long time_t;
 typedef long suseconds_t;
+typedef long clock_t;
+
+#define CLOCK_MONOTONIC 0
 
 struct timeval {
     time_t tv_sec;

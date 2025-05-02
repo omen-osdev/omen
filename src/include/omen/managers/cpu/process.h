@@ -9,30 +9,34 @@
 #include <omen/managers/cpu/signal.h>
 #include <omen/managers/mem/vdso.h>
 
-#define PROCESS_PRIORITIES 20
-#define PROCESS_PQUEUE_DELTA_UP 0x1
-#define PROCESS_PQUEUE_DELTA_SAME 0x0
-#define PROCESS_PQUEUE_DELTA_DOWN (-1)
-#define PROCESS_PQUEUE_DELTA_RESET 0x50 //This need to be bigger than PROCESS_PRIORITIES
+#define PROCESS_PRIORITIES                  20
 
-#define THREAD_STATUS_READY 0
-#define THREAD_STATUS_RUNNING 1
+#define PROCESS_STATUS_ALIVE                0
+#define PROCESS_STATUS_ZOMBIE               1
+#define PROCESS_STATUS_SIGSTOP              2
+#define PROCESS_STATUS_SIGCONT              3
+
+#define THREAD_STATUS_READY                 0
+#define THREAD_STATUS_RUNNING               1
 #define THREAD_STATUS_UNINTERRUPTIBLE_SLEEP 2
-#define THREAD_STATUS_INTERRUPTIBLE_SLEEP 3
-#define THREAD_STATUS_STOPPED 4
-#define THREAD_STATUS_ZOMBIE 4
+#define THREAD_STATUS_INTERRUPTIBLE_SLEEP   3
+#define THREAD_STATUS_ZOMBIE                5
 
-#define PROCFILE_STDIN 0
-#define PROCFILE_STDOUT 1
-#define PROCFILE_STDERR 2
+#define PROCFILE_STDIN                      0
+#define PROCFILE_STDOUT                     1
+#define PROCFILE_STDERR                     2
 
-#define MAX_OPEN_FILES 32
-#define MAX_THREADS 32
+#define MAX_OPEN_FILES                      32
+#define MAX_THREADS                         32
 
-#define VMAREA_EXT_COW      0x1
-#define VMAREA_EXT_SHARED   0x2
-#define VMAREA_EXT_GUARD    0x4
-#define VMAREA_EXT_REQ_SYNC 0x8
+#define VMAREA_EXT_COW                      0x1
+#define VMAREA_EXT_SHARED                   0x2
+#define VMAREA_EXT_GUARD                    0x4
+#define VMAREA_EXT_REQ_SYNC                 0x8
+
+#define WNOHANG                          0x1
+#define WUNTRACED                       0x2
+#define WCONTINUED                       0x4
 
 typedef int thread_status_t;
 struct process;
@@ -69,13 +73,9 @@ typedef struct thread {
     uint8_t core_id;
     void* entry;
     thread_status_t status;
+    uint8_t waiting;
     uint8_t syscall_ready; //A thread has to have called sycall_entry to return from a syscall
 } thread_t;
-
-struct pqueue {
-    process_t *task;
-    struct pqueue *next;
-};
 
 typedef struct process {
     struct page_directory * vmm;
@@ -94,6 +94,7 @@ typedef struct process {
     long nice;
     long current_nice;
     int exit_code;
+    int global_status;
 
     unsigned long long sleep_time;
     unsigned long long cpu_time;
@@ -126,7 +127,6 @@ typedef struct process {
     void * entry_address;
 
     struct process *parent;
-    struct pqueue *pqueue;
 
 } process_t;
 
@@ -140,9 +140,11 @@ void restore_signal_context(thread_t * thread, cpu_context_t * ctx);
 void * get_signal_trampoline(process_t * task);
 struct sigaction * select_signal(thread_t * thread, int * signo);
 process_t * sched();
+int16_t waitpid(thread_t * thread, int pid, int * status, int options);
 int16_t fork(thread_t *thread);
 void execve(process_t *task, const char * path, const char ** argv, const char ** envp);
 int exec(process_t *task,char const *path, const char ** argv, const char ** envp);
+void thread_exit(thread_t * thread);
 void exit(process_t *task, int error_code);
 void sync_files(thread_t *thread, struct vm_area * vma, uint64_t size);
 process_t *get_process_by_pid(int pid);

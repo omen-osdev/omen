@@ -72,3 +72,12 @@ int sys_sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
 int sys_sigpending(sigset_t *set);
 int sys_kill(int pid, int sig);
 int sys_sigaltstack(const stack_t *ss, stack_t *oss);
+int sys_waitpid(int pid, int *status, int options);
+
+int sys_gettimeofday(struct timeval *tv, struct timezone *tz);
+int sys_arch_prctl(int code, unsigned long *addr);
+int sys_gettid();
+int sys_clock_settime(int clock_id, const struct timespec *tp);
+int sys_clock_gettime(int clock_id, struct timespec *tp);
+int sys_clock_getres(int clock_id, struct timespec *tp);
+int sys_thread_exit();

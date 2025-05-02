@@ -19,6 +19,38 @@ time_t time(time_t *tloc) {
     }
     return (time_t)get_epoch();
 }
+
+struct timeval * timeval_now(struct timeval *tv) {
+    if (tv) {
+        uint64_t epoch = get_epoch();
+        uint64_t ticks = get_ticks_since_boot();
+        uint64_t ticks_ns = ticks_to_ns(ticks);
+        uint64_t seconds = ticks_ns / 1000000000;
+        uint64_t nanoseconds = ticks_ns % 1000000000;
+        tv->tv_sec = seconds + epoch;
+        tv->tv_usec = nanoseconds / 1000;
+    }
+    return tv;
+}
+
+struct timespec * timespec_now(struct timespec *ts) {
+    if (ts) {
+        struct timeval tv;
+        timeval_now(&tv);
+        TIMEVAL_TO_TIMESPEC(&tv, ts);
+    }
+    return ts;
+}
+
+struct timespec * clock_res(struct timespec *ts) {
+    uint64_t nanosecond_resolution = get_resolution();
+    if (ts) {
+        ts->tv_sec = 0;
+        ts->tv_nsec = nanosecond_resolution;
+    }
+    return ts;
+}
+
 struct tm *localtime(const time_t *timep) {
     static struct tm tm;
     tm.tm_sec = *timep % 60;

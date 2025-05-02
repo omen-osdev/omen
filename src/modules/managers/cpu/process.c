@@ -16,6 +16,7 @@
 #include <omen/hal/arch/x86/syscall.h>
 #include <omen/apps/debug/debug.h>
 #include <omen/managers/cpu/vmarea.h>
+#include <omen/managers/cpu/sline.h>
 
 #include <vfs/vfs.h>
 #include <vfs/vfs_interface.h>
@@ -38,7 +39,6 @@ void _idle() {panic("Stub running, exec failed!\n");}
 
 //TODO: Jonbardo modify this to use ur linked list :D
 process_t process_list[MAX_PROCESSES] = {0};
-struct pqueue * pqueues[PROCESS_PRIORITIES] = {0};
 process_t * current_process = NULL;
 int process_count = 0;
 
@@ -57,11 +57,13 @@ void * create_args_env_aux(void * protostack_buffer, uint64_t size, char ** argv
         for (auxc = 0; (auxv[auxc].a_type != AT_NULL); auxc++) {len+= sizeof(struct auxv);}
     len += 6*8;
 
-    if (len > size) {
+    if ((len+0xf) > size) {
         panic("Protostack too big\n");
     }
 
     uint64_t * protostack = (uint64_t)((uint64_t)protostack_buffer - len);
+    //Make sure protostack is aligned to 16 bytes
+    protostack = (uint64_t*)((uint64_t)protostack & ~0xf);
 
     memset(protostack, 0, len);
 
@@ -239,7 +241,34 @@ void restore_signal_context(thread_t * thread, cpu_context_t * ctx) {
     
 }
 
+void awake_parent(thread_t * thread) {
+    if (thread->process->parent != NULL) {
+        for (int i = 0; i < thread->process->parent->thread_count; i++) {
+            thread_t * parent_thread = &(thread->process->parent->threads[i]);
+            if (parent_thread->waiting == 1) {
+                parent_thread->waiting = 0;
+                wakeup(SLEEP_WAITPID);
+            }
+        }
+    }
+}
+
 void create_signal_context(thread_t * thread, int signo, struct sigaction * sigact, cpu_context_t * ctx) {
+
+    if (signo == SIGKILL) {
+        thread->process->global_status = PROCESS_STATUS_ZOMBIE;
+        awake_parent(thread);
+        return;
+    }
+    if (signo == SIGSTOP) {
+        thread->process->global_status = PROCESS_STATUS_SIGSTOP;
+        awake_parent(thread);
+        return;
+    }
+    if (signo == SIGCONT && thread->process->global_status == PROCESS_STATUS_SIGSTOP) {
+        thread->process->global_status = PROCESS_STATUS_SIGCONT;
+        awake_parent(thread);
+    }
 
     void * vdso_signal_trampoline = get_signal_trampoline(thread->process);
     if (vdso_signal_trampoline == NULL) {
@@ -369,88 +398,6 @@ void open_stdfiles(process_t *task, char * tty) {
     task->open_files[task->open_files_count++] = stderr;
 }
 
-//Add a process to the queue depending on its current_nice
-void pqueue_add(process_t * task) {
-    if (task->current_nice < 0 || task->current_nice >= PROCESS_PRIORITIES) {
-        panic("Invalid current_nice\n");
-    }
-
-    struct pqueue * queue = kmalloc(sizeof(struct pqueue));
-    queue->task = task;
-    queue->next = NULL;
-
-    if (pqueues[task->current_nice] == NULL) {
-        pqueues[task->current_nice] = queue;
-    } else {
-        struct pqueue * tmp = pqueues[task->current_nice];
-        while (tmp->next != NULL) {
-            tmp = tmp->next;
-        }
-        tmp->next = queue;
-    }
-
-    task->pqueue = queue;
-}
-
-//Remove a process from the queue depending on its current_nice
-void pqueue_remove(process_t * task) {
-    if (task->current_nice < 0 || task->current_nice >= PROCESS_PRIORITIES) {
-        panic("Invalid current_nice\n");
-    }
-
-    struct pqueue * queue = pqueues[task->current_nice];
-    struct pqueue * prev = NULL;
-
-    while (queue != NULL) {
-        if (queue->task == task) {
-            if (prev == NULL) {
-                pqueues[task->current_nice] = queue->next;
-            } else {
-                prev->next = queue->next;
-            }
-            kfree(queue);
-            task->pqueue = NULL;
-            return;
-        }
-        prev = queue;
-        queue = queue->next;
-    }
-
-    task->pqueue = NULL;
-}
-
-//Edit a process in the queue depending on its current_nice
-void pqueue_move(process_t * task, int8_t delta) {
-    long old_nice = task->current_nice;
-    //Increase current_nice
-    if (delta == PROCESS_PQUEUE_DELTA_RESET)
-        task->current_nice = task->nice;
-    else
-        task->current_nice += delta;
-
-    if (task->current_nice > PROCESS_PRIORITIES) {
-        task->current_nice = PROCESS_PRIORITIES;
-    }
-    if (task->current_nice < 0) {
-        task->current_nice = 0;
-    }
-
-    struct pqueue * old_queue = task->pqueue;
-    if (old_queue != pqueues[old_nice] && old_queue != NULL)
-        panic("Process not in the right queue\n");
-
-    if (old_nice != task->current_nice || old_queue == NULL) {
-        pqueue_remove(task);
-        pqueue_add(task);
-    }
-    if (task->pqueue == NULL) {
-        panic("Process not in the queue\n");
-    }
-    if (task->pqueue->task != task) {
-        panic("Process not in the right queue\n");
-    }
-}
-
 process_t * duplicate_process(thread_t * parent_thread) {
     process_t * parent = parent_thread->process;
     if (process_count >= MAX_PROCESSES) {
@@ -466,9 +413,7 @@ process_t * duplicate_process(thread_t * parent_thread) {
     task->pid = get_next_pid();
     task->nice = parent->nice;
     task->current_nice = task->nice;
-    task->pqueue = 0x0;
     task->exit_code = 0;
-    pqueue_add(task);
     task->ppid = parent->pid;
     memset(task->threads, 0, sizeof(thread_t) * MAX_THREADS);
     memcpy(&(task->threads[0]), parent_thread, sizeof(thread_t));
@@ -523,9 +468,8 @@ void alter_process_on_exec(process_t * task, struct loaded_elf * ld, char const 
     task->heap_end = 0;
     task->heap_max_size = 0;
 
-    task->nice = 10;
+    task->nice = saved_task.nice;
     task->current_nice = task->nice;
-    task->pqueue = 0x0;
     task->exit_code = 0;
 
     task->sleep_time = 0;
@@ -639,7 +583,9 @@ uint8_t sched_thread(process_t * task) {
 
     while (
         task->threads[current_thread_index].status != THREAD_STATUS_READY && 
-        task->threads[current_thread_index].status != THREAD_STATUS_RUNNING) {
+        task->threads[current_thread_index].status != THREAD_STATUS_RUNNING &&
+        task->threads[current_thread_index].waiting != 0
+    ) {
         
         if (task->threads[current_thread_index].status == THREAD_STATUS_INTERRUPTIBLE_SLEEP) {
             int signal_check = sched_sigsuspend_check(&(task->threads[current_thread_index]));
@@ -648,7 +594,7 @@ uint8_t sched_thread(process_t * task) {
                 break;
             }
             if (signal_check == SIGSTOP) {
-                task->threads[current_thread_index].status = THREAD_STATUS_STOPPED;
+                task->threads[current_thread_index].status = THREAD_STATUS_UNINTERRUPTIBLE_SLEEP;
                 break;
             }
             if (signal_check > 0) {
@@ -676,35 +622,145 @@ uint8_t sched_thread(process_t * task) {
     return 1;
 }
 
+void move_processes() {
+    //Iterate over the process list and remove any NULL process by moving the rest to the left
+    for (int i = 0; i < process_count; i++) {
+        if (process_list[i].pid == -1) {
+            for (int j = i; j < process_count - 1; j++) {
+                memcpy(&(process_list[j]), &(process_list[j + 1]), sizeof(process_t));
+            }
+            process_count--;
+            i--;
+        }
+    }
+}
+
+void delete_process(process_t * task) {
+    
+    if (task->vdso) {
+        //vdso_free(task->vdso);
+    }
+    for (int i = 0; i < task->thread_count; i++) {
+        thread_t * thread = &(task->threads[i]);
+        if (thread->ustack_base) {
+            //stackfree(thread->process->vmm, thread->ustack_base, PROCESS_STACK_SIZE);
+        }
+        if (thread->kstack_base) {
+            //kstackfree(thread->process->vmm, thread->kstack_base, PROCESS_STACK_SIZE);
+        }
+    }
+    memset(task, 0, sizeof(process_t));
+    task->pid = -1;
+    move_processes();
+    kprintf("Process %d deleted\n", task->pid);
+}
+
+int16_t waitpid(thread_t * thread, int pid, int * status, int options) {
+    if (pid == -1) {
+        for (int i = 0; i < process_count; i++) {
+            if (process_list[i].ppid == thread->process->pid) {
+                if (process_list[i].global_status == PROCESS_STATUS_ZOMBIE) {
+                    *status = PROCESS_STATUS_ZOMBIE;
+                    delete_process(&(process_list[i]));
+                    return process_list[i].pid;
+                }
+                if (process_list[i].global_status == PROCESS_STATUS_SIGSTOP && (options & WUNTRACED)) {
+                    *status = PROCESS_STATUS_SIGSTOP;
+                    return process_list[i].pid;
+                }
+                if (process_list[i].global_status == PROCESS_STATUS_SIGCONT && (options & WCONTINUED)) {
+                    *status = PROCESS_STATUS_SIGCONT;
+                    return process_list[i].pid;
+                }
+            }
+        }
+    } else {
+        
+        if (pid < 0 || pid >= process_count) {
+            return -1;
+        }
+        process_t * process = get_process_by_pid(pid);
+        if (process->ppid == thread->process->pid) {
+            if (process->global_status == PROCESS_STATUS_ZOMBIE) {
+                *status = PROCESS_STATUS_ZOMBIE;
+                delete_process(process);
+                return process->pid;
+            }
+            if (process->global_status == PROCESS_STATUS_SIGSTOP && (options & WUNTRACED)) {
+                *status = PROCESS_STATUS_SIGSTOP;
+                return process->pid;
+            }
+            if (process->global_status == PROCESS_STATUS_SIGCONT && (options & WCONTINUED)) {
+                *status = PROCESS_STATUS_SIGCONT;
+                return process->pid;
+            }
+        }
+    }
+    
+    //No process has exited
+    if (options & WNOHANG) {
+        *status = 0;
+        return -1;
+    }
+
+    //Wait for a process to exit
+    thread->waiting = 1;
+    sleep(thread, SLEEP_WAITPID);
+    sched();
+}
+
 process_t * sched() {
     process_t * task = 0x0;
-    int niceness = 0;
-    for (niceness = 0; niceness < PROCESS_PRIORITIES; niceness++ ) {
-        struct pqueue * pqueue = pqueues[niceness];
+    process_t * processes[PROCESS_PRIORITIES][process_count];
+    memset(processes, 0, sizeof(process_t *) * PROCESS_PRIORITIES * process_count);
+    int prio_list_size[PROCESS_PRIORITIES] = {0};
+    for (int i = 0; i < process_count; i++) {
+        process_list[i].current_nice--;
+        if (process_list[i].current_nice < 0) {
+            process_list[i].current_nice = 0;
+        }
+        processes[process_list[i].current_nice][prio_list_size[process_list[i].current_nice]++] = &(process_list[i]);
+    }
 
-        while (pqueue != 0) {
-            if (sched_thread(pqueue->task)) {
-                task = pqueue->task;
-                goto found;
+    //Dump the processes array
+    for (int i = 0; i < PROCESS_PRIORITIES; i++) {
+        if (prio_list_size[i] == 0)
+            continue;
+
+        kprintf("PQUEUE %d: ", i);
+        for (int j = 0; j < prio_list_size[i]; j++) {
+            kprintf("[PID:%d|TSB:%llu|NICE:%d|CNICE:%d] ", processes[i][j]->pid, processes[i][j]->last_scheduled, processes[i][j]->nice, processes[i][j]->current_nice);
+        }
+        kprintf("\n");
+    }
+
+    for (int i = 0; i < PROCESS_PRIORITIES; i++) {
+        process_t * candidate = 0x0;
+        unsigned long long last_scheduled = 99999999999999999;
+        for (int j = 0; j < prio_list_size[i]; j++) {
+            if (processes[i][j]->last_scheduled < last_scheduled) {
+                last_scheduled = processes[i][j]->last_scheduled;
+                candidate = processes[i][j];
             }
-            pqueue = pqueue->next;
+        }
+        
+        if (candidate == 0x0)
+            continue;
+
+        if (sched_thread(candidate)) {
+            kprintf("Chosen candidate [PID:%d|TSB:%llu|NICE:%d|CNICE:%d]\n", candidate->pid, candidate->last_scheduled, candidate->nice, candidate->current_nice);
+            task = candidate;
+            break;
         }
     }
 
-found:
     if (task == 0x0)
-        panic("Scheduler error: no process found\n");
-    if (task->current_nice != niceness)
-        panic("Scheduler error: process not in the right queue\n");
+        panic("No process to schedule\n");
 
-    pqueue_move(task, PROCESS_PQUEUE_DELTA_RESET);
-    for (int i = 0; i < process_count; i++) {
-        if (&process_list[i] != task)
-            pqueue_move(&process_list[i], PROCESS_PQUEUE_DELTA_DOWN);
-    }
-
+    task->last_scheduled = get_ticks_since_boot();
+    task->current_nice = task->nice;
     current_process = task;
-    return current_process;
+    return task;
 }
 
 struct sigaction * select_signal(thread_t * thread, int * signo) {
@@ -767,6 +823,11 @@ void exit(process_t* task, int error_code) {
     sched();
 }
 
+void thread_exit(thread_t * thread) {
+    thread->status = THREAD_STATUS_ZOMBIE;
+    sched();
+}
+
 process_t * create_user_process(struct page_directory* pd, void * init, char * tty) {
     process_t * task = &(process_list[process_count++]);
     memset(task, 0, sizeof(process_t));
@@ -785,10 +846,8 @@ process_t * create_user_process(struct page_directory* pd, void * init, char * t
     
     task->nice = 10;
     task->current_nice = task->nice;
-    task->pqueue = 0x0;
     task->exit_code = 0;
-    pqueue_add(task);
-
+    task->global_status = 
     task->sleep_time = 0;
     task->cpu_time = 0;
     task->last_scheduled = 0;
@@ -870,7 +929,7 @@ void init_process(const char * _init_path, const char * _idle_path, char * tty) 
     }
 #endif
 
-    //disable_debugger();
+    disable_debugger();
 
     __asm__("mov %0, %%rsp\n"
             "mov %1, %%cr3\n"
