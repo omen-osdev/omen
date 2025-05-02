@@ -34,9 +34,38 @@
 #define VMAREA_EXT_GUARD                    0x4
 #define VMAREA_EXT_REQ_SYNC                 0x8
 
-#define WNOHANG                          0x1
-#define WUNTRACED                       0x2
-#define WCONTINUED                       0x4
+//Status format: 
+
+#define _WSTATUS(x)                         ((x) & 0177)
+#define _WSTOPPED                           0177
+#define _WCONTINUED                         0177777
+#define WIFSTOPPED(x)                       (((x) & 0xff) == _WSTOPPED)
+#define WSTOPSIG(x)                         (int)(((unsigned)(x) >> 8) & 0xff)
+#define WIFSIGNALED(x)                      (_WSTATUS(x) != _WSTOPPED && _WSTATUS(x) != 0)
+#define WTERMSIG(x)                         (_WSTATUS(x))
+#define WIFEXITED(x)                        (_WSTATUS(x) == 0)
+#define WEXITSTATUS(x)                      (int)(((unsigned)(x) >> 8) & 0xff)
+#define WIFCONTINUED(x)                     (((x) & _WCONTINUED) == _WCONTINUED)
+#define WCOREFLAG                           0200
+#define WCOREDUMP(x)                        ((x) & WCOREFLAG)
+#define W_EXITCODE(ret, sig)                ((ret) << 8 | (sig))
+#define W_STOPCODE(sig)                     ((sig) << 8 | _WSTOPPED)
+
+#define WREASON_EXIT                        0x01
+#define WREASON_STOP                        0x02
+#define WREASON_CONT                        0x04
+#define WREASON_SIGNAL                      0x08
+
+#define WNOHANG                             0x01
+#define WUNTRACED                           0x02
+#define WCONTINUED                          0x08
+#define WEXITED                             0x04
+#define WSTOPPED                            WUNTRACED
+#define WNOWAIT                             0x10
+#define WTRAPPED                            0x20
+
+#define WAIT_ANY                            (-1)
+#define WAIT_MYGRP                          0
 
 typedef int thread_status_t;
 struct process;
@@ -73,7 +102,10 @@ typedef struct thread {
     uint8_t core_id;
     void* entry;
     thread_status_t status;
-    uint8_t waiting;
+    int waiting;
+    int *waitpid_status_address;
+    int waitpid_status;
+    int waitpid_pid;
     uint8_t syscall_ready; //A thread has to have called sycall_entry to return from a syscall
 } thread_t;
 

@@ -56,7 +56,7 @@ kot's
 #define SYS_SIGACTION           14 ok
 #define SYS_SIGRESTORE          15 no, we use sigreturn
 #define SYS_FORK                16 ok
-#define SYS_WAITPID             17
+#define SYS_WAITPID             17 ok
 #define SYS_EXECVE              18 ok
 #define SYS_GETPID              19 ok
 #define SYS_GETPPID             20 ok
@@ -75,7 +75,7 @@ kot's
 #define SYS_UNLINK_AT           31
 #define SYS_RENAME_AT           32
 #define SYS_PATH_STAT           33
-#define SYS_FD_STAT             34
+#define SYS_FD_STAT             34 ok
 #define SYS_FCNTL               35
 #define SYS_GETCWD              36
 #define SYS_CHDIR               37
@@ -388,8 +388,13 @@ int64_t waitpid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
         return SYSCALL_ERROR;
     }
 
-    return waitpid(thread, pid, status, options);
-
+    int result = waitpid(thread, pid, status, options);
+    if (result == -2) {
+        sched();
+        return get_current_thread()->context->cpu_context->rax;
+    } else {
+        return result;
+    }
 }   
 
 int64_t sched_yield_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
@@ -894,7 +899,17 @@ void global_syscall_handler(cpu_context_t* ctx) {
         int signo;
         struct sigaction * sigact = select_signal(current_thread, &signo);
         if (sigact == NULL) {
-            kprintf("No signal to handle\n");
+            if (current_thread->waiting == 2) {
+                kprintf("Waitpid ready to be handled [PID: %d | TID: %d]\n", current_thread->process->pid, current_thread->id);
+                current_thread->waiting = 0;
+                int * phys = get_physical_address(current_thread->process->vmm, current_thread->waitpid_status_address);
+                if (phys == NULL) {
+                    kprintf("Failed to get physical address\n");
+                    SYSRET(ctx, -1);
+                }
+                *(int*)(to_identity_map(phys)) = current_thread->waitpid_status;
+                SYSRET(ctx, current_thread->waitpid_pid);
+            }
         } else {
             kprintf("Signal ready to be handled [HANDLER: %p | SIGACTION: %p | MASK: %llx | FLAGS: %x | RESTORER: %p]\n", sigact->sa_handler, sigact->sa_sigaction, sigact->sa_mask, sigact->sa_flags, sigact->sa_restorer);
             create_signal_context(current_thread, signo, sigact, ctx);

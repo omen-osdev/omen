@@ -128,6 +128,15 @@ void * get_vdso_base() {
     return (void*)VMM_REGION_U_VDSO;
 }
 
+process_t *get_free_process_slot() {
+    for (int i = 0; i < MAX_PROCESSES; i++) {
+        if (process_list[i].pid == -1) {
+            return &(process_list[i]);
+        }
+    }
+    return 0;
+}
+
 void init_stacks(process_t * task, thread_t * thread, uint64_t size, uint64_t entry) {
     if (size % 0x1000) {
         size = (size + 0x1000) & ~0xfff;
@@ -241,33 +250,70 @@ void restore_signal_context(thread_t * thread, cpu_context_t * ctx) {
     
 }
 
-void awake_parent(thread_t * thread) {
+void awake_parent(thread_t * thread, int status) {
     if (thread->process->parent != NULL) {
         for (int i = 0; i < thread->process->parent->thread_count; i++) {
             thread_t * parent_thread = &(thread->process->parent->threads[i]);
             if (parent_thread->waiting == 1) {
-                parent_thread->waiting = 0;
+                parent_thread->waiting = 2;
+                parent_thread->waitpid_status = status;
+                parent_thread->waitpid_pid = thread->process->pid;
                 wakeup(SLEEP_WAITPID);
             }
         }
     }
 }
 
+int create_waitpid_status(int reason, int data) {
+    /*
+#define _WSTATUS(x)                         ((x) & 0177)
+#define _WSTOPPED                           0177
+#define _WCONTINUED                         0177777
+#define WIFSTOPPED(x)                       (((x) & 0xff) == _WSTOPPED)
+#define WSTOPSIG(x)                         (int)(((unsigned)(x) >> 8) & 0xff)
+#define WIFSIGNALED(x)                      (_WSTATUS(x) != _WSTOPPED && _WSTATUS(x) != 0)
+#define WTERMSIG(x)                         (_WSTATUS(x))
+#define WIFEXITED(x)                        (_WSTATUS(x) == 0)
+#define WEXITSTATUS(x)                      (int)(((unsigned)(x) >> 8) & 0xff)
+#define WIFCONTINUED(x)                     (((x) & _WCONTINUED) == _WCONTINUED)
+#define W_EXITCODE(ret, sig)                ((ret) << 8 | (sig))
+#define W_STOPCODE(sig)                     ((sig) << 8 | _WSTOPPED)
+#define WREASON_EXIT
+#define WREASON_STOP
+#define WREASON_CONT
+#define WREASON_SIGNAL
+*/
+
+    int status = 0;
+    if (reason == WREASON_EXIT) {
+        status = W_EXITCODE(data, 0);
+    } else if (reason == WREASON_STOP) {
+        status = W_STOPCODE(data);
+    } else if (reason == WREASON_CONT) {
+        status = _WCONTINUED;
+    } else if (reason == WREASON_SIGNAL) {
+        status = W_EXITCODE(0, data);
+    }
+
+    return status;
+
+}
+
 void create_signal_context(thread_t * thread, int signo, struct sigaction * sigact, cpu_context_t * ctx) {
 
     if (signo == SIGKILL) {
         thread->process->global_status = PROCESS_STATUS_ZOMBIE;
-        awake_parent(thread);
+        awake_parent(thread, create_waitpid_status(WREASON_SIGNAL, signo));
         return;
     }
     if (signo == SIGSTOP) {
         thread->process->global_status = PROCESS_STATUS_SIGSTOP;
-        awake_parent(thread);
+        awake_parent(thread, create_waitpid_status(WREASON_STOP, signo));
         return;
     }
     if (signo == SIGCONT && thread->process->global_status == PROCESS_STATUS_SIGSTOP) {
         thread->process->global_status = PROCESS_STATUS_SIGCONT;
-        awake_parent(thread);
+        awake_parent(thread, create_waitpid_status(WREASON_CONT, signo));
     }
 
     void * vdso_signal_trampoline = get_signal_trampoline(thread->process);
@@ -403,7 +449,11 @@ process_t * duplicate_process(thread_t * parent_thread) {
     if (process_count >= MAX_PROCESSES) {
         panic("No more processes available\n");
     }
-    process_t * task = &(process_list[process_count++]);
+    process_t * task = get_free_process_slot();
+    if (task == NULL) {
+        panic("No more processes available\n");
+    }
+    process_count++;
     vmarea_sync_all_files(parent);
     memcpy(task, parent, sizeof(process_t));
     task->thread_count = 1;
@@ -415,6 +465,7 @@ process_t * duplicate_process(thread_t * parent_thread) {
     task->current_nice = task->nice;
     task->exit_code = 0;
     task->ppid = parent->pid;
+    task->parent = parent;
     memset(task->threads, 0, sizeof(thread_t) * MAX_THREADS);
     memcpy(&(task->threads[0]), parent_thread, sizeof(thread_t));
     
@@ -582,9 +633,9 @@ uint8_t sched_thread(process_t * task) {
     }
 
     while (
-        task->threads[current_thread_index].status != THREAD_STATUS_READY && 
-        task->threads[current_thread_index].status != THREAD_STATUS_RUNNING &&
-        task->threads[current_thread_index].waiting != 0
+        (task->threads[current_thread_index].status != THREAD_STATUS_READY && 
+        task->threads[current_thread_index].status != THREAD_STATUS_RUNNING) ||
+        task->threads[current_thread_index].waiting == 1
     ) {
         
         if (task->threads[current_thread_index].status == THREAD_STATUS_INTERRUPTIBLE_SLEEP) {
@@ -622,19 +673,6 @@ uint8_t sched_thread(process_t * task) {
     return 1;
 }
 
-void move_processes() {
-    //Iterate over the process list and remove any NULL process by moving the rest to the left
-    for (int i = 0; i < process_count; i++) {
-        if (process_list[i].pid == -1) {
-            for (int j = i; j < process_count - 1; j++) {
-                memcpy(&(process_list[j]), &(process_list[j + 1]), sizeof(process_t));
-            }
-            process_count--;
-            i--;
-        }
-    }
-}
-
 void delete_process(process_t * task) {
     
     if (task->vdso) {
@@ -651,17 +689,19 @@ void delete_process(process_t * task) {
     }
     memset(task, 0, sizeof(process_t));
     task->pid = -1;
-    move_processes();
     kprintf("Process %d deleted\n", task->pid);
 }
 
 int16_t waitpid(thread_t * thread, int pid, int * status, int options) {
     if (pid == -1) {
-        for (int i = 0; i < process_count; i++) {
+        for (int i = 0; i < MAX_PROCESSES; i++) {
+            if (process_list[i].pid == -1) {
+                continue;
+            }
             if (process_list[i].ppid == thread->process->pid) {
                 if (process_list[i].global_status == PROCESS_STATUS_ZOMBIE) {
                     *status = PROCESS_STATUS_ZOMBIE;
-                    delete_process(&(process_list[i]));
+                    //delete_process(&(process_list[i]));
                     return process_list[i].pid;
                 }
                 if (process_list[i].global_status == PROCESS_STATUS_SIGSTOP && (options & WUNTRACED)) {
@@ -705,8 +745,32 @@ int16_t waitpid(thread_t * thread, int pid, int * status, int options) {
 
     //Wait for a process to exit
     thread->waiting = 1;
+    thread->waitpid_status_address = status;
     sleep(thread, SLEEP_WAITPID);
-    sched();
+
+    return -2;
+}
+
+void insert_in_prio_queue(process_t ** prioqueue, int * prio_list_size, process_t * task) {
+    //Insert the process in the queue
+    //Sort the queue by last_scheduled time (oldest first)
+    if (*prio_list_size == 0) {
+        prioqueue[(*prio_list_size)++] = task;
+    } else {
+        int i = 0;
+        while (i < *prio_list_size && prioqueue[i]->last_scheduled < task->last_scheduled) {
+            i++;
+        }
+        for (int j = *prio_list_size; j > i; j--) {
+            prioqueue[j] = prioqueue[j - 1];
+        }
+        prioqueue[i] = task;
+        (*prio_list_size)++;
+
+        if (*prio_list_size > process_count) {
+            panic("Process queue overflow\n");
+        }
+    }
 }
 
 process_t * sched() {
@@ -714,12 +778,19 @@ process_t * sched() {
     process_t * processes[PROCESS_PRIORITIES][process_count];
     memset(processes, 0, sizeof(process_t *) * PROCESS_PRIORITIES * process_count);
     int prio_list_size[PROCESS_PRIORITIES] = {0};
-    for (int i = 0; i < process_count; i++) {
+    for (int i = 0; i < MAX_PROCESSES; i++) {
+        if (process_list[i].pid == -1) {
+            continue;
+        }
         process_list[i].current_nice--;
         if (process_list[i].current_nice < 0) {
             process_list[i].current_nice = 0;
         }
-        processes[process_list[i].current_nice][prio_list_size[process_list[i].current_nice]++] = &(process_list[i]);
+        if (process_list[i].current_nice > PROCESS_PRIORITIES - 1) {
+            process_list[i].current_nice = PROCESS_PRIORITIES - 1;
+        }
+        int nice = process_list[i].current_nice;
+        insert_in_prio_queue(processes[nice], &(prio_list_size[nice]), &(process_list[i]));
     }
 
     //Dump the processes array
@@ -729,30 +800,22 @@ process_t * sched() {
 
         kprintf("PQUEUE %d: ", i);
         for (int j = 0; j < prio_list_size[i]; j++) {
-            kprintf("[PID:%d|TSB:%llu|NICE:%d|CNICE:%d] ", processes[i][j]->pid, processes[i][j]->last_scheduled, processes[i][j]->nice, processes[i][j]->current_nice);
+            kprintf("[PID:%d|TSB:%llu|NICE:%d|CNICE:%d|LS:%d] ", processes[i][j]->pid, processes[i][j]->last_scheduled, processes[i][j]->nice, processes[i][j]->current_nice, processes[i][j]->last_scheduled);
         }
         kprintf("\n");
     }
 
     for (int i = 0; i < PROCESS_PRIORITIES; i++) {
-        process_t * candidate = 0x0;
-        unsigned long long last_scheduled = 99999999999999999;
         for (int j = 0; j < prio_list_size[i]; j++) {
-            if (processes[i][j]->last_scheduled < last_scheduled) {
-                last_scheduled = processes[i][j]->last_scheduled;
-                candidate = processes[i][j];
+            if (sched_thread(processes[i][j])) {
+                kprintf("Chosen candidate [PID:%d|LS:%llu|NICE:%d|CNICE:%d]\n", processes[i][j]->pid, processes[i][j]->last_scheduled, processes[i][j]->nice, processes[i][j]->current_nice);
+                task = processes[i][j];
+                goto found;
             }
         }
-        
-        if (candidate == 0x0)
-            continue;
-
-        if (sched_thread(candidate)) {
-            kprintf("Chosen candidate [PID:%d|TSB:%llu|NICE:%d|CNICE:%d]\n", candidate->pid, candidate->last_scheduled, candidate->nice, candidate->current_nice);
-            task = candidate;
-            break;
-        }
     }
+
+found:
 
     if (task == 0x0)
         panic("No process to schedule\n");
@@ -798,7 +861,7 @@ struct sigaction * select_signal(thread_t * thread, int * signo) {
 }
 
 process_t *get_process_by_pid(int pid) {
-    for (int i = 0; i < process_count; i++) {
+    for (int i = 0; i < MAX_PROCESSES; i++) {
         if (process_list[i].pid == pid) {
             return &(process_list[i]);
         }
@@ -820,6 +883,8 @@ void exit(process_t* task, int error_code) {
         thread->status = THREAD_STATUS_ZOMBIE;
     }
     task->exit_code = error_code;
+    task->global_status = PROCESS_STATUS_ZOMBIE;
+    awake_parent(&(task->threads[0]), create_waitpid_status(WREASON_EXIT, error_code));
     sched();
 }
 
@@ -829,7 +894,11 @@ void thread_exit(thread_t * thread) {
 }
 
 process_t * create_user_process(struct page_directory* pd, void * init, char * tty) {
-    process_t * task = &(process_list[process_count++]);
+    process_t * task = get_free_process_slot();
+    if (task == 0x0) {
+        panic("No more processes available\n");
+    }
+    process_count++;
     memset(task, 0, sizeof(process_t));
 
     task->vmm = vmm_copy_kernel(pd);
@@ -904,6 +973,10 @@ void * get_signal_trampoline(process_t * task) {
 }
 
 void init_process(const char * _init_path, const char * _idle_path, char * tty) {
+    for (int i = 0; i < MAX_PROCESSES; i++) {
+        process_list[i].pid = -1;
+    }
+    process_count = 0;
     process_t * init_proc = create_user_process(get_pml4(), (void*)_idle, tty);
     init_proc->pid = 0;
     current_process = init_proc;
