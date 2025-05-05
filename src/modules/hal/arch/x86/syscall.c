@@ -39,8 +39,8 @@ kot's
 #define SYS_LOG                 0 no, unnecessary
 #define SYS_ARCH_PRCTL          1 ok
 #define SYS_GET_TID             2 ok
-#define SYS_FUTEX_WAIT          3
-#define SYS_FUTEX_WAKE          4
+#define SYS_FUTEX_WAIT          3 not implemented
+#define SYS_FUTEX_WAKE          4 not implemented
 
 #define SYS_MMAP                5 ok
 #define SYS_MUNMAP              6 ok
@@ -48,7 +48,7 @@ kot's
 
 #define SYS_EXIT                8 ok
 #define SYS_THREAD_EXIT         9 ok
-#define SYS_CLOCK_GET           10 ok (gettimeofday)
+#define SYS_CLOCK_GET           10 ok
 #define SYS_CLOCK_GETRES        11 ok
 #define SYS_SLEEP               12 ok
 
@@ -80,16 +80,16 @@ kot's
 #define SYS_GETCWD              36
 #define SYS_CHDIR               37
 
-#define SYS_SOCKET              38
-#define SYS_BIND                39
-#define SYS_CONNECT             40
-#define SYS_LISTEN              41
-#define SYS_ACCEPT              42
-#define SYS_SOCKET_SEND         43
-#define SYS_SOCKET_RECV         44
-#define SYS_SOCKET_PAIR         45
-#define SYS_PPOLL               46
-#define SYS_SELECT              47
+#define SYS_SOCKET              38 no
+#define SYS_BIND                39 no
+#define SYS_CONNECT             40 no
+#define SYS_LISTEN              41 no
+#define SYS_ACCEPT              42 no
+#define SYS_SOCKET_SEND         43 no
+#define SYS_SOCKET_RECV         44 no
+#define SYS_SOCKET_PAIR         45 no
+#define SYS_PPOLL               46 no
+#define SYS_SELECT              47 no
 
 */
 
@@ -450,7 +450,7 @@ int64_t arch_prctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
         case ARCH_GET_CPUID:
             return -ENODEV;
         case ARCH_SET_FS:
-        th->context->fs_base = (uint64_t)arg2;
+            th->context->fs_base = (uint64_t)arg2;
             break;
         case ARCH_GET_FS: {
             unsigned long * fs_base = (unsigned long *)(unsigned long)arg2;
@@ -459,6 +459,7 @@ int64_t arch_prctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
             }
 
             *fs_base = (unsigned long)th->context->fs_base;
+            setFsBase(th->context->fs_base);
             break;
         }
         case ARCH_SET_GS:
@@ -510,6 +511,14 @@ int64_t getppid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
     kprintf("[PID: %d | TID %d] GETPPID_SYSCALL()\n", thread->process->pid, thread->id);
     return thread->process->parent->pid;
+}
+
+int64_t log_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    char * message = (char *)SYSCALL_ARG0(ctx);
+    uint64_t length = SYSCALL_ARG1(ctx);
+    kprintf("[PID: %d | TID %d] LOG_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, message, length);
+    kprintf("Log message: %s\n", message);
+    return SYSCALL_SUCCESS;
 }
 
 //void * mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);

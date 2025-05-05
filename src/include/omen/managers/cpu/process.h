@@ -4,6 +4,7 @@
 #include <generic/config.h>
 #include <omen/hal/hal.h>
 #include <omen/libraries/std/stdint.h>
+#include <omen/libraries/std/path.h>
 #include <omen/managers/mem/vmm.h>
 #include <omen/libraries/allocators/heap_allocator.h>
 #include <omen/managers/cpu/signal.h>
@@ -77,6 +78,15 @@ typedef struct context {
     uint64_t fs_base;
     uint64_t gs_base;
 } context_t;
+
+typedef struct fs_struct {
+    //int users;
+    //Spinlocks...
+    //int umask;
+    //int in_exec;
+    struct path root;
+    struct path pwd;
+} fs_struct_t;
 
 typedef struct thread {
     process_t *process;

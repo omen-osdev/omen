@@ -81,6 +81,14 @@ struct vfs_mount {
     struct vfs_mount * next;
 };
 
+struct vfs_dentry {
+    uint32_t inode;                 /* Inode number */
+    uint16_t rec_len;               /* Directory entry length */
+    uint8_t  name_len;              /* Name length */
+    uint8_t  file_type;             /* File type */
+    char     name[255];   /* File name */ //TODO: CONVERT THIS TO A POINTER
+} __attribute__((packed));
+
 void dump_mounts();
 uint8_t iterate_mounts(uint8_t (*callback)(struct vfs_mount*, void * data, void* passthrough), void * data, void* passthrough);
 struct vfs_mount* get_mount_from_path(const char* path, char* native_path);
