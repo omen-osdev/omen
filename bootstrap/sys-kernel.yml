@@ -1,0 +1,18 @@
+packages:
+  - name: kernel
+    tools_required:
+      - host-gcc
+      - host-binutils
+    source:
+      subdir: 'src'
+    build:
+      - args: 
+        - 'make'
+        - '-C'
+        - '@THIS_SOURCE_DIR@/buildenv/'
+        - 'kernel'
+        environ:
+          CC: "@OPTION:cc@"
+          CXX: "@OPTION:cxx@"
+          LD: "@OPTION:ld@"
+          ASMC: "@OPTION:asmc@"

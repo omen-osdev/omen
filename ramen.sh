@@ -15,7 +15,16 @@ install_deps() {
         case $ID in
             ubuntu|debian)
                 say "Installing dependencies for $ID"
+                sudo apt install -y wget
+                sudo wget -qO /usr/local/bin/ninja.gz https://github.com/ninja-build/ninja/releases/latest/download/ninja-linux.zip
+                sudo gunzip /usr/local/bin/ninja.gz
+                sudo chmod +x /usr/local/bin/ninja
                 sudo apt install -y build-essential qemu-system qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
+                sudo apt install -y rsync qemu-utils meson python3 python3-pip python3-setuptools python3-wheel ninja-build cmake sed m4 texinfo libgmp-dev bison flex curl
+                sudo pip3 install --upgrade pip
+                sudo pip3 install --break-system-packages pillow
+                sudo pip3 install --break-system-packages meson
+                sudo pip3 install --break-system-packages xbstrap
                 ;;
             arch)
                 say "Installing dependencies for Arch Linux"
@@ -51,36 +60,36 @@ install_deps() {
 }
 
 say Run Automatically o\(MEN\), automator for newbies
-say Dependencies for this script are bash, git and sudo.
-say First of all, go to github and fork this repo: https://github.com/omen-osdev/omen.git
-read -p "Press enter when you are ready"
-say Now enter your github username \(ex. omen-osdev\)
-read username
-say Now enter the name of the repo you just forked \(ex. omen\)
-read reponame
+#say Dependencies for this script are bash, git and sudo.
+#say First of all, go to github and fork this repo: https://github.com/omen-osdev/omen.git
+#read -p "Press enter when you are ready"
+#say Now enter your github username \(ex. omen-osdev\)
+#read username
+#say Now enter the name of the repo you just forked \(ex. omen\)
+#read reponame
 
-cloneuri="git@github.com:$username/$reponame.git"
-git clone $cloneuri
-cd $reponame
+#cloneuri="git@github.com:$username/$reponame.git"
+#git clone $cloneuri
+#cd $reponame
 
-git checkout develop
-say Now name your new feature branch, please include feature/ at the beginning \(ex: feature/your-feature-name\)
-say If you are just seeing the code atm, leave this empty
-read featurename
-if [ -z "$featurename" ]
-then
-    say "No feature name provided, skipping branch creation"
-else
-    git checkout -b $featurename
-fi
+#git checkout develop
+#say Now name your new feature branch, please include feature/ at the beginning \(ex: feature/your-feature-name\)
+#say If you are just seeing the code atm, leave this empty
+#read featurename
+#if [ -z "$featurename" ]
+#then
+#    say "No feature name provided, skipping branch creation"
+#else
+#    git checkout -b $featurename
+#fi
 
 say We will now install the dependencies.
 
 install_deps
 
-read -p "If everything was ok, press enter to setup the project"
-cd omen
-make setup-gpt
-read -p "If everything was ok, press enter to compile and run"
-make gpt
-say Everything is ready for you to start fiddling, just open the omen folder in your favourite IDE
+#read -p "If everything was ok, press enter to setup the project"
+#cd omen
+#make setup-gpt
+#read -p "If everything was ok, press enter to compile and run"
+#make debugpt-wsl
+#say Everything is ready for you to start fiddling, just open the omen folder in your favourite IDE
