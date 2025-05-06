@@ -157,7 +157,8 @@ void boot_startup() {
     kprintf("Enabling interrupts...\n");
     __asm__("cli");
     unmask_interrupt(PIT_IRQ);
-    vfs_dir_list("/");
+    vfs_dir_list("/usr/lib/");
+    
     init_process("/export/minit.elf", "/export/idle.elf", vfs_tty);
     
     panic("¡Returned from the scheduler!\n");

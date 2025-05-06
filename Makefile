@@ -35,11 +35,15 @@ setup:
 	mkdir -p "$(DEPENDENCIES_DIR)"
 
 setup-gpt:
+	@xbstrap init .
 	@make -C "$(BUILDENV_DIR)" setup
 
 cleansetup:
-	rm -rf "$(BUILD_DIR)"
-	rm -rf "$(DEPENDENCIES_DIR)"
+	@rm -rf .xbstrap sysroot tools bundled pkg-builds tool-builds packages
+	@rm -f bootstrap.link
+	@find . -name "*.xbstrap" -type f -delete
+	@rm -rf "$(BUILD_DIR)"
+	@rm -rf "$(DEPENDENCIES_DIR)"
 	@make -C $(BUILDENV_DIR) cleansetup
 
 clean:
@@ -63,7 +67,11 @@ debugpt:
 debugpt-wsl:
 	@sudo make -C $(BUILDENV_DIR) clean
 	@sudo make -C $(BUILDENV_DIR) cprogs
-	@xbstrap install --all
+	@xbstrap build --all
+	@objcopy --only-keep-debug ./sysroot/usr/lib/ld.so ./progs/sym/ld.so.sym
+	@make -C $(BUILDENV_DIR) debugpt-wsl
+
+rerun:
 	@make -C $(BUILDENV_DIR) debugpt-wsl
 
 run:

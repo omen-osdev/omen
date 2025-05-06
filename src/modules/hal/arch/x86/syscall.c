@@ -516,8 +516,10 @@ int64_t getppid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 int64_t log_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char * message = (char *)SYSCALL_ARG0(ctx);
     uint64_t length = SYSCALL_ARG1(ctx);
+    enable_debugger();
     kprintf("[PID: %d | TID %d] LOG_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, message, length);
     kprintf("Log message: %s\n", message);
+    disable_debugger();
     return SYSCALL_SUCCESS;
 }
 
@@ -871,7 +873,8 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [229] = clock_getres_syscall_handler,
     [230 ... 335] = undefined_syscall_handler,
     [336] = thread_exit_syscall_handler,
-    [337 ... 511] = undefined_syscall_handler
+    [337] = log_syscall_handler,
+    [338 ... 511] = undefined_syscall_handler
 };
 
 void global_syscall_handler(cpu_context_t* ctx) {

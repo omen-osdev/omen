@@ -10,7 +10,7 @@ using sc_word_t = long;
 /* list */
 #define SYSCALL_COUNT 1
 
-#define SYS_LOG 0
+#define SYS_LOG 337
 
 
 /* extern functions */

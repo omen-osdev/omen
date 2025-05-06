@@ -359,7 +359,6 @@ struct loaded_elf* elf_load_elf(struct page_directory* root, uint8_t * buffer, u
             }
         }
 
-        kfree(ld_buffer);
         struct loaded_elf * ld = kmalloc(sizeof(struct loaded_elf));
         if (!ld) {
             panic("Could not allocate loaded elf\n");

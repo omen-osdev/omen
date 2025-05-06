@@ -84,7 +84,7 @@ int64_t ext2_read_indirect_blocks(struct ext2_partition* partition, uint32_t * b
 
         int64_t read_result = ext2_read_direct_blocks(partition, indirect_block, entries_per_block, destination_buffer, count - blocks_read , skip);
         kfree(indirect_block);
-        if (read_result == EXT2_READ_FAILED || read_result == 0) return read_result;
+        if (read_result == EXT2_READ_FAILED || (read_result == 0 && *skip <= 0)) return read_result;
 
         destination_buffer += (read_result * block_size);
         blocks_read += read_result;
@@ -113,7 +113,7 @@ int64_t ext2_read_double_indirect_blocks(struct ext2_partition* partition, uint3
         int64_t read_result = ext2_read_indirect_blocks(partition, double_indirect_block, entries_per_block, destination_buffer, count - blocks_read, skip);
         kfree(double_indirect_block);
 
-        if (read_result == EXT2_READ_FAILED || read_result == 0) return read_result;
+        if (read_result == EXT2_READ_FAILED || (read_result == 0 && *skip <= 0))  return read_result;
 
 
         destination_buffer += (read_result * block_size);
@@ -144,7 +144,7 @@ int64_t ext2_read_triple_indirect_blocks(struct ext2_partition* partition, uint3
         int64_t read_result = ext2_read_double_indirect_blocks(partition, triple_indirect_block, entries_per_block, destination_buffer, count - blocks_read, skip);
         kfree(triple_indirect_block);
 
-        if (read_result == EXT2_READ_FAILED || read_result == 0) return read_result;
+        if (read_result == EXT2_READ_FAILED || (read_result == 0 && *skip <= 0))  return read_result;
 
         destination_buffer += (read_result * block_size);
         blocks_read += read_result;

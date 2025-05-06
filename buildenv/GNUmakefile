@@ -24,7 +24,6 @@ ASMC := nasm
 #WSLHOSTIP := $(shell ipconfig.exe | grep 'WSL' -a -A4 | tail -n1 | cut -d":" -f 2 | tail -n1 | sed -e 's/\s*//g')
 #########################LAPTOP SETTINGS###################################
 QEMU := qemu-system-x86_64
-GDB := gdb
 WSLHOSTIP := 127.0.0.1
 ###########################################################################
 MNTDIR := /mnt/omen
@@ -82,6 +81,8 @@ PROGSSYMDIR := $(ABSDIR)/progs/sym
 PROGS := $(wildcard $(PROGSDIR)/*)
 SYMDIR := /mnt/c/omen/
 SYSROOT := $(ABSDIR)/sysroot
+
+GDB := $(ABSDIR)/tools/host-binutils/bin/x86_64-omen-gdb
 
 # /mnt/omen
 SYSDIR := $(MNTDIR)/system
