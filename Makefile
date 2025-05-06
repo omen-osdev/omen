@@ -61,6 +61,9 @@ debugpt:
 	@make -C $(BUILDENV_DIR) debugpt
 
 debugpt-wsl:
+	@sudo make -C $(BUILDENV_DIR) clean
+	@sudo make -C $(BUILDENV_DIR) cprogs
+	@xbstrap install --all
 	@make -C $(BUILDENV_DIR) debugpt-wsl
 
 run:

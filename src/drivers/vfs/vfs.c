@@ -12,6 +12,7 @@ uint16_t vfs_root_size = 0;
 struct vfs_devmap vfs_root[VFS_MAX_DEVICES];
 struct vfs_file_system_type * file_system_type_list_head;
 struct vfs_mount * mount_list_head;
+struct vfs_mount * main_mount;
 
 struct vfs_mount * init_mount_header() {
     struct vfs_mount * mount = kmalloc(sizeof(struct vfs_mount));
@@ -280,6 +281,15 @@ int is_safe_for_removing(const char* path, uint8_t force) {
 
 struct vfs_mount* get_mount_from_path(const char* path, char* native_path) {
     struct vfs_mount * mount = mount_list_head;
+    if (path[0] == 0) {
+        memset(native_path, 0, strlen(path) + 1);
+        return main_mount;
+    } else if (path[0] == '/') {
+        strncpy(native_path, path, strlen(path));
+        native_path[strlen(path)] = 0;
+        return main_mount;
+    }
+    
     while (mount != 0 && mount->device != 0 && mount->fst != 0 && mount->partition != 0) {
         uint32_t mountpoint_len = strlen(mount->partition->name);
         if (strncmp(mount->partition->name, path, mountpoint_len) == 0) {
@@ -290,6 +300,17 @@ struct vfs_mount* get_mount_from_path(const char* path, char* native_path) {
         mount = mount->next;
     }
     return 0;
+}
+
+void set_main_mount(const char * mountname) {
+    struct vfs_mount * mount = mount_list_head;
+    while (mount != 0 && mount->device != 0 && mount->fst != 0 && mount->partition != 0) {
+        if (strcmp(mount->partition->name, mountname) == 0) {
+            main_mount = mount;
+            return;
+        }
+        mount = mount->next;
+    }
 }
 
 void detect_partition_fs() {

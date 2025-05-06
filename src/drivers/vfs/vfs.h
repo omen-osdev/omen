@@ -97,5 +97,6 @@ char* get_full_path_from_dir(int fd);
 char* get_full_path_from_dev(int fd);
 int is_safe_for_removing(const char* path, uint8_t force);
 void register_filesystem(struct vfs_compatible *);
+void set_main_mount(const char * mountname);
 void probe_fs();
 #endif

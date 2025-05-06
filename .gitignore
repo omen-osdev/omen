@@ -7,3 +7,12 @@ dependencies/
 **/compile_commands.json
 .vscode/
 *.gdb
+*.xbstrap
+bootstrap.link
+packages
+pkg-builds
+tool-builds
+bundled
+.xbstrap
+sysroot
+tools

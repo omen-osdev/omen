@@ -55,6 +55,7 @@ if not no_headers
 		'include/abi-bits/socklen_t.h',
 		'include/abi-bits/statfs.h',
 		'include/abi-bits/statvfs.h',
+		'include/abi-bits/statx.h',
 		'include/abi-bits/ioctls.h',
 		'include/abi-bits/xattr.h',
 		subdir: 'abi-bits'

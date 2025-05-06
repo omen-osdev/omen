@@ -9,7 +9,7 @@ packages:
       - args: 
         - 'make'
         - '-C'
-        - '@THIS_SOURCE_DIR@/buildenv/'
+        - '@SOURCE_ROOT@/buildenv/'
         - 'kernel'
         environ:
           CC: "@OPTION:cc@"

@@ -144,6 +144,7 @@ void boot_startup() {
     probe_fs();
     kprintf("VFS startup complete...\n");
     vfs_lsdisk();
+    set_main_mount("hdap2");
     char vfs_tty[32];
     sprintf(vfs_tty, "%sp0/", tty); 
 
@@ -156,7 +157,8 @@ void boot_startup() {
     kprintf("Enabling interrupts...\n");
     __asm__("cli");
     unmask_interrupt(PIT_IRQ);
-    init_process("hdap2/export/init.elf", "hdap2/export/idle.elf", vfs_tty);
+    vfs_dir_list("/");
+    init_process("/export/minit.elf", "/export/idle.elf", vfs_tty);
     
     panic("¡Returned from the scheduler!\n");
 }

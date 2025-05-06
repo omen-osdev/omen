@@ -1,61 +1,61 @@
-From 2a9b8755f439f837ac68551d819ebe16e90c918f Mon Sep 17 00:00:00 2001
-From: xabier iglesias <xabier.iglesias.perez@udc.es>
-Date: Tue, 6 May 2025 00:13:35 +0200
-Subject: [PATCH] Toolchain for omen
+From 495457e171527bb311f32f491d4aebce51796958 Mon Sep 17 00:00:00 2001
+From: tretornesp <xabier.iglesias.perez@udc.es>
+Date: Tue, 6 May 2025 09:56:00 +0200
+Subject: [PATCH 1/1] Patch for omen
 
 ---
  config.sub                  |  4 ++--
  fixincludes/mkfixinc.sh     |  1 +
  gcc/config.gcc              | 12 ++++++++++++
  gcc/config/omen.h           | 30 ++++++++++++++++++++++++++++++
- libgcc/config.host          |  9 +++++++++
+ libgcc/config.host          |  8 ++++++++
  libgcc/libgcov.h            |  1 +
  libstdc++-v3/crossconfig.m4 | 12 ++++++++++++
- libtool.m4                  | 14 ++++++++++++++
- 8 files changed, 81 insertions(+), 2 deletions(-)
+ libtool.m4                  | 12 ++++++++++++
+ 8 files changed, 78 insertions(+), 2 deletions(-)
  create mode 100644 gcc/config/omen.h
 
 diff --git a/config.sub b/config.sub
-index 38f3d037a..bfc6ffb28 100755
+index 38f3d037a78..4c4bdf1815d 100755
 --- a/config.sub
 +++ b/config.sub
 @@ -145,7 +145,7 @@ case $1 in
-                        nto-qnx* | linux-* | uclinux-uclibc* \
-                        | uclinux-gnu* | kfreebsd*-gnu* | knetbsd*-gnu* | netbsd*-gnu* \
-                        | netbsd*-eabi* | kopensolaris*-gnu* | cloudabi*-eabi* \
--                       | storm-chaos* | os2-emx* | rtmk-nova*)
-+                       | storm-chaos* | os2-emx* | rtmk-nova* | omen*)
-                                basic_machine=$field1
-                                basic_os=$maybe_os
-                                ;;
-@@ -1748,7 +1748,7 @@ case $os in
-             | skyos* | haiku* | rdos* | toppers* | drops* | es* \
-             | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
-             | midnightbsd* | amdhsa* | unleashed* | emscripten* | wasi* \
--            | nsk* | powerunix* | genode* | zvmoe* | qnx* | emx* | zephyr* \
-+            | nsk* | powerunix* | genode* | zvmoe* | qnx* | emx* | zephyr* | omen* \
-             | fiwix* )
-                ;;
-        # This one is extra strict with allowed versions
+ 			nto-qnx* | linux-* | uclinux-uclibc* \
+ 			| uclinux-gnu* | kfreebsd*-gnu* | knetbsd*-gnu* | netbsd*-gnu* \
+ 			| netbsd*-eabi* | kopensolaris*-gnu* | cloudabi*-eabi* \
+-			| storm-chaos* | os2-emx* | rtmk-nova*)
++			| storm-chaos* | os2-emx* | rtmk-nova* | omen*)
+ 				basic_machine=$field1
+ 				basic_os=$maybe_os
+ 				;;
+@@ -1749,7 +1749,7 @@ case $os in
+ 	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
+ 	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | wasi* \
+ 	     | nsk* | powerunix* | genode* | zvmoe* | qnx* | emx* | zephyr* \
+-	     | fiwix* )
++	     | fiwix* | omen*)
+ 		;;
+ 	# This one is extra strict with allowed versions
+ 	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)
 diff --git a/fixincludes/mkfixinc.sh b/fixincludes/mkfixinc.sh
-index 7112f4dcd..eb71b5f05 100755
+index df90720b716..82229934b16 100755
 --- a/fixincludes/mkfixinc.sh
 +++ b/fixincludes/mkfixinc.sh
 @@ -11,6 +11,7 @@ target=fixinc.sh
-
+ 
  # Check for special fix rules for particular targets
  case $machine in
 +    x86_64-*-omen* | \
      i?86-*-cygwin* | \
-     *-mingw32* | \
-     powerpc-*-eabisim* | \
+     i?86-*-mingw32* | \
+     x86_64-*-mingw32* | \
 diff --git a/gcc/config.gcc b/gcc/config.gcc
-index 40b50dc96..5f3aa697d 100644
+index 648b3dc2110..766259e86d9 100644
 --- a/gcc/config.gcc
 +++ b/gcc/config.gcc
-@@ -879,6 +879,15 @@ case ${target} in
-   rust_target_objs="${rust_target_objs} freebsd-rust.o"
-   target_has_targetrustm=yes
+@@ -840,6 +840,15 @@ case ${target} in
+   tmake_file="${tmake_file} t-freebsd"
+   target_has_targetdm=yes
    ;;
 +*-*-omen*)
 +  extra_options="$extra_options gnu-user.opt"
@@ -68,25 +68,25 @@ index 40b50dc96..5f3aa697d 100644
 +  ;;
  *-*-fuchsia*)
    native_system_header_dir=/include
-   tmake_file="t-fuchsia"
-@@ -2320,6 +2329,9 @@ i[34567]86-*-mingw* | x86_64-*-mingw*)
-                        ;;
-        esac
-        ;;
+   ;;
+@@ -2214,6 +2223,9 @@ i[34567]86-*-mingw* | x86_64-*-mingw*)
+ 			;;
+ 	esac
+ 	;;
 +x86_64-*-omen*)
-+       tm_file="${tm_file} i386/unix.h i386/att.h elfos.h gnu-user.h glibc-stdint.h i386/x86-64.h i386/gnu-user-common.h i386/gnu-user64.h omen.h"
-+       ;;
++	tm_file="${tm_file} i386/unix.h i386/att.h elfos.h gnu-user.h glibc-stdint.h i386/x86-64.h i386/gnu-user-common.h i386/gnu-user64.h omen.h"
++	;;
  x86_64-*-fuchsia*)
-        tmake_file="${tmake_file} i386/t-x86_64-elf"
-        tm_file="${tm_file} i386/unix.h i386/att.h elfos.h newlib-stdint.h i386/i386elf.h i386/x86-64.h fuchsia.h"
+ 	tmake_file="${tmake_file} i386/t-x86_64-elf"
+ 	tm_file="${tm_file} i386/unix.h i386/att.h elfos.h newlib-stdint.h i386/i386elf.h i386/x86-64.h fuchsia.h"
 diff --git a/gcc/config/omen.h b/gcc/config/omen.h
 new file mode 100644
-index 000000000..ed63986aa
+index 00000000000..6d4796b3c4f
 --- /dev/null
 +++ b/gcc/config/omen.h
 @@ -0,0 +1,30 @@
-+#undef TARGET_omen
-+#define TARGET_omen 1
++#undef TARGET_OMEN
++#define TARGET_OMEN 1
 +
 +#undef LIB_SPEC
 +#define LIB_SPEC "-lc -lm"
@@ -117,14 +117,13 @@ index 000000000..ed63986aa
 +    } while (0);
 \ No newline at end of file
 diff --git a/libgcc/config.host b/libgcc/config.host
-index 6a88ee5a2..4960dc73c 100644
+index 9d7212028d0..876ed4943e1 100644
 --- a/libgcc/config.host
 +++ b/libgcc/config.host
-@@ -310,6 +310,12 @@ case ${host} in
+@@ -281,6 +281,11 @@ case ${host} in
    tmake_file="$tmake_file t-crtstuff-pic t-libgcc-pic t-eh-dw2-dip t-slibgcc t-slibgcc-fuchsia"
    extra_parts="crtbegin.o crtend.o"
    ;;
-+
 +*-*-omen*)
 +  extra_parts="$extra_parts crti.o crtbegin.o crtbeginS.o crtend.o crtendS.o crtn.o"
 +  tmake_file="$tmake_file t-crtstuff-pic"
@@ -133,18 +132,18 @@ index 6a88ee5a2..4960dc73c 100644
  *-*-linux* | frv-*-*linux* | *-*-kfreebsd*-gnu | *-*-gnu* | *-*-kopensolaris*-gnu | *-*-uclinuxfdpiceabi)
    tmake_file="$tmake_file t-crtstuff-pic t-libgcc-pic t-eh-dw2-dip t-slibgcc t-slibgcc-gld t-slibgcc-elf-ver t-linux"
    extra_parts="crtbegin.o crtbeginS.o crtbeginT.o crtend.o crtendS.o"
-@@ -767,6 +773,9 @@ x86_64-*-elf* | x86_64-*-rtems*)
+@@ -715,6 +720,9 @@ x86_64-*-elf* | x86_64-*-rtems*)
  x86_64-*-fuchsia*)
-        tmake_file="$tmake_file t-libgcc-pic"
-        ;;
+ 	tmake_file="$tmake_file t-libgcc-pic"
+ 	;;
 +x86_64-*-omen*)
-+       tmake_file="$tmake_file i386/t-crtstuff"
-+       ;;
++	tmake_file="$tmake_file i386/t-crtstuff"
++	;;
  i[34567]86-*-dragonfly*)
-        tmake_file="${tmake_file} i386/t-dragonfly i386/t-crtstuff"
-        md_unwind_header=i386/dragonfly-unwind.h
+ 	tmake_file="${tmake_file} i386/t-dragonfly i386/t-crtstuff"
+ 	md_unwind_header=i386/dragonfly-unwind.h
 diff --git a/libgcc/libgcov.h b/libgcc/libgcov.h
-index 3d7d52afd..9877218d8 100644
+index 92df440d401..320f3b50021 100644
 --- a/libgcc/libgcov.h
 +++ b/libgcc/libgcov.h
 @@ -44,6 +44,7 @@
@@ -152,17 +151,17 @@ index 3d7d52afd..9877218d8 100644
  #include "libgcc_tm.h"
  #include "gcov.h"
 +#include <stdint.h>
-
+ 
  #if HAVE_SYS_MMAN_H
  #include <sys/mman.h>
 diff --git a/libstdc++-v3/crossconfig.m4 b/libstdc++-v3/crossconfig.m4
-index b3269cb88..7bab6c39c 100644
+index b3269cb88e0..7e43674987a 100644
 --- a/libstdc++-v3/crossconfig.m4
 +++ b/libstdc++-v3/crossconfig.m4
-@@ -136,6 +136,18 @@ case "${host}" in
+@@ -135,6 +135,18 @@ case "${host}" in
+     AC_CHECK_FUNCS(sockatmark)
      AC_CHECK_FUNCS(uselocale)
      ;;
-
 +  *-omen*)
 +    GLIBCXX_CHECK_COMPILER_FEATURES
 +    GLIBCXX_CHECK_LINKER_FEATURES
@@ -175,17 +174,17 @@ index b3269cb88..7bab6c39c 100644
 +    AC_CHECK_FUNCS(timespec_get)
 +    ;;
 +
+ 
    *-fuchsia*)
      SECTION_FLAGS='-ffunction-sections -fdata-sections'
-     AC_SUBST(SECTION_FLAGS)
 diff --git a/libtool.m4 b/libtool.m4
-index add2d4a1e..3ee5f657a 100644
+index b92e284d9f9..0e4ebc9ee85 100644
 --- a/libtool.m4
 +++ b/libtool.m4
-@@ -2568,6 +2568,16 @@ linux* | k*bsd*-gnu | kopensolaris*-gnu | gnu* | uclinuxfdpiceabi)
+@@ -2490,6 +2490,15 @@ linux* | k*bsd*-gnu | kopensolaris*-gnu | gnu* | uclinuxfdpiceabi)
+   # assume the GNU/Linux dynamic linker is in use.
    dynamic_linker='GNU/Linux ld.so'
    ;;
-
 +omen*)
 +  version_type=linux
 +  need_lib_prefix=no
@@ -195,20 +194,19 @@ index add2d4a1e..3ee5f657a 100644
 +  shlibpath_var=LD_LIBRARY_PATH
 +  hardcode_into_libs=yes
 +  ;;
-+
+ 
  netbsd*)
    version_type=sunos
-   need_lib_prefix=no
-@@ -3186,6 +3196,10 @@ linux* | k*bsd*-gnu | kopensolaris*-gnu | uclinuxfdpiceabi)
+@@ -3108,6 +3117,9 @@ irix5* | irix6* | nonstopux*)
+ linux* | k*bsd*-gnu | kopensolaris*-gnu | uclinuxfdpiceabi)
    lt_cv_deplibs_check_method=pass_all
    ;;
-
 +omen*)
 +  lt_cv_deplibs_check_method=pass_all
 +  ;;
-+
+ 
  netbsd*)
    if echo __ELF__ | $CC -E - | $GREP __ELF__ > /dev/null; then
-     lt_cv_deplibs_check_method='match_pattern /lib[[^/]]+(\.so\.[[0-9]]+\.[[0-9]]+|_pic\.a)$'
---
-2.34.1
+-- 
+2.43.0
+

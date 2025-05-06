@@ -9,9 +9,9 @@ sources:
   - name: gcc
     subdir: 'bundled'
     git: 'git://gcc.gnu.org/git/gcc.git'
-    tag: 'releases/gcc-15.1.0'
+    tag: 'releases/gcc-13.2.0'
     patch-path-strip: 0
-    version: '15.1.0'
+    version: '13.2.0'
     tools_required:
       - host-autoconf-v2.69
       - host-automake-v1.16

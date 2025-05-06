@@ -31,7 +31,7 @@ void vfs_normalize_path(char * path) {
         }
     }
 
-    //Remove trailing slashes and dots
+    //Remove trailing slashes and dots unless the path is /
     while (path_ptr2 != path) {
         path_ptr2--;
         if (*path_ptr2 != '/' && *path_ptr2 != '.') {

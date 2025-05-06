@@ -21,7 +21,7 @@ install_deps() {
                 sudo chmod +x /usr/local/bin/ninja
                 sudo apt install -y build-essential qemu-system qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
                 sudo apt install -y rsync qemu-utils meson python3 python3-pip python3-setuptools python3-wheel ninja-build cmake sed m4 texinfo libgmp-dev bison flex curl
-                sudo pip3 install --upgrade pip
+                sudo pip3 install --break-system-packages --upgrade pip 
                 sudo pip3 install --break-system-packages pillow
                 sudo pip3 install --break-system-packages meson
                 sudo pip3 install --break-system-packages xbstrap

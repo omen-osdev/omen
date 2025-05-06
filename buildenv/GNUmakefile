@@ -81,6 +81,7 @@ PROGSDATADIR := $(ABSDIR)/progs/data
 PROGSSYMDIR := $(ABSDIR)/progs/sym
 PROGS := $(wildcard $(PROGSDIR)/*)
 SYMDIR := /mnt/c/omen/
+SYSROOT := $(ABSDIR)/sysroot
 
 # /mnt/omen
 SYSDIR := $(MNTDIR)/system
@@ -218,7 +219,7 @@ setup:
 	@echo set confirm on >> $(ABSDIR)/$(GDBCFG)
 	@echo end >> $(ABSDIR)/$(GDBCFG)
 	@echo end >> $(ABSDIR)/$(GDBCFG)
-	@echo adds init >> $(ABSDIR)/$(GDBCFG)
+#	@echo adds init >> $(ABSDIR)/$(GDBCFG)
 	@echo b main >> $(ABSDIR)/$(GDBCFG)
 	@echo b $(KERNEL_ENTRY) >> $(ABSDIR)/$(GDBCFG)
 	@echo c >> $(ABSDIR)/$(GDBCFG)
@@ -293,6 +294,7 @@ buildimggpt_second_phase:
 	@echo F32 data files created, creating ext2 data files
 	@mount $(LOOP_DEV_PATH)p3 $(DATDIR)
 	@cp -r $(PROGSBUILDDIR) $(DATDIR)
+	@cp -r $(SYSROOT)/* $(DATDIR)
 	@cp -r $(PROGSDATADIR) $(DATDIR)
 	@tree $(DATDIR)
 	@umount $(DATDIR)
@@ -306,8 +308,9 @@ buildimggpt_second_phase:
 buildimggpt:
 #if $(BUILDDIR)/$(LOCKFILE), call cleanup
 	@if [ -f $(BUILDDIR)/$(LOCKFILE) ]; then \
-		echo "Lockfile exists, cleaning up..."; \
-		make cleanup; \
+		echo "Lockfile exists, exiting..."; \
+		echo "Please run 'make cleanup' to remove the lockfile"; \
+		exit 1; \
 	fi
 	rm -f $(BUILDDIR)/$(LOCKFILE)
 	@echo "Building GPT..."
@@ -339,10 +342,8 @@ debugpt:
 	tmux split-window -h '$(GDB) $(GDBFLAGS)' & $(QEMU) -S -s $(QFLAGSEXP)$(ISODIR)/$(IMG)
 
 debugpt-wsl:
-	@sudo make clean
-	@sudo make cprogs
-	@make progs
-	@make kernel
+#@make progs
+#	@make kernel
 	@echo "Building GPT..."
 #This is required to be before buildimggpt!
 # Due to eval weird behaviour

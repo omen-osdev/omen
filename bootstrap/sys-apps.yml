@@ -1,1 +1,24 @@
-packages: []
+packages:
+  - name: minit
+    source:
+      subdir: 'progs/sources/'
+    tools_required:
+      - host-gcc
+    pkgs_required:
+      - mlibc
+    build:
+      - args: 
+        - 'make'
+        - '-C'
+        - '@THIS_SOURCE_DIR@/'
+        - 'build'
+        environ:
+          CC: "@OPTION:cc@"
+          CXX: "@OPTION:cxx@"
+          LD: "@OPTION:ld@"
+          ASMC: "@OPTION:asmc@"
+      - args: 
+        - 'cp'
+        - '-r'
+        - '@THIS_SOURCE_DIR@/build/.'
+        - '@THIS_SOURCE_DIR@/../../export/.'
