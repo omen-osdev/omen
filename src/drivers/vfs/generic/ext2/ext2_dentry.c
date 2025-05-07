@@ -360,7 +360,7 @@ uint8_t ext2_initialize_directory(struct ext2_partition* partition, uint32_t ino
     return 0;
 }
 
-uint8_t ext2_create_directory_entry(struct ext2_partition* partition, uint32_t inode_number, uint32_t child_inode, const char* name, uint32_t type) {
+int64_t ext2_create_directory_entry(struct ext2_partition* partition, uint32_t inode_number, uint32_t child_inode, const char* name, uint32_t type) {
     EXT2_DEBUG("File name: %s, Parent inode: %d, Type: %d", name, inode_number, type);
 
     struct ext2_inode_descriptor_generic * root_inode = (struct ext2_inode_descriptor_generic *)ext2_read_inode(partition, inode_number);

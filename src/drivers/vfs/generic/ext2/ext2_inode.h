@@ -7,6 +7,7 @@
 
 #define EXT2_INO_PAP_NOTFOUND (-1)
 #define EXT2_INO_PAP_ERROR    (-2)
+#define EXT2_INODE_ERROR (-1)
 
 #define EXT2_INO_PTI_ERROR    0
 
@@ -62,5 +63,5 @@ void ext2_print_inode(struct ext2_inode_descriptor_generic* inode);
 int32_t ext2_inode_from_path_and_parent(struct ext2_partition* partition, uint32_t parent_inode, const char* path);
 uint32_t ext2_path_to_inode(struct ext2_partition* partition, const char * path);
 uint8_t ext2_delete_inode(struct ext2_partition* partition, uint32_t inode_number);
-uint8_t ext2_delete_file_blocks(struct ext2_partition* partition, uint32_t inode_number);
+int64_t ext2_delete_file_blocks(struct ext2_partition* partition, uint32_t inode_number);
 #endif

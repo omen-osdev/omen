@@ -11,7 +11,7 @@
 #define MAX_FIFO_DEVICES 32
 
 struct vfs_fifo* fifo_devices[MAX_FIFO_DEVICES] = {0};
-//-1 cannot return the object
+//VFS_ERROR cannot return the object
 // 0 all okey
 // 1 error
 
@@ -20,22 +20,22 @@ int fifo_compat_register_device(const char* device, uint32_t mode, const char* m
         if (fifo_devices[i] == 0) {
             fifo_devices[i] = fifo_register_device(device, mode, mountpoint);
             if (fifo_devices[i] == 0) {
-                return -1;
+                return VFS_ERROR;
             }
             
             return i;
         }
     }
-    return -1;
+    return VFS_ERROR;
 }
 
-uint8_t fifo_compat_unregister_device(int index) {
+int8_t fifo_compat_unregister_device(int index) {
     if (fifo_devices[index] != 0) {
         fifo_unregister_device(fifo_devices[index]);
         fifo_devices[index] = 0;
         return 0;
     }
-    return 1;
+    return VFS_ERROR;
 }
 
 uint8_t fifo_compat_detect(const char* name , uint32_t port) {
@@ -53,42 +53,42 @@ void fifo_compat_debug() {
     }
 }
 
-uint64_t fifo_compat_file_read(int devno, int fd, void* buffer, uint64_t size) {
+int64_t fifo_compat_file_read(int devno, int fd, void* buffer, uint64_t size) {
     if (devno < 0 || devno >= MAX_FIFO_DEVICES) 
-        return -1;
+        return VFS_ERROR;
 
     struct vfs_fifo * device = fifo_devices[devno];
     if (device == 0)
-        return -1;
+        return VFS_ERROR;
 
     struct file_descriptor_entry * entry = vfs_compat_get_file_descriptor(fd);
-    if (entry == 0 || entry->loaded == 0) return -1;
+    if (entry == 0 || entry->loaded == 0) return VFS_ERROR;
     return vfs_fifo_read(device, buffer, size, entry->offset);
 }
 
-uint64_t fifo_compat_file_write(int devno, int fd, void* buffer, uint64_t size) {
+int64_t fifo_compat_file_write(int devno, int fd, void* buffer, uint64_t size) {
     if (devno < 0 || devno >= MAX_FIFO_DEVICES) 
-        return -1;
+        return VFS_ERROR;
 
     struct vfs_fifo * device = fifo_devices[devno];
     if (device == 0)
-        return -1;
+        return VFS_ERROR;
 
     struct file_descriptor_entry * entry = vfs_compat_get_file_descriptor(fd);
-    if (entry == 0 || entry->loaded == 0) return -1;
+    if (entry == 0 || entry->loaded == 0) return VFS_ERROR;
     return vfs_fifo_write(device, buffer, size, entry->offset);
 }
 
-uint64_t fifo_compat_file_seek(int devno, int fd, uint64_t offset, int whence) {
+int64_t fifo_compat_file_seek(int devno, int fd, uint64_t offset, int whence) {
     if (devno < 0 || devno >= MAX_FIFO_DEVICES) 
-        return -1;
+        return VFS_ERROR;
 
     struct vfs_fifo * device = fifo_devices[devno];
     if (device == 0)
-        return -1;
+        return VFS_ERROR;
 
     struct file_descriptor_entry * entry = vfs_compat_get_file_descriptor(fd);
-    if (entry == 0 || entry->loaded == 0) return -1;
+    if (entry == 0 || entry->loaded == 0) return VFS_ERROR;
 
     uint64_t size = 0;
     switch (whence) {
@@ -112,78 +112,78 @@ uint64_t fifo_compat_file_seek(int devno, int fd, uint64_t offset, int whence) {
     return entry->offset;
 }
 
-uint64_t fifo_compat_file_tell(int devno, int fd) {
+int64_t fifo_compat_file_tell(int devno, int fd) {
     if (devno < 0 || devno >= MAX_FIFO_DEVICES) 
-        return -1;
+        return VFS_ERROR;
 
     struct vfs_fifo * device = fifo_devices[devno];
     if (device == 0)
-        return -1;
+        return VFS_ERROR;
 
     struct file_descriptor_entry * entry = vfs_compat_get_file_descriptor(fd);
-    if (entry == 0 || entry->loaded == 0) return -1;
+    if (entry == 0 || entry->loaded == 0) return VFS_ERROR;
     return entry->offset;
 }
 
 int fifo_compat_file_open(int devno, const char* path, int flags, int mode) {
     if (devno < 0 || devno >= MAX_FIFO_DEVICES) 
-        return -1;
+        return VFS_ERROR;
 
     struct vfs_fifo * device = fifo_devices[devno];
     if (device == 0)
-        return -1;
+        return VFS_ERROR;
 
-    if (strlen(path) != 0) return -1;
+    if (strlen(path) != 0) return VFS_ERROR;
 
     return get_fd(path, device->name, flags, mode);
 }
 
-uint64_t fifo_compat_file_ioctl(int devno, int fd, int request, void* arg) {
+int64_t fifo_compat_file_ioctl(int devno, int fd, int request, void* arg) {
     if (devno < 0 || devno >= MAX_FIFO_DEVICES) 
-        return -1;
+        return VFS_ERROR;
 
     struct vfs_fifo * device = fifo_devices[devno];
     if (device == 0)
-        return -1;
+        return VFS_ERROR;
 
     struct file_descriptor_entry * entry = vfs_compat_get_file_descriptor(fd);
-    if (entry == 0 || entry->loaded == 0) return -1;
+    if (entry == 0 || entry->loaded == 0) return VFS_ERROR;
 
     return vfs_fifo_ioctl(device, request, arg);
 }
 
 int fifo_compat_file_close(int devno, int fd) {
     if (devno < 0 || devno >= MAX_FIFO_DEVICES) 
-        return -1;
+        return VFS_ERROR;
 
     struct vfs_fifo * device = fifo_devices[devno];
     if (device == 0)
-        return -1;
+        return VFS_ERROR;
 
     return release_fd(fd);
 }
 
 int fifo_compat_file_flush(int devno, int fd) {
     if (devno < 0 || devno >= MAX_FIFO_DEVICES) 
-        return -1;
+        return VFS_ERROR;
 
     struct vfs_fifo * device = fifo_devices[devno];
     return (int)fifo_sync(device);
 }
 
-int fifo_compat_flush(int partno) {(void)partno; return -1;}
-int fifo_compat_dir_open(int partno, const char* path) {(void)partno; (void)path; return -1;}
-int fifo_compat_dir_close(int partno, int fd) {(void)partno; (void)fd; return -1;}
-int fifo_compat_file_creat(int partno, const char* path, int mode) {(void)partno; (void)path; (void)mode; return -1;}
-int fifo_compat_file_dup(int partno, int oldfd, int newfd) {(void)partno; (void)oldfd; (void)newfd; return -1;}
-int fifo_compat_dir_creat(int partno, const char* path, int mode) {(void)partno; (void)path; (void)mode; return -1;}
-int fifo_compat_dir_read(int partno, int fd, char* name, uint32_t * name_len, uint32_t * type) {(void)partno; (void)fd; (void)name_len; (void)type; return -1;}
-int fifo_compat_dir_load(int partno, int fd) {(void)partno; (void)fd; return -1;}
-int fifo_compat_stat(int partno, int fd, stat_t* st) {(void)partno; (void)fd; (void)st; return -1;}
-int fifo_compat_rename(int partno, const char* path, const char* newpath) {(void)partno; (void)path; (void)newpath; return -1;}
-int fifo_compat_prepare_remove(int partno, const char* path) {(void)partno; (void)path; return -1;}
-int fifo_compat_remove(int partno, const char* path) {(void)partno; (void)path; return -1;}
-int fifo_compat_chmod(int partno, const char* path, int mode) {(void)partno; (void)path; (void)mode; return -1;}
+int fifo_compat_flush(int partno) {(void)partno; return VFS_ERROR;}
+int fifo_compat_dir_open(int partno, const char* path) {(void)partno; (void)path; return VFS_ERROR;}
+int fifo_compat_dir_close(int partno, int fd) {(void)partno; (void)fd; return VFS_ERROR;}
+int fifo_compat_file_creat(int partno, const char* path, int mode) {(void)partno; (void)path; (void)mode; return VFS_ERROR;}
+int fifo_compat_file_dup(int partno, int oldfd, int newfd) {(void)partno; (void)oldfd; (void)newfd; return VFS_ERROR;}
+int fifo_compat_dir_creat(int partno, const char* path, int mode) {(void)partno; (void)path; (void)mode; return VFS_ERROR;}
+int fifo_compat_dir_read(int partno, int fd, char* name, uint32_t * name_len, uint32_t * type) {(void)partno; (void)fd; (void)name_len; (void)type; return VFS_ERROR;}
+int fifo_compat_dir_load(int partno, int fd) {(void)partno; (void)fd; return VFS_ERROR;}
+int fifo_compat_stat(int partno, int fd, stat_t* st) {(void)partno; (void)fd; (void)st; return VFS_ERROR;}
+int fifo_compat_rename(int partno, const char* path, const char* newpath) {(void)partno; (void)path; (void)newpath; return VFS_ERROR;}
+int fifo_compat_prepare_remove(int partno, const char* path) {(void)partno; (void)path; return VFS_ERROR;}
+int fifo_compat_remove(int partno, const char* path) {(void)partno; (void)path; return VFS_ERROR;}
+int fifo_compat_chmod(int partno, const char* path, int mode) {(void)partno; (void)path; (void)mode; return VFS_ERROR;}
 
 struct vfs_compatible fifo_register = {
     .name = "FIFO",

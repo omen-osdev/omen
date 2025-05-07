@@ -1,5 +1,5 @@
 #include "vfs_compat.h"
-
+#include "../vfs.h"
 #include <omen/libraries/allocators/heap_allocator.h>
 #include <omen/apps/debug/debug.h>
 #include <omen/libraries/std/string.h>
@@ -20,8 +20,8 @@ struct file_descriptor_entry * vfs_compat_get_file_descriptor(int fd) {
 }
 
 int get_fd(const char* path, const char* mount, int flags, int mode) {
-    if (strlen(path) >  VFS_FDE_NAME_MAX_LEN) return -1;
-    if (strlen(mount) > VFS_FDE_NAME_MAX_LEN) return -1; 
+    if (strlen(path) >  VFS_FDE_NAME_MAX_LEN) return VFS_ERROR;
+    if (strlen(mount) > VFS_FDE_NAME_MAX_LEN) return VFS_ERROR; 
     static int fd = 0;
     for (int i = 0; i < VFS_COMPAT_MAX_OPEN_FILES; i++) {
         if (open_file_table[fd].loaded == 0) {
@@ -38,12 +38,12 @@ int get_fd(const char* path, const char* mount, int flags, int mode) {
             if (fd >= VFS_COMPAT_MAX_OPEN_FILES) fd = 0;
         }
     }
-    return -1;
+    return VFS_ERROR;
 }
 
 int get_dirfd(const char* path, const char* mount, int flags, int mode) {
-    if (strlen(path) >  VFS_FDE_NAME_MAX_LEN) return -1;
-    if (strlen(mount) > VFS_FDE_NAME_MAX_LEN) return -1; 
+    if (strlen(path) >  VFS_FDE_NAME_MAX_LEN) return VFS_ERROR;
+    if (strlen(mount) > VFS_FDE_NAME_MAX_LEN) return VFS_ERROR; 
     static int fd = 0;
     for (int i = 0; i < VFS_COMPAT_MAX_OPEN_DIRECTORIES; i++) {
         if (open_directory_table[fd].fd.loaded == 0) {
@@ -65,13 +65,13 @@ int get_dirfd(const char* path, const char* mount, int flags, int mode) {
             if (fd >= VFS_COMPAT_MAX_OPEN_DIRECTORIES) fd = 0;
         }
     }
-    return -1;
+    return VFS_ERROR;
 }
 
 int dup2_fd(int oldfd, int newfd) {
-    if (oldfd >= VFS_COMPAT_MAX_OPEN_FILES) return -1;
-    if (newfd >= VFS_COMPAT_MAX_OPEN_FILES) return -1;
-    if (open_file_table[oldfd].loaded == 0) return -1;
+    if (oldfd >= VFS_COMPAT_MAX_OPEN_FILES) return VFS_ERROR;
+    if (newfd >= VFS_COMPAT_MAX_OPEN_FILES) return VFS_ERROR;
+    if (open_file_table[oldfd].loaded == 0) return VFS_ERROR;
     if (open_file_table[newfd].loaded == 1) {
         open_file_table[newfd].loaded = 0;
     }
@@ -85,11 +85,11 @@ int dup2_fd(int oldfd, int newfd) {
 }
 
 int dup_fd(int oldfd, int newfd) {
-    //if newfd != -1 then apply dup2's logic
+    //if newfd != VFS_ERROR then apply dup2's logic
     if (newfd != -1) return dup2_fd(oldfd, newfd);
     //else behave like dup and ignore newfd
-    if (oldfd >= VFS_COMPAT_MAX_OPEN_FILES) return -1;
-    if (open_file_table[oldfd].loaded == 0) return -1;
+    if (oldfd >= VFS_COMPAT_MAX_OPEN_FILES) return VFS_ERROR;
+    if (open_file_table[oldfd].loaded == 0) return VFS_ERROR;
 
     for (int i = 0; i < VFS_COMPAT_MAX_OPEN_FILES; i++) {
         if (open_file_table[i].loaded == 0) {
@@ -102,7 +102,7 @@ int dup_fd(int oldfd, int newfd) {
             return i;
         }
     }
-    return -1;
+    return VFS_ERROR;
 }
 
 int is_open(const char* path) {
@@ -120,7 +120,7 @@ int is_open(const char* path) {
             }
         }
     }
-    return -1;
+    return VFS_ERROR;
 }
 
 int force_release(const char * path) {
@@ -145,14 +145,14 @@ int force_release(const char * path) {
 }
 
 int release_fd(int fd) {
-    if (fd >= VFS_COMPAT_MAX_OPEN_FILES) return -1;
+    if (fd >= VFS_COMPAT_MAX_OPEN_FILES) return VFS_ERROR;
     open_file_table[fd].loaded = 0;
     return 0;
 }
 
 int read_dirfd(int fd, char * name, uint32_t * name_len, uint32_t * type) {
-    if (fd >= VFS_COMPAT_MAX_OPEN_DIRECTORIES) return -1;
-    if (open_directory_table[fd].fd.loaded == 0) return -1;
+    if (fd >= VFS_COMPAT_MAX_OPEN_DIRECTORIES) return VFS_ERROR;
+    if (open_directory_table[fd].fd.loaded == 0) return VFS_ERROR;
     if (open_directory_table[fd].index >= open_directory_table[fd].number) return 0;
 
     uint32_t index = open_directory_table[fd].index;
@@ -171,7 +171,7 @@ int read_dirfd(int fd, char * name, uint32_t * name_len, uint32_t * type) {
 }
 
 int release_dirfd(int fd) {
-    if (fd >= VFS_COMPAT_MAX_OPEN_DIRECTORIES) return -1;
+    if (fd >= VFS_COMPAT_MAX_OPEN_DIRECTORIES) return VFS_ERROR;
     open_directory_table[fd].fd.loaded = 0;
     struct dentry * dentry_head = open_directory_table[fd].dentries;
     struct dentry * dentry = dentry_head;

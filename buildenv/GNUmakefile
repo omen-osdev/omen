@@ -296,6 +296,7 @@ buildimggpt_second_phase:
 	@mount $(LOOP_DEV_PATH)p3 $(DATDIR)
 	@cp -r $(PROGSBUILDDIR) $(DATDIR)
 	@cp -r $(SYSROOT)/* $(DATDIR)
+	@cp -r $(DATDIR)/usr/lib $(DATDIR)/
 	@cp -r $(PROGSDATADIR) $(DATDIR)
 	@tree $(DATDIR)
 	@umount $(DATDIR)

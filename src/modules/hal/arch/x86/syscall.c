@@ -6,12 +6,14 @@
 #include <omen/managers/cpu/signal.h>
 #include <omen/libraries/std/string.h>
 #include <omen/libraries/std/time.h>
+#include <omen/libraries/crypto/md5.h>
 #include <omen/apps/debug/debug.h>
 #include <omen/managers/cpu/sline.h>
 #include <omen/apps/panic/panic.h>
 #include <vfs/vfs.h>
 #include <vfs/vfs_interface.h>
 #include <errno.h>
+#include <asm/prctl.h>
 /*
 
 
@@ -109,6 +111,16 @@ int64_t dummy_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     return SYSCALL_SUCCESS;
 }
 
+int64_t futex_wait_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    kprintf("[PID: %d | TID %d] FUTEX_WAIT()\n", thread->process->pid, thread->id);
+    return SYSCALL_SUCCESS;
+}
+
+int64_t futex_wake_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    kprintf("[PID: %d | TID %d] FUTEX_WAKE()\n", thread->process->pid, thread->id);
+    return SYSCALL_SUCCESS;
+}
+
 int64_t read_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     uint64_t fd = SYSCALL_ARG0(ctx);
     uint64_t buffer = SYSCALL_ARG1(ctx);
@@ -117,7 +129,26 @@ int64_t read_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)buffer;
     (void)size;
     kprintf("[PID: %d | TID %d] READ_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, buffer, size);
-    return vfs_file_read(fd, (void*)buffer, size);
+    int64_t res = vfs_file_read(fd, (void*)buffer, size);
+    //Print 10 bytes
+    kprintf("Read %d bytes\n", res);
+    if (res < 0) {
+        return SYSCALL_ERROR;
+    }
+    for (int i = 0; i < res && i < 10; i++) {
+        kprintf("%x", ((char*)buffer)[i]);
+    }
+    kprintf("\n");
+    unsigned char *md5_buffer = kmalloc(16);
+    memset(md5_buffer, 0, 16);
+    MD5_Digest(md5_buffer, buffer, size);
+    kprintf("MD5: ");
+    for (int i = 0; i < 16; i++) {
+        kprintf("%x", md5_buffer[i]);
+    }
+    kprintf("\n");
+    kfree(md5_buffer);
+    return res;
 }
 
 int64_t write_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
@@ -431,12 +462,6 @@ int64_t execve_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     return SYSCALL_SUCCESS;
 }
 
-#define ARCH_SET_CPUID 0x0
-#define ARCH_GET_CPUID 0x1
-#define ARCH_SET_FS 0x2
-#define ARCH_GET_FS 0x3
-#define ARCH_SET_GS 0x4
-#define ARCH_GET_GS 0x5
 int64_t arch_prctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
     (void)thread;
@@ -516,23 +541,37 @@ int64_t getppid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 int64_t log_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char * message = (char *)SYSCALL_ARG0(ctx);
     uint64_t length = SYSCALL_ARG1(ctx);
-    enable_debugger();
+    //enable_debugger();
     kprintf("[PID: %d | TID %d] LOG_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, message, length);
     kprintf("Log message: %s\n", message);
-    disable_debugger();
+    //disable_debugger();
     return SYSCALL_SUCCESS;
 }
 
 //void * mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
-//Prots: 0x1 = PROT_READ, 0x2 = PROT_WRITE, 0x4 = PROT_EXEC
-//Flags: 0x1 = MAP_SHARED, 0x2 = MAP_PRIVATE, 0x4 = MAP_ANONYMOUS
-#define MAP_SHARED 0x1
-#define MAP_PRIVATE 0x2
-#define MAP_ANONYMOUS 0x4
-#define PROT_READ 0x1
-#define PROT_WRITE 0x2
-#define PROT_EXEC 0x4
-#define PROT_NONE 0x8
+#define PROT_NONE  0x00
+#define PROT_READ  0x01
+#define PROT_WRITE 0x02
+#define PROT_EXEC  0x04
+
+#define MAP_FAILED ((void *)(-1))
+#define MAP_FILE    0x00
+#define MAP_SHARED    0x01
+#define MAP_PRIVATE   0x02
+#define MAP_FIXED     0x10
+#define MAP_ANON      0x20
+#define MAP_ANONYMOUS 0x20
+#define MAP_GROWSDOWN 0x100
+#define MAP_DENYWRITE 0x800
+#define MAP_EXECUTABLE 0x1000
+#define MAP_LOCKED    0x2000
+#define MAP_NORESERVE 0x4000
+#define MAP_POPULATE  0x8000
+#define MAP_NONBLOCK  0x10000
+#define MAP_STACK     0x20000
+#define MAP_HUGETLB   0x40000
+#define MAP_SYNC      0x80000
+#define MAP_FIXED_NOREPLACE 0x100000
 int64_t mmap_syscall_handler(thread_t*thread, cpu_context_t*ctx) {
     void * addr = (void *)SYSCALL_ARG0(ctx);
     size_t length = SYSCALL_ARG1(ctx);
@@ -874,7 +913,9 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [230 ... 335] = undefined_syscall_handler,
     [336] = thread_exit_syscall_handler,
     [337] = log_syscall_handler,
-    [338 ... 511] = undefined_syscall_handler
+    [338] = futex_wait_syscall_handler,
+    [339] = futex_wake_syscall_handler,
+    [340 ... 511] = undefined_syscall_handler
 };
 
 void global_syscall_handler(cpu_context_t* ctx) {

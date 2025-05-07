@@ -13,32 +13,57 @@
 
 namespace mlibc{
     int sys_open(const char *pathname, int flags, mode_t mode, int *fd){
-        // TODO
-        __ensure(!"Not implemented");
+        auto result = do_syscall(SYS_FILE_OPEN, pathname, strlen(pathname), flags, mode);
+
+        if(result < 0){
+            return -result;
+        }
+
+        *fd = result;
         return 0;
     }
 
     int sys_read(int fd, void *buf, size_t count, ssize_t *bytes_read){
-        // TODO
-        __ensure(!"Not implemented");
+        auto result = do_syscall(SYS_FILE_READ, fd, buf, count);
+
+        if(result < 0){
+            *bytes_read = 0;
+            return -result;
+        }
+
+        *bytes_read = result;
         return 0;
     }
 
     int sys_write(int fd, const void *buf, size_t count, ssize_t *bytes_written){
-        // TODO
-        __ensure(!"Not implemented");
+        auto result = do_syscall(SYS_FILE_WRITE, fd, buf, count);
+
+        if(result < 0){
+            return -result;
+        }
+
+        *bytes_written = result;
         return 0;
     }
 
     int sys_seek(int fd, off_t offset, int whence, off_t *new_offset){
-        // TODO
-        __ensure(!"Not implemented");
+        auto result = do_syscall(SYS_FILE_SEEK, fd, offset, whence);
+
+        if(result < 0){
+            return -result;
+        }
+
+        *new_offset = result;
         return 0;
     }
 
     int sys_close(int fd){
-        // TODO
-        __ensure(!"Not implemented");
+        auto result = do_syscall(SYS_FILE_CLOSE, fd);
+
+        if(result < 0){
+            return -result;
+        }
+
         return 0;
     }
 
@@ -48,9 +73,17 @@ namespace mlibc{
         return 0;
     }
 
-    int sys_ioctl(int fd, unsigned long request, void* arg, int* result){
-        // TODO
-        __ensure(!"Not implemented");
+    int sys_ioctl(int fd, unsigned long request, void* arg, int* ptr_result){
+        auto result = do_syscall(SYS_FILE_IOCTL, fd, request, arg);
+
+        if(result < 0){
+            return -result;
+        }
+
+        if(ptr_result != NULL){
+            *ptr_result = result;
+        }
+        
         return 0;
     }
 
@@ -105,8 +138,27 @@ namespace mlibc{
     }
 
     int sys_stat(fsfd_target fsfdt, int fd, const char *path, int flags, struct stat *statbuf){
-        // TODO
-        __ensure(!"Not implemented");
+        auto result = 0;
+
+        switch(fsfdt){
+            case fsfd_target::path:{
+                result = do_syscall(SYS_PATH_STAT, path, strlen(path), flags, statbuf);
+                break;
+            }
+            case fsfd_target::fd:{
+                result = do_syscall(SYS_FD_STAT, fd, flags, statbuf);
+                break;
+            }
+            default:{
+                mlibc::infoLogger() << "mlibc warning: sys_stat: unsupported fsfd target" << frg::endlog;
+                return EINVAL;
+            }
+        }
+
+        if(result < 0){
+            return -result;
+        }
+
         return 0;
     }
 

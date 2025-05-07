@@ -42,6 +42,7 @@
 #include <vfs/vfs_interface.h>
 #include <vfs/generic/fifo/generic_fifo.h>
 #include <vfs/generic/ext2/generic_ext2.h>
+#include <vfs/generic/ext2/ext2.h>
 #include <vfs/generic/tty/generic_tty.h>
 
 #include <fifo/fifo_interface.h>
@@ -144,6 +145,7 @@ void boot_startup() {
     probe_fs();
     kprintf("VFS startup complete...\n");
     vfs_lsdisk();
+    //ext2_inhibit_errors(1);
     set_main_mount("hdap2");
     char vfs_tty[32];
     sprintf(vfs_tty, "%sp0/", tty); 

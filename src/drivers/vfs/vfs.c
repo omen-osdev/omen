@@ -173,7 +173,7 @@ uint8_t mount_fs(struct device* dev, struct vfs_partition* partition, const char
         if (fst->detect(dev->name, partition->lba)) {
             kprintf("[VFS] Detected %s on %s, trying to mount on %s\n", fst->name, dev->name, mountpoint);
             int ret = fst->register_partition(dev->name, partition->lba, mountpoint);
-            if (ret == -1) {
+            if (ret == VFS_ERROR) {
                 kprintf("[VFS] Failed to mount %s on %s\n", fst->name, mountpoint);
                 return 0;
             }

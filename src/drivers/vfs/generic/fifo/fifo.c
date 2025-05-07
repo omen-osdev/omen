@@ -37,17 +37,17 @@ void fifo_dump_device(struct vfs_fifo* fifo) {
     kprintf("FIFO: %s, dev: %s\n", fifo->name, fifo->device);
 }
 
-uint64_t vfs_fifo_get_size(struct vfs_fifo* fifo) {
+int64_t vfs_fifo_get_size(struct vfs_fifo* fifo) {
     return fifo_get_size(fifo->device);
 }
 
-uint8_t vfs_fifo_read(struct vfs_fifo * fifo, uint8_t * destination_buffer, uint64_t size, uint64_t skip) {
+int64_t vfs_fifo_read(struct vfs_fifo * fifo, uint8_t * destination_buffer, uint64_t size, uint64_t skip) {
     return fifo_read(fifo->device, destination_buffer, skip, size);
 }
-uint8_t vfs_fifo_write(struct vfs_fifo * fifo, uint8_t * source_buffer, uint64_t size, uint64_t skip) {
+int64_t vfs_fifo_write(struct vfs_fifo * fifo, uint8_t * source_buffer, uint64_t size, uint64_t skip) {
     return fifo_write(fifo->device, source_buffer, skip, size);
 }
 
-uint8_t vfs_fifo_ioctl(struct vfs_fifo * fifo, uint32_t request, uint32_t arg) {
+int64_t vfs_fifo_ioctl(struct vfs_fifo * fifo, uint32_t request, uint32_t arg) {
     return fifo_ioctl(fifo->device, request, arg);
 }

@@ -15,6 +15,8 @@
 
 #define VFS_MAX_DEVICES 512
 
+#define VFS_ERROR (-1)
+
 #define PAR_STATUS			0
 #define PAR_TYPE			4
 #define PAR_LBA				8
@@ -25,7 +27,7 @@ struct vfs_file_system_type {
     char majors[256];
     int major_no;
     int (*register_partition)(const char*, uint32_t, const char*);
-    uint8_t (*unregister_partition)(int);
+    int8_t (*unregister_partition)(int);
     uint8_t (*detect)(const char *, uint32_t);
     int (*flush)(int);
 
@@ -34,11 +36,11 @@ struct vfs_file_system_type {
     int (*file_close)(int, int);
     int (*file_creat)(int, const char*, int);
     int (*file_dup)(int, int, int);
-    uint64_t (*file_read)(int, int, void*, uint64_t);
-    uint64_t (*file_write)(int, int, void*, uint64_t);
-    uint64_t (*file_seek)(int, int, uint64_t, int);
-    uint64_t (*file_ioctl)(int, int, int, void*);
-    uint64_t (*file_tell)(int, int);
+    int64_t (*file_read)(int, int, void*, uint64_t);
+    int64_t (*file_write)(int, int, void*, uint64_t);
+    int64_t (*file_seek)(int, int, uint64_t, int);
+    int64_t (*file_ioctl)(int, int, int, void*);
+    int64_t (*file_tell)(int, int);
     int (*file_stat)(int, int, stat_t*);
 
     int (*dir_read)(int, int, char*, uint32_t *, uint32_t *);

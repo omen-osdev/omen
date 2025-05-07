@@ -17,7 +17,7 @@
 #define EXT2_DIR_TYPE_SOCKET    6
 #define EXT2_DIR_TYPE_SYMLINK   7
 
-uint8_t ext2_create_directory_entry(struct ext2_partition* partition, uint32_t inode_number, uint32_t child_inode, const char* name, uint32_t type);
+int64_t ext2_create_directory_entry(struct ext2_partition* partition, uint32_t inode_number, uint32_t child_inode, const char* name, uint32_t type);
 uint8_t ext2_delete_dentry(struct ext2_partition* partition, const char * path);
 void ext2_list_dentry(struct ext2_partition* partition, const char * path);
 uint8_t ext2_initialize_directory(struct ext2_partition* partition, uint32_t inode_number, uint32_t parent_inode_number);

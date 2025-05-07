@@ -5,15 +5,15 @@
 #include <omen/apps/debug/debug.h>
 #include <disk/disk_interface.h>
 
-uint8_t ext2_flush_sb(struct ext2_partition* partition, struct ext2_block_group_descriptor* bg, uint32_t bgid) {
+int64_t ext2_flush_sb(struct ext2_partition* partition, struct ext2_block_group_descriptor* bg, uint32_t bgid) {
     (void)bg;
-    if (bgid >= partition->backup_bgs_count || partition->backup_bgs[bgid] == -1) return 1;
+    if (bgid >= partition->backup_bgs_count || partition->backup_bgs[bgid] == -1) return -1;
 
     uint32_t block_size = 1024 << ((struct ext2_superblock*)(partition->sb))->s_log_block_size;
     uint32_t sectors_per_group = ((struct ext2_superblock*)(partition->sb))->s_blocks_per_group * (block_size / partition->sector_size);
 
     if (!write_disk(partition->disk, (uint8_t*)partition->sb, partition->lba+(sectors_per_group*bgid)+partition->sb_block, 2)) {
-        return 1;
+        return -1;
     }
     
     return 0;

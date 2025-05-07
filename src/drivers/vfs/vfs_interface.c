@@ -57,12 +57,12 @@ int vfs_file_dup(int old, int new) {
     vfs_print("vfs_file_dup(%d, %d)\n", old, new);
     char * path = get_full_path_from_fd(old);
     if (path == 0) {
-        return -1;
+        return VFS_ERROR;
     }
     char * native_path_buffer = kmalloc(strlen(path) + 1);
     struct vfs_mount* mount = get_mount_from_path(path, native_path_buffer);
 
-    int res = -1;
+    int res = VFS_ERROR;
     if (mount != 0) {
         res = mount->fst->file_dup(mount->internal_index, old, new);
     }
@@ -78,7 +78,7 @@ int vfs_file_open(char* path, int flags, int mode) {
     vfs_print("vfs_file_open(%s, %d, %d)\n", npath, flags, mode);
     char * native_path_buffer = kmalloc(strlen(npath) + 1);
     struct vfs_mount* mount = get_mount_from_path(npath, native_path_buffer);
-    int res = -1;
+    int res = VFS_ERROR;
     if (mount != 0) {
         res = mount->fst->file_open(mount->internal_index, native_path_buffer, flags, mode);
     }
@@ -91,12 +91,12 @@ int vfs_file_close(int fd) {
     vfs_print("vfs_file_close(%d)\n", fd);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
-        return -1;
+        return VFS_ERROR;
     }
 
     char * native_path_buffer = kmalloc(strlen(path) + 1);
     struct vfs_mount* mount = get_mount_from_path(path, native_path_buffer);
-    int res = -1;
+    int res = VFS_ERROR;
     if (mount != 0) {
         res = mount->fst->file_close(mount->internal_index, fd);
     }
@@ -109,12 +109,12 @@ int64_t vfs_file_read(int fd, void* buffer, uint64_t size) {
     vfs_print("vfs_file_read(%d, %p, %ld)\n", fd, buffer, size);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
-        return -1;
+        return VFS_ERROR;
     }
     char * native_path_buffer = kmalloc(strlen(path) + 1);
     struct vfs_mount* mount = get_mount_from_path(path, native_path_buffer);
 
-    int res = -1;
+    int res = VFS_ERROR;
     if (mount != 0) {
         res = mount->fst->file_read(mount->internal_index, fd, (char*)buffer, size);
     }
@@ -127,12 +127,12 @@ int64_t vfs_file_write(int fd, void* buffer, uint64_t size) {
     vfs_print("vfs_file_write(%d, %p, %ld)\n", fd, buffer, size);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
-        return -1;
+        return VFS_ERROR;
     }
     char * native_path_buffer = kmalloc(strlen(path) + 1);
     struct vfs_mount* mount = get_mount_from_path(path, native_path_buffer);
 
-    int res = -1;
+    int res = VFS_ERROR;
     if (mount != 0) {
         res = mount->fst->file_write(mount->internal_index, fd, (char*)buffer, size);
     }
@@ -146,7 +146,7 @@ int64_t vfs_file_ioctl(int fd, int request, void* arg) {
     vfs_print("vfs_file_ioctl(%d, %d, %p)\n", fd, request, arg);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
-        return -1;
+        return VFS_ERROR;
     }
     char * native_path_buffer = kmalloc(strlen(path) + 1);
     struct vfs_mount* mount = get_mount_from_path(path, native_path_buffer);
@@ -167,7 +167,7 @@ int vfs_file_creat(char* path, int mode) {
     vfs_print("vfs_file_creat(%s, %d)\n", npath, mode);
     char * native_path_buffer = kmalloc(strlen(npath) + 1);
     struct vfs_mount* mount = get_mount_from_path(npath, native_path_buffer);
-    int res = -1;
+    int res = VFS_ERROR;
     if (mount != 0) {
         res = mount->fst->file_creat(mount->internal_index, native_path_buffer, mode);
     }
@@ -180,12 +180,12 @@ int vfs_file_stat(int fd, stat_t* st) {
     vfs_print("vfs_file_stat(%d, %p)\n", fd, st);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
-        return -1;
+        return VFS_ERROR;
     }
     char * native_path_buffer = kmalloc(strlen(path) + 1);
     struct vfs_mount* mount = get_mount_from_path(path, native_path_buffer);
 
-    int res = -1;
+    int res = VFS_ERROR;
     if (mount != 0) {
         res = mount->fst->file_stat(mount->internal_index, fd, st);
     }
@@ -198,7 +198,7 @@ int64_t vfs_file_seek(int fd, uint64_t offset, int whence) {
     vfs_print("vfs_file_seek(%d, %ld, %d)\n", fd, offset, whence);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
-        return -1;
+        return VFS_ERROR;
     }
     char * native_path_buffer = kmalloc(strlen(path) + 1);
     struct vfs_mount* mount = get_mount_from_path(path, native_path_buffer);
@@ -216,7 +216,7 @@ int64_t vfs_file_tell(int fd) {
     vfs_print("vfs_file_tell(%d)\n", fd);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
-        return -1;
+        return VFS_ERROR;
     }
     char * native_path_buffer = kmalloc(strlen(path) + 1);
     struct vfs_mount* mount = get_mount_from_path(path, native_path_buffer);
@@ -237,7 +237,7 @@ int vfs_dir_open(char* path) {
     vfs_print("vfs_dir_open(%s)\n", path);
     char * native_path_buffer = kmalloc(strlen(npath) + 1);
     struct vfs_mount* mount = get_mount_from_path(npath, native_path_buffer);
-    int res = -1;
+    int res = VFS_ERROR;
     if (mount != 0) {
         res = mount->fst->dir_open(mount->internal_index, native_path_buffer);
     }
@@ -252,12 +252,12 @@ int vfs_dir_close(int fd) {
 
     char * path = get_full_path_from_dir(fd);
     if (path == 0) {
-        return -1;
+        return VFS_ERROR;
     }
     char * native_path_buffer = kmalloc(strlen(path) + 1);
     struct vfs_mount* mount = get_mount_from_path(path, native_path_buffer);
 
-    int res = -1;
+    int res = VFS_ERROR;
     if (mount != 0) {
         res = mount->fst->dir_close(mount->internal_index, fd);
     }
@@ -290,12 +290,12 @@ int vfs_dir_load(int fd) {
 
     char * path = get_full_path_from_dir(fd);
     if (path == 0) {
-        return -1;
+        return VFS_ERROR;
     }
     char * native_path_buffer = kmalloc(strlen(path) + 1);
     struct vfs_mount* mount = get_mount_from_path(path, native_path_buffer);
 
-    int res = -1;
+    int res = VFS_ERROR;
     if (mount != 0) {
         res = mount->fst->dir_load(mount->internal_index, fd);
     }
@@ -338,7 +338,7 @@ void vfs_dir_list(char* path) {
 
 int vfs_file_search(const char * name, char * cpath) {
     if (cpath == 0 || name == 0) {
-        return -1;
+        return VFS_ERROR;
     }
     char * path = kmalloc(strlen(cpath) + 1);
     strcpy(path, cpath);
@@ -405,12 +405,12 @@ int vfs_dir_read(int fd, char* name, uint32_t * name_len, uint32_t * type) {
 
     char * path = get_full_path_from_dir(fd);
     if (path == 0) {
-        return -1;
+        return VFS_ERROR;
     }
     char * native_path_buffer = kmalloc(strlen(path) + 1);
     struct vfs_mount* mount = get_mount_from_path(path, native_path_buffer);
 
-    int res = -1;
+    int res = VFS_ERROR;
     if (mount != 0) {
         res = mount->fst->dir_read(mount->internal_index, fd, name, name_len, type);
     }
@@ -428,7 +428,7 @@ int vfs_mkdir(char* cpath, int mode) {
 
     char * native_path_buffer = kmalloc(strlen(path) + 1);
     struct vfs_mount* mount = get_mount_from_path(path, native_path_buffer);
-    int res = -1;
+    int res = VFS_ERROR;
     if (mount != 0) {
         res = mount->fst->dir_creat(mount->internal_index, native_path_buffer, mode);
     }
@@ -436,7 +436,7 @@ int vfs_mkdir(char* cpath, int mode) {
     return res;
 }
 
-int vfs_rename(char* path, const char* name) {return -1;}
+int vfs_rename(char* path, const char* name) {return VFS_ERROR;}
 
 int vfs_remove(char* cpath, uint8_t force) {
     char * path = kmalloc(strlen(cpath) + 1);
@@ -446,11 +446,11 @@ int vfs_remove(char* cpath, uint8_t force) {
     char * native_path_buffer = kmalloc(strlen(path) + 1);
     struct vfs_mount* mount = get_mount_from_path(path, native_path_buffer);
 
-    int res = -1;
+    int res = VFS_ERROR;
     if (mount != 0) {
         res = mount->fst->prepare_remove(mount->internal_index, native_path_buffer);
         if (res == 0) return -2;
-        if (is_safe_for_removing(native_path_buffer, force) == 0) return -1;
+        if (is_safe_for_removing(native_path_buffer, force) == 0) return VFS_ERROR;
         res = mount->fst->remove(mount->internal_index, native_path_buffer);
     }
     kfree(native_path_buffer);
@@ -458,7 +458,7 @@ int vfs_remove(char* cpath, uint8_t force) {
     return res;
 }
 
-int vfs_chmod(char* path, int mode) {return -1;}
+int vfs_chmod(char* path, int mode) {return VFS_ERROR;}
 
 void vfs_debug_by_path(char* cpath) {
     char * path = kmalloc(strlen(cpath) + 1);

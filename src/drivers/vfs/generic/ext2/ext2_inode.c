@@ -593,7 +593,7 @@ uint32_t* ext2_load_block_list(struct ext2_partition* partition, uint32_t inode_
 
 }
 
-uint8_t ext2_delete_file_blocks(struct ext2_partition* partition, uint32_t inode_number) {
+int64_t ext2_delete_file_blocks(struct ext2_partition* partition, uint32_t inode_number) {
     uint32_t block_size = 1024 << (((struct ext2_superblock*)partition->sb)->s_log_block_size);
     struct ext2_inode_descriptor_generic * inode = (struct ext2_inode_descriptor_generic *)ext2_read_inode(partition, inode_number);
     if (inode == 0) {

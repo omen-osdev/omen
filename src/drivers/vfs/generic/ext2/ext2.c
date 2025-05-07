@@ -69,11 +69,11 @@ char * ext2_file_type_names[8] = {
 #define EXT2_TRANSLATE_NATIVE_TO_DENTRY(native) (EXT2_TRANSLATE_UNIT(native, EXT2_DENTRY_TRANSLATOR_INDEX))
 #define EXT2_TRANSLATE_NATIVE_TO_INODE(native) (EXT2_TRANSLATE_UNIT(native, EXT2_INODE_TRANSLATOR_INDEX))
 
-uint8_t is_directory(struct ext2_directory_entry * dentry) {
+int64_t is_directory(struct ext2_directory_entry * dentry) {
     return (dentry->file_type == EXT2_DIR_TYPE_DIRECTORY);
 }
 
-uint8_t is_regular_file(struct ext2_directory_entry * dentry) {
+int64_t is_regular_file(struct ext2_directory_entry * dentry) {
     return (dentry->file_type == EXT2_DIR_TYPE_REGULAR);
 }
 
@@ -132,7 +132,7 @@ uint8_t split_into_path_and_name(const char* full_path, char* parent, char* name
 }
 
 //Returns uint64, on error returns EXT2_RESULT_ERROR
-uint64_t ext2_get_file_size(struct ext2_partition* partition, const char* path) {
+int64_t ext2_get_file_size(struct ext2_partition* partition, const char* path) {
     EXT2_INFO("Getting file size of %s", path);
     uint32_t inode_number = ext2_path_to_inode(partition, path);
     if (inode_number == EXT2_INO_PTI_ERROR) {
@@ -159,13 +159,13 @@ uint8_t ext2_set_debug_base(const char* base) {
     return EXT2_RESULT_OK;
 }
 
-uint8_t ext2_list_directory(struct ext2_partition* partition, const char * path) {
+int64_t ext2_list_directory(struct ext2_partition* partition, const char * path) {
     EXT2_INFO("Listing directory %s", path);
     ext2_list_dentry(partition, path);
     return EXT2_RESULT_OK;
 }
 
-uint8_t ext2_get_dentry(struct ext2_partition* partition, const char* path, struct ext2_directory_entry* dentry) {
+int64_t ext2_get_dentry(struct ext2_partition* partition, const char* path, struct ext2_directory_entry* dentry) {
     EXT2_INFO("Getting dentry of %s", path);
     if (path == 0) {
         return EXT2_RESULT_ERROR;
@@ -190,13 +190,13 @@ uint8_t ext2_get_dentry(struct ext2_partition* partition, const char* path, stru
     return EXT2_RESULT_OK;
 }
 
-uint8_t ext2_read_directory(struct ext2_partition* partition, const char * path, uint32_t * count, struct ext2_directory_entry** buffer) {
+int64_t ext2_read_directory(struct ext2_partition* partition, const char * path, uint32_t * count, struct ext2_directory_entry** buffer) {
     EXT2_INFO("Reading directory %s", path);
     *count = ext2_get_all_dirs(partition, path, buffer);
     return EXT2_RESULT_OK;
 }
 
-uint8_t ext2_create_file(struct ext2_partition * partition, const char* path, uint32_t type, uint32_t permissions) {
+int64_t ext2_create_file(struct ext2_partition * partition, const char* path, uint32_t type, uint32_t permissions) {
     EXT2_INFO("Creating file %s of type %s", path, ext2_file_type_names[type]);
     uint32_t block_size = 1024 << (((struct ext2_superblock*)partition->sb)->s_log_block_size);
 
@@ -261,7 +261,7 @@ uint8_t ext2_create_file(struct ext2_partition * partition, const char* path, ui
     return EXT2_RESULT_OK;
 }
 
-uint8_t ext2_resize_file(struct ext2_partition* partition, uint32_t inode_index, uint32_t new_size) {
+int64_t ext2_resize_file(struct ext2_partition* partition, uint32_t inode_index, uint32_t new_size) {
     EXT2_INFO("Resizing file %d to %d", inode_index, new_size);
     struct ext2_inode_descriptor_generic * inode = (struct ext2_inode_descriptor_generic *)ext2_read_inode(partition, inode_index);
     uint32_t block_size = 1024 << (((struct ext2_superblock*)partition->sb)->s_log_block_size);
@@ -312,7 +312,7 @@ uint8_t ext2_resize_file(struct ext2_partition* partition, uint32_t inode_index,
     return EXT2_RESULT_OK;
 }
 
-uint8_t ext2_read_file(struct ext2_partition * partition, const char * path, uint8_t * destination_buffer, uint64_t size, uint64_t skip) {
+int64_t ext2_read_file(struct ext2_partition * partition, const char * path, uint8_t * destination_buffer, uint64_t size, uint64_t skip) {
     EXT2_INFO("Reading file %s", path);
 
     uint32_t inode_index = ext2_path_to_inode(partition, path);
@@ -345,11 +345,16 @@ uint8_t ext2_read_file(struct ext2_partition * partition, const char * path, uin
         return EXT2_RESULT_ERROR;
     }
 
-    if ((uint64_t)read_bytes != size) {
-        EXT2_ERROR("Read %d bytes, expected %d", read_bytes, size);
+    if ((uint64_t)read_bytes < size) {
+        EXT2_WARN("Read less bytes than requested[read=%d, requested=%d]", read_bytes, size);
+        return read_bytes;
+    } else if ((uint64_t)read_bytes > size) {
+        EXT2_WARN("Read more bytes than requested[read=%d, requested=%d]", read_bytes, size);
+        return size;
+    } else {
+        EXT2_DEBUG("Read %d bytes", read_bytes);
+        return read_bytes;
     }
-
-    return EXT2_RESULT_OK;
 }
 
 uint32_t ext2_get_inode_index(struct ext2_partition* partition, const char* path) {
@@ -369,7 +374,7 @@ uint32_t ext2_get_inode_index(struct ext2_partition* partition, const char* path
     return inode_index;
 }
 
-uint8_t ext2_write_file(struct ext2_partition * partition, const char * path, uint8_t * source_buffer, uint64_t size, uint64_t skip) {
+int64_t ext2_write_file(struct ext2_partition * partition, const char * path, uint8_t * source_buffer, uint64_t size, uint64_t skip) {
     EXT2_INFO("Writing file %s", path);
 
     uint32_t inode_index = ext2_path_to_inode(partition, path);
@@ -410,7 +415,16 @@ uint8_t ext2_write_file(struct ext2_partition * partition, const char * path, ui
         return EXT2_RESULT_ERROR;
     }
 
-    return EXT2_RESULT_OK;
+    if ((uint64_t)write_bytes < size) {
+        EXT2_WARN("Wrote less bytes than requested[write=%d, requested=%d]", write_bytes, size);
+        return EXT2_RESULT_ERROR;
+    } else if ((uint64_t)write_bytes > size) {
+        EXT2_WARN("Wrote more bytes than requested[write=%d, requested=%d]", write_bytes, size);
+        return EXT2_RESULT_ERROR;
+    } else {
+        EXT2_DEBUG("Wrote %d bytes", write_bytes);
+        return write_bytes;
+    }
 }
 
 struct stat {
@@ -430,7 +444,7 @@ struct stat {
 };
 typedef struct stat stat_t;
 
-uint8_t ext2_get_stat(struct ext2_partition* partition, const char * path, void* st_generic) {
+int64_t ext2_get_stat(struct ext2_partition* partition, const char * path, void* st_generic) {
     EXT2_INFO("Getting stat of %s", path);
     uint32_t inode_index = ext2_path_to_inode(partition, path);
     if (inode_index == EXT2_INO_PTI_ERROR) {
@@ -497,7 +511,7 @@ uint8_t ext2_get_stat(struct ext2_partition* partition, const char * path, void*
     return EXT2_RESULT_OK;
 }
 
-uint8_t ext2_delete_file(struct ext2_partition* partition, const char * path) {
+int64_t ext2_delete_file(struct ext2_partition* partition, const char * path) {
     EXT2_INFO("Deleting file %s", path);
     uint32_t inode_index = ext2_path_to_inode(partition, path);
     EXT2_DEBUG("Deleting file %s, inode %d", path, inode_index);

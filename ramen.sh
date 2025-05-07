@@ -15,11 +15,12 @@ install_deps() {
         case $ID in
             ubuntu|debian)
                 say "Installing dependencies for $ID"
+                sudo apt update
                 sudo apt install -y wget
                 sudo wget -qO /usr/local/bin/ninja.gz https://github.com/ninja-build/ninja/releases/latest/download/ninja-linux.zip
                 sudo gunzip /usr/local/bin/ninja.gz
                 sudo chmod +x /usr/local/bin/ninja
-                sudo apt install -y build-essential qemu-system qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree
+                sudo apt install -y build-essential qemu-system qemu-system-x86 nasm make parted gdisk gdb tmux dosfstools tree texinfo
                 sudo apt install -y rsync qemu-utils meson python3 python3-pip python3-setuptools python3-wheel ninja-build cmake sed m4 texinfo libgmp-dev bison flex curl
                 sudo pip3 install --break-system-packages --upgrade pip 
                 sudo pip3 install --break-system-packages pillow

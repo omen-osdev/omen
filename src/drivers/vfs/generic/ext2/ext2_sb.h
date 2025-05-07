@@ -45,6 +45,6 @@
 #define FS_USES_64BIT_FILESIZE      0x0002
 #define DIR_ENTRIES_TYPE_BTREE      0x0004
 
-uint8_t ext2_flush_sb(struct ext2_partition* partition, struct ext2_block_group_descriptor* bg, uint32_t bgid);
+int64_t ext2_flush_sb(struct ext2_partition* partition, struct ext2_block_group_descriptor* bg, uint32_t bgid);
 void ext2_dump_sb(struct ext2_partition* partition);
 #endif /* _EXT2_SB_H */

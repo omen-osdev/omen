@@ -1002,7 +1002,7 @@ void init_process(const char * _init_path, const char * _idle_path, char * tty) 
     }
 #endif
 
-    disable_debugger();
+    //disable_debugger();
 
     __asm__("mov %0, %%rsp\n"
             "mov %1, %%cr3\n"
