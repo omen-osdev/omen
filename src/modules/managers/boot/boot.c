@@ -145,7 +145,7 @@ void boot_startup() {
     probe_fs();
     kprintf("VFS startup complete...\n");
     vfs_lsdisk();
-    //ext2_inhibit_errors(1);
+    ext2_inhibit_errors(0);
     set_main_mount("hdap2");
     char vfs_tty[32];
     sprintf(vfs_tty, "%sp0/", tty); 
@@ -158,7 +158,7 @@ void boot_startup() {
     kprintf("Active subsystems: APIC, ACPI, VMM, PMM, HEAP, SERIAL, TTY, FIFO, EXT2, VFS\n");
     kprintf("Enabling interrupts...\n");
     __asm__("cli");
-    unmask_interrupt(PIT_IRQ);
+    //unmask_interrupt(PIT_IRQ);
     vfs_dir_list("/usr/lib/");
     
     init_process("/export/minit.elf", "/export/idle.elf", vfs_tty);

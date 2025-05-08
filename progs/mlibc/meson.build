@@ -251,8 +251,6 @@ elif host_machine.system() == 'dripos'
 elif host_machine.system() == 'omen'
 	rtld_include_dirs += include_directories('sysdeps/omen/include')
 	libc_include_dirs += include_directories('sysdeps/omen/include')
-	internal_conf.set10('MLIBC_MAP_DSO_SEGMENTS', true)
-	internal_conf.set10('MLIBC_MAP_FILE_WINDOWS', true)
 	subdir('sysdeps/omen')
 else
 	error('No sysdeps defined for OS: ' + host_machine.system())

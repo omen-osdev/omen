@@ -25,7 +25,7 @@ enum {
 uintptr_t libraryBase = 0x41000000;
 #endif
 
-constexpr bool verbose = false;
+constexpr bool verbose = true;
 constexpr bool stillSlightlyVerbose = false;
 constexpr bool logBaseAddresses = false;
 constexpr bool logRpath = false;

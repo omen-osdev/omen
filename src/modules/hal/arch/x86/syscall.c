@@ -125,30 +125,26 @@ int64_t read_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     uint64_t fd = SYSCALL_ARG0(ctx);
     uint64_t buffer = SYSCALL_ARG1(ctx);
     uint64_t size = SYSCALL_ARG2(ctx);
-    (void)fd;
-    (void)buffer;
-    (void)size;
     kprintf("[PID: %d | TID %d] READ_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, buffer, size);
-    int64_t res = vfs_file_read(fd, (void*)buffer, size);
+    char * rbuffer = (char*)kmalloc(size + 1024);
+    if (!rbuffer) {
+        kprintf("Could not allocate buffer for read\n");
+        return SYSCALL_ERROR;
+    }
+    memset(rbuffer, 0, size + 1024);
+    int64_t res = vfs_file_read(fd, (void*)rbuffer, size);
     //Print 10 bytes
     kprintf("Read %d bytes\n", res);
     if (res < 0) {
         return SYSCALL_ERROR;
     }
-    for (int i = 0; i < res && i < 10; i++) {
-        kprintf("%x", ((char*)buffer)[i]);
+    if ((uint64_t)res < size) {
+        memcpy((void*)buffer, rbuffer, res);
+        return res;
+    } else {
+        memcpy((void*)buffer, rbuffer, size);
+        return size;
     }
-    kprintf("\n");
-    unsigned char *md5_buffer = kmalloc(16);
-    memset(md5_buffer, 0, 16);
-    MD5_Digest(md5_buffer, buffer, size);
-    kprintf("MD5: ");
-    for (int i = 0; i < 16; i++) {
-        kprintf("%x", md5_buffer[i]);
-    }
-    kprintf("\n");
-    kfree(md5_buffer);
-    return res;
 }
 
 int64_t write_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
@@ -465,17 +461,16 @@ int64_t execve_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 int64_t arch_prctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
     (void)thread;
-    thread_t * th = SYSCALL_ARG0(ctx);
-    int option = SYSCALL_ARG1(ctx);
-    int arg2 = SYSCALL_ARG2(ctx);
-    kprintf("[PID: %d | TID %d] PRCTL_SYSCALL(%d,%d)\n", th->process->pid, th->id, option, arg2);
+    uint64_t option = SYSCALL_ARG0(ctx);
+    uint64_t arg2 = SYSCALL_ARG1(ctx);
+    kprintf("[PID: %d | TID %d] PRCTL_SYSCALL(%llx,%llx)\n", thread->process->pid, thread->id, option, arg2);
     switch (option) {
         case ARCH_SET_CPUID:
             return -ENODEV;
         case ARCH_GET_CPUID:
             return -ENODEV;
         case ARCH_SET_FS:
-            th->context->fs_base = (uint64_t)arg2;
+            thread->context->fs_base = (uint64_t)arg2;
             break;
         case ARCH_GET_FS: {
             unsigned long * fs_base = (unsigned long *)(unsigned long)arg2;
@@ -483,12 +478,12 @@ int64_t arch_prctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
                 return -EINVAL;
             }
 
-            *fs_base = (unsigned long)th->context->fs_base;
-            setFsBase(th->context->fs_base);
+            *fs_base = (unsigned long)thread->context->fs_base;
+            setFsBase(thread->context->fs_base);
             break;
         }
         case ARCH_SET_GS:
-        th->context->gs_base = (uint64_t)arg2;
+        thread->context->gs_base = (uint64_t)arg2;
             break;
         case ARCH_GET_GS: {
             unsigned long * gs_base = (unsigned long *)(unsigned long)arg2;
@@ -496,7 +491,7 @@ int64_t arch_prctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
                 return -EINVAL;
             }
 
-            *gs_base = (unsigned long)th->context->gs_base;
+            *gs_base = (unsigned long)thread->context->gs_base;
             break;
         }
         default:
@@ -922,6 +917,15 @@ void global_syscall_handler(cpu_context_t* ctx) {
 
     thread_t * current_thread = get_current_thread();
     current_thread->syscall_ready = 1;
+    int hidden_syscalls = [337, 186];
+
+    for (int i = 0; i < sizeof(hidden_syscalls) / sizeof(int); i++) {
+        if (ctx->rax == hidden_syscalls[i]) {
+            current_thread->syscall_ready = 0;
+            break;
+        }
+    }
+    
     kprintf("[PID: %d | TID %d] SYSCALL(%d)\n", current_thread->process->pid, current_thread->id, ctx->rax);    
     memcpy(current_thread->context->cpu_context, ctx, sizeof(cpu_context_t));
     memcpy(current_thread->context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));

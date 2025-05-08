@@ -24,9 +24,9 @@
 #define HIDDEN  __attribute__((__visibility__("hidden")))
 #define EXPORT  __attribute__((__visibility__("default")))
 
-static constexpr bool logEntryExit = false;
-static constexpr bool logStartup = false;
-static constexpr bool logDlCalls = false;
+static constexpr bool logEntryExit = true;
+static constexpr bool logStartup = true;
+static constexpr bool logDlCalls = true;
 
 #ifndef MLIBC_STATIC_BUILD
 extern HIDDEN void *_GLOBAL_OFFSET_TABLE_[];
@@ -40,7 +40,7 @@ namespace mlibc {
 
 mlibc::RtldConfig rtldConfig;
 
-bool ldShowAuxv = false;
+bool ldShowAuxv = true;
 
 uintptr_t *entryStack;
 frg::manual_box<ObjectRepository> initialRepository;

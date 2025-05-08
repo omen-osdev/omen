@@ -8,4 +8,3 @@ _start:
 
 	jmp *%rax
 .section .note.GNU-stack,"",%progbits
-
