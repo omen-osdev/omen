@@ -3,6 +3,7 @@
 #include <omen/managers/cpu/vmarea.h>
 #include <omen/managers/cpu/process.h>
 #include <omen/managers/mem/vmm.h>
+#include <omen/apps/debug/debug.h>
 #include <omen/libraries/allocators/heap_allocator.h>
 
 struct vm_area* is_in_vmarea(process_t* process, void * address) {
@@ -16,6 +17,14 @@ struct vm_area* is_in_vmarea(process_t* process, void * address) {
     return 0;
 }
 
+void dump_vmareas(process_t* process) {
+    struct vm_area * current = process->vm_areas;
+    while (current) {
+        kprintf("[PID: %d | AT: %p | NEXT: %p] VM Area: %p - %p, flags: %x, extended_flags: %x, page_size: %llu, fd: %d, offset: %lld\n", process->pid, current, current->next, current->start, current->end, current->flags, current->extended_flags, current->page_size, current->fd, current->offset);
+        current = current->next;
+    }
+}
+
 void create_vmarea(process_t* process, void * start, void * end, uint8_t flags, uint8_t extended_flags, uint64_t page_size, int fd, off_t offset) {
     struct vm_area * new_area = kmalloc(sizeof(struct vm_area));
     new_area->start = start;
@@ -27,6 +36,7 @@ void create_vmarea(process_t* process, void * start, void * end, uint8_t flags, 
     new_area->fd = fd;
     new_area->offset = offset;
     process->vm_areas = new_area;
+    dump_vmareas(process);
 }
 
 void remove_vmarea(process_t* process, void * start) {

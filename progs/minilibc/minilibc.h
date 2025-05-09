@@ -38,6 +38,7 @@ typedef struct stack {
     void * base;
     int flags;
     void * top;
+    uint64_t guard_size;
 } stack_t;
 
 typedef struct stat stat_t;

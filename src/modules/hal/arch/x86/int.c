@@ -70,6 +70,9 @@ void PageFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {
         thread->context->cpu_context->cr3 = from_identity_map(thread->context->cpu_context->cr3);
         return;
     }
+    if (thread->process && vma && (vma->flags & VMM_USER_BIT) && (vma->extended_flags & VMAREA_EXT_STACK_GUARD)) {
+        kprintf("Page fault: STACK GUARD\n");
+    }
 
     panic("Page fault in kernel mode\n");
 }

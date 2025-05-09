@@ -77,12 +77,6 @@ void * pmm_alloc(uint64_t size) {
     if (!ready) {
         return NULL;
     }
-    if (size % PAGE_SIZE) {
-        size += PAGE_SIZE - (size % PAGE_SIZE);
-    }
-    if (size < PAGE_SIZE) {
-        size = PAGE_SIZE;
-    }
     void * ptr = allocate(bf, size);
     return ptr;
 }

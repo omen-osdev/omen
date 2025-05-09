@@ -298,10 +298,14 @@ int64_t sigaltstack_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
     stack.base = thread->altstack_base;
     stack.top = thread->altstack;
     stack.flags = thread->altstack_flags;
+    stack.size = thread->altstack_size;
+    stack.guard_size = thread->altstack_guard_size;
     int64_t ret= sigaltstack(&stack, ss, old_ss);
     thread->altstack = stack.base;
     thread->altstack_base = stack.base;
     thread->altstack_flags = stack.flags;
+    thread->altstack_size = stack.size;
+    thread->altstack_guard_size = stack.guard_size;
     return ret;
 }
 
@@ -517,7 +521,7 @@ int64_t exit_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 
 int64_t get_tid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
-    kprintf("[PID: %d | TID %d] GET_TID_SYSCALL()\n", thread->process->pid, thread->id);
+    //kprintf("[PID: %d | TID %d] GET_TID_SYSCALL()\n", thread->process->pid, thread->id);
     return thread->id;
 }
 
@@ -535,10 +539,10 @@ int64_t getppid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 
 int64_t log_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char * message = (char *)SYSCALL_ARG0(ctx);
-    uint64_t length = SYSCALL_ARG1(ctx);
+    //uint64_t length = SYSCALL_ARG1(ctx);
     //enable_debugger();
-    kprintf("[PID: %d | TID %d] LOG_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, message, length);
-    kprintf("Log message: %s\n", message);
+    //kprintf("[PID: %d | TID %d] LOG_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, message, length);
+    kprintf("%s\n", message);
     //disable_debugger();
     return SYSCALL_SUCCESS;
 }
@@ -569,7 +573,7 @@ int64_t log_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 #define MAP_FIXED_NOREPLACE 0x100000
 int64_t mmap_syscall_handler(thread_t*thread, cpu_context_t*ctx) {
     void * addr = (void *)SYSCALL_ARG0(ctx);
-    size_t length = SYSCALL_ARG1(ctx);
+    uint64_t length = SYSCALL_ARG1(ctx);
     int prot = SYSCALL_ARG2(ctx);
     int flags = SYSCALL_ARG3(ctx);
     int fd = SYSCALL_ARG4(ctx);
@@ -917,16 +921,9 @@ void global_syscall_handler(cpu_context_t* ctx) {
 
     thread_t * current_thread = get_current_thread();
     current_thread->syscall_ready = 1;
-    int hidden_syscalls = [337, 186];
 
-    for (int i = 0; i < sizeof(hidden_syscalls) / sizeof(int); i++) {
-        if (ctx->rax == hidden_syscalls[i]) {
-            current_thread->syscall_ready = 0;
-            break;
-        }
-    }
-    
-    kprintf("[PID: %d | TID %d] SYSCALL(%d)\n", current_thread->process->pid, current_thread->id, ctx->rax);    
+    if (ctx->rax != 337 && ctx->rax != 186)
+        kprintf("[PID: %d | TID %d] SYSCALL(%d)\n", current_thread->process->pid, current_thread->id, ctx->rax);    
     memcpy(current_thread->context->cpu_context, ctx, sizeof(cpu_context_t));
     memcpy(current_thread->context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
 
@@ -941,7 +938,8 @@ void global_syscall_handler(cpu_context_t* ctx) {
     }
 
     current_thread = get_current_thread();
-    kprintf("[PID: %d | TID %d] SYSCALL(%d) RETURNED %d\n", current_thread->process->pid, current_thread->id, ctx->rax, result);
+    if (ctx->rax != 337 && ctx->rax != 186)
+        kprintf("[PID: %d | TID %d] SYSCALL(%d) RETURNED %d\n", current_thread->process->pid, current_thread->id, ctx->rax, result);
     __asm__("fxrstor %0" : "=m" (current_thread->context->fxsave_region));
     memcpy(ctx, current_thread->context->cpu_context, sizeof(cpu_context_t));
     memcpy(ctx->info, current_thread->context->cpu_context->info, sizeof(struct cpu_context_info));

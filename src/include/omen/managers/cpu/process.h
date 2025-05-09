@@ -34,6 +34,7 @@
 #define VMAREA_EXT_SHARED                   0x2
 #define VMAREA_EXT_GUARD                    0x4
 #define VMAREA_EXT_REQ_SYNC                 0x8
+#define VMAREA_EXT_STACK_GUARD              0x10
 
 //Status format: 
 
@@ -94,11 +95,17 @@ typedef struct thread {
 
     void * ustack;
     void * ustack_base;
+    uint64_t ustack_size;
+    uint64_t ustack_guard_size;
     void * kstack;
     void * kstack_base;
+    uint64_t kstack_size;
+    uint64_t kstack_guard_size;
 
     void * altstack;
     void * altstack_base;
+    uint64_t altstack_size;
+    uint64_t altstack_guard_size;
     void * altstack_saved_stack;
     void * altstack_saved_base;
     context_t *signal_context;
@@ -146,8 +153,6 @@ typedef struct process {
     struct sigaction signal_handlers[NSIG];
 
     unsigned int locks;
-
-    uint64_t stack_max_size;
 
     int16_t pid;
     int16_t ppid;

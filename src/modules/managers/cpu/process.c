@@ -137,7 +137,7 @@ process_t *get_free_process_slot() {
     return 0;
 }
 
-void init_stacks(process_t * task, thread_t * thread, uint64_t size, uint64_t entry) {
+void init_stacks(thread_t * thread, uint64_t size, uint64_t entry) {
     if (size % 0x1000) {
         size = (size + 0x1000) & ~0xfff;
     }
@@ -145,26 +145,38 @@ void init_stacks(process_t * task, thread_t * thread, uint64_t size, uint64_t en
         size = PROCESS_STACK_SIZE & ~0xfff;
     }
 
+    process_t * task = thread->process;
+    if (task == 0) {
+        panic("No task for thread\n");
+    }
+    if (task->vmm == 0) {
+        panic("No VMM for process\n");
+    }
+
     struct stack stack;
     stackalloc(task->vmm, &stack, size);
     thread->ustack = stack.top;
     thread->ustack_base = stack.base;
-    create_vmarea(task, thread->ustack_base, thread->ustack, VMM_USER_BIT | VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
+    thread->ustack_size = stack.size
+    thread->ustack_guard_size = stack.guard_size;
+    create_vmarea(task, thread->ustack_base, thread->ustack-1, VMM_USER_BIT | VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
+    create_vmarea(task, thread->ustack_base-thread->ustack_guard_size, thread->ustack_base-1, VMM_USER_BIT, VMAREA_EXT_STACK_GUARD, PAGE_SIZE_4KIB, -1, 0);
     kstackalloc(task->vmm, &stack, size);
     thread->kstack_base = stack.base;
     thread->kstack = stack.top;
-    create_vmarea(task, thread->kstack_base, thread->kstack, VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
-
+    thread->kstack_guard_size = stack.guard_size;
+    create_vmarea(task, thread->kstack_base, thread->kstack-1, VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
+    create_vmarea(task, thread->kstack_base-thread->kstack_guard_size, thread->kstack_base-1, VMM_USER_BIT, VMAREA_EXT_STACK_GUARD, PAGE_SIZE_4KIB, -1, 0);
     if (get_pml4() != task->vmm) {
         void * stack_physical = get_physical_address(task->vmm, thread->ustack_base);
-        map_range(get_pml4(), thread->ustack_base, (uint64_t)stack_physical, PAGE_SIZE_4KIB, PROCESS_STACK_SIZE, VMM_WRITE_BIT);
+        map_range(get_pml4(), thread->ustack_base, (uint64_t)stack_physical, PAGE_SIZE_4KIB, thread->ustack_size, VMM_WRITE_BIT);
     }
     
-    thread->ustack = create_args_env_aux(thread->ustack, PROCESS_STACK_SIZE, task->argv, task->envp, task->auxv);
+    thread->ustack = create_args_env_aux(thread->ustack, thread->ustack_size, task->argv, task->envp, task->auxv);
     newuctxcreat((uint64_t)&(thread->ustack), (uint64_t)entry);
 
     if (get_pml4() != task->vmm)
-        unmap_range(get_pml4(), thread->ustack_base, PROCESS_STACK_SIZE);
+        unmap_range(get_pml4(), thread->ustack_base, thread->ustack_size);
 }
 
 context_t * create_context(void * cr3, void * ustack, void * kstack, void * init) {
@@ -214,6 +226,8 @@ context_t * create_context(void * cr3, void * ustack, void * kstack, void * init
 void restore_signal_context(thread_t * thread, cpu_context_t * ctx) {
     thread->ustack = thread->altstack_saved_stack;
     thread->ustack_base = thread->altstack_saved_base;
+    thread->ustack_size = thread->ustack_guard_size;
+    thread->ustack_guard_size = thread->altstack_guard_size;
     thread->altstack_saved_stack = 0;
     thread->altstack_saved_base = 0;
 
@@ -336,6 +350,7 @@ void create_signal_context(thread_t * thread, int signo, struct sigaction * siga
         thread->altstack = stack.top;
         thread->altstack_base = stack.base;
         create_vmarea(thread->process, thread->ustack_base, thread->ustack, VMM_USER_BIT | VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
+        create_vmarea(thread->process, thread->ustack_base-thread->ustack_guard_size, thread->ustack_guard_size, VMM_USER_BIT, VMAREA_EXT_STACK_GUARD, PAGE_SIZE_4KIB, -1, 0);
     } else {
         size = (uint64_t)thread->altstack - (uint64_t)thread->altstack_base;
         if (size % 0x1000) {
@@ -345,8 +360,12 @@ void create_signal_context(thread_t * thread, int signo, struct sigaction * siga
 
     thread->altstack_saved_stack = thread->ustack;
     thread->altstack_saved_base = thread->ustack_base;
+    thread->altstack_size = thread->ustack_size;
+    thread->altstack_guard_size = thread->ustack_guard_size;
     thread->ustack = thread->altstack;
     thread->ustack_base = thread->altstack_base;
+    thread->ustack_size = size;
+    thread->ustack_guard_size = thread->altstack_guard_size;
 
     if (get_pml4() != thread->process->vmm) {
         void * stack_physical = get_physical_address(thread->process->vmm, thread->ustack_base);
@@ -386,8 +405,8 @@ void init_thread(process_t * task, void * init) {
     thread_t * thread = &(task->threads[task->thread_count++]);
     memset(thread, 0, sizeof(thread_t));
 
-    init_stacks(task, thread, task->stack_max_size, init);
     thread->process = task;
+    init_stacks(thread, PROCESS_STACK_SIZE, init);
     thread->context = create_context(from_identity_map(task->vmm), thread->ustack, thread->kstack, init);
     thread->entry = init;
     thread->id = task->thread_count - 1;
@@ -489,9 +508,9 @@ process_t * duplicate_process(thread_t * parent_thread) {
 
     task->vmm = vmm_copy(parent->vmm);
     main_thread->context->cpu_context->cr3 = from_identity_map(task->vmm);
-    vmm_copy_stack(task->vmm, parent_thread->ustack_base, task->stack_max_size, VMM_USER_BIT | VMM_WRITE_BIT);
-    vmm_copy_stack(task->vmm, parent_thread->kstack_base, task->stack_max_size, VMM_WRITE_BIT);
-    vmm_copy_stack(task->vmm, parent_thread->altstack_base, (parent_thread->altstack - parent_thread->altstack_base), VMM_USER_BIT | VMM_WRITE_BIT);
+    vmm_copy_stack(task->vmm, parent_thread->ustack_base, parent_thread->ustack_size, parent_thread->ustack_size, VMM_USER_BIT | VMM_WRITE_BIT);
+    vmm_copy_stack(task->vmm, parent_thread->kstack_base, parent_thread->kstack_size, parent_thread->ustack_size, VMM_WRITE_BIT);
+    vmm_copy_stack(task->vmm, parent_thread->altstack_base, parent_thread->altstack_size, parent_thread->ustack_size, VMM_USER_BIT | VMM_WRITE_BIT);
     //vdso_remap(task->vmm, task->vdso);
     engrave_vmareas(task, parent);
     kprintf("Process %d duplicated\n", task->pid);
@@ -527,8 +546,6 @@ void alter_process_on_exec(process_t * task, struct loaded_elf * ld, char const 
     task->cpu_time = 0;
     task->last_scheduled = 0;
     task->locks = 0;
-
-    task->stack_max_size = PROCESS_STACK_SIZE;
 
     for (int i = 1; i < NSIG; i++) {
         task->signal_queue[i] = 0;
@@ -921,8 +938,6 @@ process_t * create_user_process(struct page_directory* pd, void * init, char * t
     task->cpu_time = 0;
     task->last_scheduled = 0;
     task->locks = 0;
-
-    task->stack_max_size = PROCESS_STACK_SIZE;
 
     for (int i = 1; i < NSIG; i++) {
         task->signal_queue[i] = 0;
