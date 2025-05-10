@@ -62,8 +62,9 @@ struct page_directory* get_pml4();
 
 void remap_allocate_cow(struct page_directory * pml4, void * section_start, uint64_t size, uint64_t page_size, uint8_t flags);
 void * vmm_create_kernel_stack(struct page_directory* stack_root, uint64_t stack_pages, uint8_t flags, uint64_t * stack_base);
-void * vmm_copy_stack(struct page_directory* stack_root, void * stack_base, uint64_t stack_size, uint64_t grow_size, uint8_t flags);
+void * vmm_copy_stack(struct page_directory* stack_root, void * stack_base, uint64_t stack_size, uint8_t flags);
 struct page_directory * vmm_copy_kernel(struct page_directory* root);
+void * vmm_grow_stack(struct page_directory* stack_root, void * stack_base, uint64_t original_size, uint64_t guard_size, uint64_t new_size);
 uint64_t vmm_is_present(struct page_directory* root, void * vmm_address);
 void vmm_unmap_userspace(struct page_directory* root);
 void * get_current_physical_address(void * address);

@@ -690,35 +690,37 @@ uint64_t vmm_is_present(struct page_directory* root, void * vmm_address) {
     return PAGE_SIZE_4KIB;
 }
 
-void * vmm_copy_stack(struct page_directory* stack_root, void * stack_base, uint64_t stack_size, uint64_t grow_size, uint8_t flags)
+void * vmm_copy_stack(struct page_directory* stack_root, void * stack_base, uint64_t stack_size, uint8_t flags)
 {
     if (stack_size == 0) return NULL;
-    if (grow_size == 0) grow_size = stack_size;
     stack_size = (stack_size + 0xfff) & ~0xfff;
-    grow_size = (grow_size + 0xfff) & ~0xfff;
-    if (stack_size > grow_size) {
-        panic("Stack size is greater than grow size\n");
-        return NULL;
-    }
 
-    void * new_stack_phys = pmm_alloc(grow_size);
-    void * old_stack_phys = get_physical_address(stack_root, stack_base);
+    void * new_stack_phys = pmm_alloc(stack_size);
+    memcpy(TO_IDENTITY_MAP(new_stack_phys), stack_base, stack_size);
+    map_range(stack_root, stack_base, new_stack_phys, PAGE_SIZE_4KIB, stack_size, flags);
+    return stack_base;
+}
+
+void * vmm_grow_stack(struct page_directory* stack_root, void * stack_base, uint64_t original_size, uint64_t guard_size, uint64_t new_size) {
+    //uint8_t flags = get_page_perms(stack_root, stack_base);
+    
+    uint64_t size_delta = new_size - original_size;
+
+    void * guard_address = (void*)((uint64_t)stack_base - guard_size);
+    pmm_free(guard_address);
+
+    void * new_stack_phys = pmm_alloc(new_size+guard_size);
     if (new_stack_phys == NULL) {
         panic("Failed to allocate memory for new stack\n");
         return NULL;
     }
-    if (old_stack_phys == NULL) {
-        panic("Failed to get physical address of old stack\n");
-        return NULL;
-    }
-    memcpy(TO_IDENTITY_MAP(new_stack_phys), stack_base, stack_size);
-    if (grow_size > stack_size) {
-        //Deallocate the old stack
-        pmm_free(old_stack_phys);
-    }
+    memset(TO_IDENTITY_MAP(new_stack_phys), 0, new_size+guard_size);
+    memcpy(TO_IDENTITY_MAP(new_stack_phys+size_delta+guard_size), stack_base, original_size);
 
-    map_range(stack_root, stack_base-(grow_size-stack_size), new_stack_phys, PAGE_SIZE_4KIB, grow_size, flags);
-
+    //void * new_base = (void*)((uint64_t)stack_base - size_delta);
+//
+    //unmap_memory(stack_root, stack_base); //Just in case... make sure the guard page is not mapped
+    //map_range(stack_root, stack_base, new_stack_phys+guard_size, PAGE_SIZE_4KIB, new_size, flags);
     return stack_base;
 }
 

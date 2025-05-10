@@ -157,7 +157,7 @@ void init_stacks(thread_t * thread, uint64_t size, uint64_t entry) {
     stackalloc(task->vmm, &stack, size);
     thread->ustack = stack.top;
     thread->ustack_base = stack.base;
-    thread->ustack_size = stack.size
+    thread->ustack_size = stack.size;
     thread->ustack_guard_size = stack.guard_size;
     create_vmarea(task, thread->ustack_base, thread->ustack-1, VMM_USER_BIT | VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
     create_vmarea(task, thread->ustack_base-thread->ustack_guard_size, thread->ustack_base-1, VMM_USER_BIT, VMAREA_EXT_STACK_GUARD, PAGE_SIZE_4KIB, -1, 0);
@@ -508,9 +508,9 @@ process_t * duplicate_process(thread_t * parent_thread) {
 
     task->vmm = vmm_copy(parent->vmm);
     main_thread->context->cpu_context->cr3 = from_identity_map(task->vmm);
-    vmm_copy_stack(task->vmm, parent_thread->ustack_base, parent_thread->ustack_size, parent_thread->ustack_size, VMM_USER_BIT | VMM_WRITE_BIT);
-    vmm_copy_stack(task->vmm, parent_thread->kstack_base, parent_thread->kstack_size, parent_thread->ustack_size, VMM_WRITE_BIT);
-    vmm_copy_stack(task->vmm, parent_thread->altstack_base, parent_thread->altstack_size, parent_thread->ustack_size, VMM_USER_BIT | VMM_WRITE_BIT);
+    vmm_copy_stack(task->vmm, parent_thread->ustack_base, parent_thread->ustack_size, VMM_USER_BIT | VMM_WRITE_BIT);
+    vmm_copy_stack(task->vmm, parent_thread->kstack_base, parent_thread->kstack_size, VMM_WRITE_BIT);
+    vmm_copy_stack(task->vmm, parent_thread->altstack_base, parent_thread->altstack_size, VMM_USER_BIT | VMM_WRITE_BIT);
     //vdso_remap(task->vmm, task->vdso);
     engrave_vmareas(task, parent);
     kprintf("Process %d duplicated\n", task->pid);

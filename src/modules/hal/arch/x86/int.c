@@ -72,6 +72,9 @@ void PageFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {
     }
     if (thread->process && vma && (vma->flags & VMM_USER_BIT) && (vma->extended_flags & VMAREA_EXT_STACK_GUARD)) {
         kprintf("Page fault: STACK GUARD\n");
+        kprintf("Normally we should grow the stack\n");
+        kprintf("But we are not doing it yet\n");
+        kprintf("JONBARDO\n");
     }
 
     panic("Page fault in kernel mode\n");

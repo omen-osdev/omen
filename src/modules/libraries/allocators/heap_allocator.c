@@ -59,11 +59,12 @@ void _stkalloc(struct page_directory* pd, struct stack * stack, uint64_t length,
     stack->guard_size = guard_size;
 }
 
-void grow_stack(struct page_directory* pd, void * stack_base, uint64_t * stack_size, uint64_t guard_size) {
-    uint8_t flags = get_page_perms(pd, stack_base);
-    void * newbase = vmm_copy_stack(pd, stack_base-grow_size, *stack_size, (*stack_size)+grow_size, flags);
-    if (newbase != (stack_base-STACK_GROWTH_SIZE)) panic("Failed to grow stack\n");
-    *stack_size += grow_size;
+void grow_stack(struct page_directory* pd, struct stack * stack) {
+//    void * vmm_grow_stack(struct page_directory* stack_root, void * stack_base, uint64_t original_size, uint64_t guard_size, uint64_t new_size);
+//    if (vmm_grow_stack(pd, stack->base, stack->size, stack->guard_size, stack->size+STACK_GROWTH_SIZE) != stack->base) {
+//        panic("Failed to grow stack\n");
+//    }
+//    stack->base = (void*)((uint64_t)stack->base + STACK_GROWTH_SIZE);
 }
 
 void kstackalloc(struct page_directory* pd, struct stack * stack, uint64_t length) {

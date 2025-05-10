@@ -22,4 +22,5 @@ void kstackalloc(struct page_directory* pd, struct stack * stack, uint64_t lengt
 void kstackfree(struct page_directory* pd, struct stack * stack);
 void stackalloc(struct page_directory* root, struct stack * stack, uint64_t length);
 void stackfree(struct page_directory* root, struct stack * stack);
+void grow_stack(struct page_directory* pd, struct stack * stack);
 #endif
