@@ -1,5 +1,6 @@
 #include <omen/libraries/std/stdint.h>
 #include <omen/apps/debug/debug.h>
+#include <omen/managers/mem/account.h>
 #include <omen/managers/mem/pmm.h>
 #include <omen/managers/mem/vmm.h>
 #include <omen/apps/panic/panic.h>
@@ -288,13 +289,14 @@ check_mapping:
         kprintf("Mapping error: %llx != %llx\n", phys_addr, physical_address);
         panic("Mapping error");
     }
+
+    insert_allocation(root, virtual_address, physical_address, size);
 }
 
 void unmap_memory(struct page_directory* root, void* virtual_address)
 {
     struct page_map_index map;
     address_to_map((uint64_t)virtual_address, &map);
-
     struct page_directory *pdptable, *pdtable, *pttable;
     vm_entry *pml4entry, *pdptentry, *pdentry, *ptentry;
 
@@ -339,6 +341,7 @@ void unmap_memory(struct page_directory* root, void* virtual_address)
     }
 
     ptentry->directory.P = 0;
+    remove_allocation(root, virtual_address);
 }
 
 void * allocate_vmm(struct page_directory * pml4, uint64_t size, uint64_t region, uint8_t flags)
@@ -355,7 +358,7 @@ void * allocate_vmm(struct page_directory * pml4, uint64_t size, uint64_t region
         panic("Failed to allocate memory\n");
         return NULL;
     }
-
+    
     memset(TO_IDENTITY_MAP(buffer), 0, size);
 
     switch (region) {
@@ -387,6 +390,19 @@ void free_vmm(struct page_directory * pml4, void * address)
         }
         unmap_memory(pml4, address);
     }
+    
+    uint64_t count = how_many_allocations_for_physaddr(physical);
+    if (count >= 1)
+    {
+        kprintf("Physical address %llx is still in use, not freeing\n", physical);
+        return;
+    }
+
+    if (physical == 0)
+    {
+        panic("free_vmm failed to find physical address\n");
+    }
+
     pmm_free(physical);
 }
 
@@ -471,6 +487,16 @@ struct page_directory * vmm_copy_kernel(struct page_directory* root)
 {
     struct page_directory* new = (struct page_directory*)TO_IDENTITY_MAP(allocate_phys_page());
     duplicate_page_directory(root, new, 3, 256, 0);
+    struct page_map_index map;
+    map.PML4_index = 256;
+    map.PDP_index = 0;
+    map.PD_index = 0;
+    map.PT_index = 0;
+
+    uint64_t min_address;
+    map_to_address(&map, &min_address);
+    copy_page_directory(root, new, (void*)min_address, (void*)0xffffffffffffffff);
+    
     return new;
 }
 
@@ -478,6 +504,16 @@ struct page_directory * vmm_copy(struct page_directory* root)
 {
     struct page_directory* new = (struct page_directory*)TO_IDENTITY_MAP(allocate_phys_page());
     duplicate_page_directory(root, new, 3, 0, 0);
+    struct page_map_index map;
+    map.PML4_index = 0;
+    map.PDP_index = 0;
+    map.PD_index = 0;
+    map.PT_index = 0;
+
+    uint64_t min_address;
+    map_to_address(&map, &min_address);
+
+    copy_page_directory(root, new, (void*)min_address, (void*)0xffffffffffffffff);
     return new;
 }
 
@@ -628,7 +664,6 @@ void init_vmm()
     {
         panic("VDSO_START or VDSO_END not defined\n");
     }
-
     map_range(get_current_cr3(), (void*)VMM_REGION_K_IDENT, (void*)0, PAGE_SIZE_1GIB, PHYSICAL_MEMORY_SIZE, VMM_WRITE_BIT);
     map_range(get_current_cr3(), (void*)VMM_REGION_K_HEAP, (void*)0, PAGE_SIZE_1GIB, PHYSICAL_MEMORY_SIZE, VMM_WRITE_BIT);
     map_range(get_current_cr3(), (void*)VMM_REGION_DEVICES, (void*)0, PAGE_SIZE_1GIB, PHYSICAL_MEMORY_SIZE, VMM_WRITE_BIT | VMM_CACHE_DISABLE_BIT | VMM_NX_BIT);
@@ -641,7 +676,15 @@ void init_vmm()
     vme->directory.US = 1;
     physical_memory_offset = VMM_REGION_K_IDENT;
     remap_bitfield(VMM_REGION_K_IDENT);
+
+    void * cr3ident = (void*)TO_IDENTITY_MAP(cr3);
+    insert_page_directory(cr3ident);
+    insert_allocation(cr3ident, (void*)VMM_REGION_K_IDENT, (void*)0x0, PAGE_SIZE_1GIB);
+    insert_allocation(cr3ident, (void*)VMM_REGION_K_HEAP, (void*)0x0, PAGE_SIZE_1GIB);
+    insert_allocation(cr3ident, (void*)VMM_REGION_DEVICES, (void*)0x0, PAGE_SIZE_1GIB);
+    insert_allocation(cr3ident, (void*)VMM_REGION_U_VDSO, (void*)0x0, PAGE_SIZE_1GIB);
     struct page_directory* global_cr3 = vmm_copy_kernel(get_current_cr3());
+    remove_page_directory((void*)TO_IDENTITY_MAP(cr3));
     //compare_directories(get_current_cr3(), global_cr3, 4);
     switch_cr3(FROM_IDENTITY_MAP(global_cr3));
     kprintf("Page table switched\n");
@@ -701,27 +744,16 @@ void * vmm_copy_stack(struct page_directory* stack_root, void * stack_base, uint
     return stack_base;
 }
 
-void * vmm_grow_stack(struct page_directory* stack_root, void * stack_base, uint64_t original_size, uint64_t guard_size, uint64_t new_size) {
-    //uint8_t flags = get_page_perms(stack_root, stack_base);
-    
-    uint64_t size_delta = new_size - original_size;
-
-    void * guard_address = (void*)((uint64_t)stack_base - guard_size);
-    pmm_free(guard_address);
+void * vmm_grow_stack(struct page_directory* stack_root, void * stack_base, uint64_t original_size, uint64_t guard_size, uint64_t size_increase) {
+    uint8_t flags = get_page_perms(stack_root, stack_base);
+    if (size_increase == 0) return NULL;
+    size_increase = (size_increase + 0xfff) & ~0xfff;
+    uint64_t new_size = original_size + size_increase;
 
     void * new_stack_phys = pmm_alloc(new_size+guard_size);
-    if (new_stack_phys == NULL) {
-        panic("Failed to allocate memory for new stack\n");
-        return NULL;
-    }
-    memset(TO_IDENTITY_MAP(new_stack_phys), 0, new_size+guard_size);
-    memcpy(TO_IDENTITY_MAP(new_stack_phys+size_delta+guard_size), stack_base, original_size);
-
-    //void * new_base = (void*)((uint64_t)stack_base - size_delta);
-//
-    //unmap_memory(stack_root, stack_base); //Just in case... make sure the guard page is not mapped
-    //map_range(stack_root, stack_base, new_stack_phys+guard_size, PAGE_SIZE_4KIB, new_size, flags);
-    return stack_base;
+    memcpy(TO_IDENTITY_MAP(new_stack_phys+guard_size+size_increase), stack_base, original_size);
+    map_range(stack_root, stack_base-size_increase, new_stack_phys+guard_size, PAGE_SIZE_4KIB, new_size, flags);
+    return stack_base-size_increase;
 }
 
 //Adapters for the interface
@@ -1117,6 +1149,8 @@ void vmm_unmap_userspace(struct page_directory* root)
     {
         memset(GET_ENTRY(root, i), 0, sizeof(vm_entry)); //TODO: Reclaim the used memory!
     }
+    remove_page_directory((void*)root);
+    insert_page_directory((void*)root);
 }
 
 void debug_current_address(void * address)
@@ -1149,8 +1183,4 @@ void * allocate_at_vaddr(struct page_directory * root, void * virtual_address, u
     memset(TO_IDENTITY_MAP(buffer), 0, pages * PAGE_SIZE_4KIB);
     map_range(root, virtual_address, buffer, PAGE_SIZE_4KIB, pages * PAGE_SIZE_4KIB, flags);
     return buffer;
-}
-
-void free_phys_page(void * address) {
-    pmm_free(address);
 }

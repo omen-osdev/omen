@@ -14,6 +14,11 @@ char debug_buffer[DEBUG_MESSAGE_BUFFER];
 
 bool debug_enabled = false;
 
+void __breakpoint() {
+    int a = 5+6;
+    a = a + 1;
+}
+
 void init_debugger(const char * device_name) {
     if (device_name == NULL) {
         return;

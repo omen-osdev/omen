@@ -75,7 +75,7 @@ typedef struct process process_t;
 
 typedef struct context {
     cpu_context_t *cpu_context;
-    char fxsave_region[512] __attribute__((aligned(16)));
+    uint8_t *fxsave_region __attribute__((aligned(16)));
     uint64_t fs_base;
     uint64_t gs_base;
 } context_t;

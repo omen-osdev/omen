@@ -62,6 +62,10 @@ gpt:
 	@make -C $(BUILDENV_DIR) gpt
 
 debugpt:
+	@sudo make -C $(BUILDENV_DIR) clean
+	@sudo make -C $(BUILDENV_DIR) cprogs
+	@xbstrap build --all
+	@objcopy --only-keep-debug ./sysroot/usr/lib/ld.so ./progs/sym/ld.so.sym
 	@make -C $(BUILDENV_DIR) debugpt
 
 debugpt-wsl:

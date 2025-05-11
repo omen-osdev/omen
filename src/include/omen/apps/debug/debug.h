@@ -18,6 +18,8 @@
 
 //Setup the debugger over a device
 //TODO: Use an abstract device, not a callback!
+#define BREAKPOINT() __breakpoint()
+void __breakpoint();
 void init_debugger(const char * device_name);
 void disable_debugger();
 void enable_debugger();

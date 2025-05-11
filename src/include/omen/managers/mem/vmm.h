@@ -86,7 +86,6 @@ void free_vmm(struct page_directory * pml4, void * address);
 void* get_physical_address(struct page_directory* root, void* virtual_address);
 void switch_cr3(struct page_directory* cr3);
 void * allocate_phys_page();
-void free_phys_page(void * address);
 
 //Used one time
 void init_paging();

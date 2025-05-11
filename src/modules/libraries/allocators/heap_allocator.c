@@ -60,11 +60,8 @@ void _stkalloc(struct page_directory* pd, struct stack * stack, uint64_t length,
 }
 
 void grow_stack(struct page_directory* pd, struct stack * stack) {
-//    void * vmm_grow_stack(struct page_directory* stack_root, void * stack_base, uint64_t original_size, uint64_t guard_size, uint64_t new_size);
-//    if (vmm_grow_stack(pd, stack->base, stack->size, stack->guard_size, stack->size+STACK_GROWTH_SIZE) != stack->base) {
-//        panic("Failed to grow stack\n");
-//    }
-//    stack->base = (void*)((uint64_t)stack->base + STACK_GROWTH_SIZE);
+    stack->base = vmm_grow_stack(pd, stack->base, stack->size, stack->guard_size, stack->size + STACK_GROWTH_SIZE);
+    stack->size += STACK_GROWTH_SIZE;
 }
 
 void kstackalloc(struct page_directory* pd, struct stack * stack, uint64_t length) {
@@ -79,8 +76,12 @@ void kstackfree(struct page_directory* pd, struct stack * stack) {
     unmap_range(pd, stack->base - stack->guard_size, stack->guard_size);
 }
 
+void free(struct page_directory* root, void * address) {
+    free_vmm(root, address);
+}
+
 void kfree(void* address) {
-    free_vmm(get_pml4(), address); //In the future account for malloc size!!
+    free(get_pml4(), address); //In the future account for malloc size!!
 }
 
 void * malloc(struct page_directory* root, uint64_t size) {
@@ -90,10 +91,6 @@ void * malloc(struct page_directory* root, uint64_t size) {
     }
     memset(to_identity_map(VMM_FROM_USER_HEAP(ptr)), 0, size);
     return ptr;
-}
-
-void free(struct page_directory* root, void * address) {
-    free_vmm(root, address);
 }
 
 void stackfree(struct page_directory* root, struct stack * stack) {

@@ -72,9 +72,22 @@ void PageFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {
     }
     if (thread->process && vma && (vma->flags & VMM_USER_BIT) && (vma->extended_flags & VMAREA_EXT_STACK_GUARD)) {
         kprintf("Page fault: STACK GUARD\n");
-        kprintf("Normally we should grow the stack\n");
-        kprintf("But we are not doing it yet\n");
-        kprintf("JONBARDO\n");
+        struct stack stack;
+        stack.base = thread->ustack_base;
+        stack.top = thread->ustack;
+        stack.size = thread->ustack_size;
+        stack.guard_size = thread->ustack_guard_size;
+        stack.flags = 0;
+        grow_stack(thread->process->vmm, &stack);
+
+        remove_vmarea(thread->process, thread->ustack_base-thread->ustack_guard_size);
+        remove_vmarea(thread->process, thread->ustack_base);
+        thread->ustack_base = stack.base;
+        thread->ustack_size = stack.size;
+        create_vmarea(thread->process, thread->ustack_base, thread->ustack_base+thread->ustack_size-1, VMM_USER_BIT | VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
+        create_vmarea(thread->process, thread->ustack_base-thread->ustack_guard_size, thread->ustack_base-1, VMM_USER_BIT, VMAREA_EXT_STACK_GUARD, PAGE_SIZE_4KIB, -1, 0);
+        thread->context->cpu_context->cr3 = from_identity_map(thread->context->cpu_context->cr3);
+        return;
     }
 
     panic("Page fault in kernel mode\n");

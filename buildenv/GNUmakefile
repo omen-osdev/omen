@@ -222,6 +222,7 @@ setup:
 	@echo end >> $(ABSDIR)/$(GDBCFG)
 #	@echo adds init >> $(ABSDIR)/$(GDBCFG)
 	@echo b main >> $(ABSDIR)/$(GDBCFG)
+	@echo b __breakpoint >> $(ABSDIR)/$(GDBCFG)
 	@echo b $(KERNEL_ENTRY) >> $(ABSDIR)/$(GDBCFG)
 	@echo c >> $(ABSDIR)/$(GDBCFG)
 
@@ -357,7 +358,6 @@ debugsetup:
 	@losetup -l
 	@mount
 	@ls -slart /mnt
-
 
 progs:
 	$(foreach prog,$(PROGS),$(MAKE) -C $(prog); rsync -a $(prog)/build/bin/ $(PROGSBUILDDIR);rsync -a $(prog)/build/sym/ $(PROGSSYMDIR);)

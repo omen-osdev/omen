@@ -159,13 +159,14 @@ void init_stacks(thread_t * thread, uint64_t size, uint64_t entry) {
     thread->ustack_base = stack.base;
     thread->ustack_size = stack.size;
     thread->ustack_guard_size = stack.guard_size;
-    create_vmarea(task, thread->ustack_base, thread->ustack-1, VMM_USER_BIT | VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
+    create_vmarea(task, thread->ustack_base, thread->ustack_base+thread->ustack_size-1, VMM_USER_BIT | VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
     create_vmarea(task, thread->ustack_base-thread->ustack_guard_size, thread->ustack_base-1, VMM_USER_BIT, VMAREA_EXT_STACK_GUARD, PAGE_SIZE_4KIB, -1, 0);
     kstackalloc(task->vmm, &stack, size);
     thread->kstack_base = stack.base;
     thread->kstack = stack.top;
+    thread->kstack_size = stack.size;
     thread->kstack_guard_size = stack.guard_size;
-    create_vmarea(task, thread->kstack_base, thread->kstack-1, VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
+    create_vmarea(task, thread->kstack_base, thread->kstack_base+thread->kstack_size-1, VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
     create_vmarea(task, thread->kstack_base-thread->kstack_guard_size, thread->kstack_base-1, VMM_USER_BIT, VMAREA_EXT_STACK_GUARD, PAGE_SIZE_4KIB, -1, 0);
     if (get_pml4() != task->vmm) {
         void * stack_physical = get_physical_address(task->vmm, thread->ustack_base);
@@ -181,13 +182,15 @@ void init_stacks(thread_t * thread, uint64_t size, uint64_t entry) {
 
 context_t * create_context(void * cr3, void * ustack, void * kstack, void * init) {
     context_t * context = kmalloc(sizeof(context_t));
-
+    context->fxsave_region = kmalloc(512);
+    memset(context->fxsave_region, 0, 512);
     context->fs_base = 0;
     context->gs_base = 0;
     __asm__ volatile("fxsave %0" : "=m" (context->fxsave_region));
 
     cpu_context_t * cpu_context = kmalloc(sizeof(cpu_context_t));
     memset(cpu_context, 0, sizeof(cpu_context_t));
+
     cpu_context->info = kmalloc(sizeof(struct cpu_context_info));
     memset(cpu_context->info, 0, sizeof(struct cpu_context_info));
     cpu_context->cr3 = (uint64_t)cr3;
@@ -251,6 +254,8 @@ void restore_signal_context(thread_t * thread, cpu_context_t * ctx) {
 
     thread->context = kmalloc(sizeof(context_t));
     memcpy(thread->context, thread->signal_context, sizeof(context_t));
+    thread->context->fxsave_region = kmalloc(512);
+    memcpy(thread->context->fxsave_region, thread->signal_context->fxsave_region, 512);
     thread->context->cpu_context = kmalloc(sizeof(cpu_context_t));
     memcpy(thread->context->cpu_context, thread->signal_context->cpu_context, sizeof(cpu_context_t));
     thread->context->cpu_context->info = kmalloc(sizeof(struct cpu_context_info));
@@ -338,6 +343,8 @@ void create_signal_context(thread_t * thread, int signo, struct sigaction * siga
 
     thread->signal_context = kmalloc(sizeof(context_t));
     memcpy(thread->signal_context, thread->context, sizeof(context_t));
+    thread->signal_context->fxsave_region = kmalloc(512);
+    memcpy(thread->signal_context->fxsave_region, thread->context->fxsave_region, 512);
     thread->signal_context->cpu_context = kmalloc(sizeof(cpu_context_t));
     memcpy(thread->signal_context->cpu_context, thread->context->cpu_context, sizeof(cpu_context_t));
     thread->signal_context->cpu_context->info = kmalloc(sizeof(struct cpu_context_info));
@@ -493,6 +500,8 @@ process_t * duplicate_process(thread_t * parent_thread) {
     main_thread->process = task;
     main_thread->context = kmalloc(sizeof(context_t));
     memcpy(main_thread->context, parent_thread->context, sizeof(context_t));
+    main_thread->context->fxsave_region = kmalloc(512);
+    memcpy(main_thread->context->fxsave_region, parent_thread->context->fxsave_region, 512);
     main_thread->context->cpu_context = kmalloc(sizeof(cpu_context_t));
     memcpy(main_thread->context->cpu_context, parent_thread->context->cpu_context, sizeof(cpu_context_t));
     main_thread->context->cpu_context->info = kmalloc(sizeof(struct cpu_context_info));
