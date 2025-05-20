@@ -158,7 +158,7 @@ void boot_startup() {
     kprintf("Active subsystems: APIC, ACPI, VMM, PMM, HEAP, SERIAL, TTY, FIFO, EXT2, VFS\n");
     kprintf("Enabling interrupts...\n");
     __asm__("cli");
-    //unmask_interrupt(PIT_IRQ);
+    unmask_interrupt(PIT_IRQ);
     vfs_dir_list("/usr/lib/");
     
     init_process("/export/minit.elf", "/export/idle.elf", vfs_tty);

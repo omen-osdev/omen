@@ -7,11 +7,13 @@ override HOME = .
 SYSROOT = $(HOME)/../../../sysroot
 INCLUDE = $(SYSROOT)/usr/include
 SOURCE = $(HOME)/src
+SYMDIR := $(HOME)/../../sym
 BIN = build
 LIB = lib
 
 # Tools Config
-CFLAGS = 
+CFLAGS = -O2 -g -Wall -Wextra -Wpedantic -std=c11
+NASMFLAGS = -F dwarf -g
 
 LDFLAGS = -Wall \
 		  -lc
@@ -40,4 +42,13 @@ clean:
 	@ $(call cyan,"Cleaning up...")
 	@ rm -rf $(BIN) $(LIB)
 	@ mkdir -m 777 -p $(BIN) $(LIB)
+	@ $(call cyan,"Done.")
+
+all:
+	@ $(call cyan,"Building program...")
+	@ $(call cyan,"Absdir: $(HOME)")
+	@ make build
+	@ $(call cyan,"Generating symbol table...")
+	@ mkdir -m 777 -p $(SYMDIR)
+	@ objcopy --only-keep-debug $(BIN)/minit.elf $(SYMDIR)/minit.elf.sym
 	@ $(call cyan,"Done.")

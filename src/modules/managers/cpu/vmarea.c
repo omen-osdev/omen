@@ -36,7 +36,7 @@ void create_vmarea(process_t* process, void * start, void * end, uint8_t flags, 
     new_area->fd = fd;
     new_area->offset = offset;
     process->vm_areas = new_area;
-    dump_vmareas(process);
+    //dump_vmareas(process);
 }
 
 void remove_vmarea(process_t* process, void * start) {

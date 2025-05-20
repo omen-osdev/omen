@@ -351,7 +351,7 @@ int64_t ioctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     }
 
     kprintf("IOCTL request: %d\n", request);
-    return SYSCALL_SUCCESS;
+    return ret;
 }
 
 int64_t clock_gettime_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
@@ -635,7 +635,7 @@ int64_t mmap_syscall_handler(thread_t*thread, cpu_context_t*ctx) {
         panic("Failed to find a free area\n");
         return SYSCALL_ERROR;
     }
-    kprintf("Found free area: %p\n", addr);
+    //kprintf("Found free area: %p\n", addr);
 
     if (flags & MAP_PRIVATE || flags & MAP_SHARED) {
 
@@ -927,7 +927,7 @@ void global_syscall_handler(cpu_context_t* ctx) {
     memcpy(current_thread->context->cpu_context, ctx, sizeof(cpu_context_t));
     memcpy(current_thread->context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
 
-    __asm__("fxsave %0" : : "m" (current_thread->context->fxsave_region));
+    arch_simd_save_context(current_thread->context->fxsave_region);
 
     int64_t result = SYSCALL_SUCCESS;
     if (ctx->rax < SYSCALL_HANDLER_COUNT) {
@@ -940,7 +940,7 @@ void global_syscall_handler(cpu_context_t* ctx) {
     current_thread = get_current_thread();
     if (ctx->rax != 337 && ctx->rax != 186)
         kprintf("[PID: %d | TID %d] SYSCALL(%d) RETURNED %d\n", current_thread->process->pid, current_thread->id, ctx->rax, result);
-    __asm__("fxrstor %0" : "=m" (current_thread->context->fxsave_region));
+    arch_simd_restore_context(current_thread->context->fxsave_region);
     memcpy(ctx, current_thread->context->cpu_context, sizeof(cpu_context_t));
     memcpy(ctx->info, current_thread->context->cpu_context->info, sizeof(struct cpu_context_info));
 

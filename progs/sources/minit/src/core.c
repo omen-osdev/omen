@@ -3,6 +3,7 @@
 
 int main(int argc, char* argv[]){
     assert(argc > 0);
-    printf("Hello world from %s", argv[0]);
+    printf("Hello world from %s\n", argv[0]);
+    while (1);
     return 0;
 }

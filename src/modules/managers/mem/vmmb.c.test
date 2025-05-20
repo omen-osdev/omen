@@ -1,0 +1,105 @@
+#include <omen/libraries/std/stdint.h>
+#include <omen/libraries/std/string.h>
+#include <generic/config.h>
+#include <omen/apps/panic/panic.h>
+#include <omen/managers/mem/pmm.h>
+#include <omen/managers/mem/vmm.h>
+#include <omen/managers/boot/bootloaders/bootloader.h>
+
+#define IS_PRESENT(entry) ((entry)->directory.P)
+#define IS_WRITEABLE(entry) ((entry)->directory.RW)
+#define IS_USER_ACCESS(entry) ((entry)->directory.US)
+#define IS_EXECUTABLE(entry) (!((entry)->directory.XD))
+#define GET_PDPP_HUGE(entry) ((uint64_t)(((uint64_t)(entry)->huge.PDPP) << 30))
+#define GET_PDPP_BIG(entry) ((uint64_t)(((uint64_t)(entry)->big.PDPP) << 21))
+#define GET_PDPP_REGULAR(entry) ((uint64_t)(((uint64_t)(entry)->regular.PDPP) << 12))
+#define GET_PDPP_DIR(entry) ((uint64_t)(((uint64_t)(entry)->directory.PDPP) << 12))
+#define GET_ENTRY(root, index) (vm_entry*)(&((root)->entries[(index)]))
+
+void __a2m(uint64_t address, vmm_page_map_index_t* map) {
+    address >>= 12;
+    map->PT_index = address & 0x1ff;
+    address >>= 9;
+    map->PD_index = address & 0x1ff;
+    address >>= 9;
+    map->PDP_index = address & 0x1ff;
+    address >>= 9;    
+    map->PML4_index = address & 0x1ff;
+}
+
+void __m2a(vmm_page_map_index_t* map, uint64_t* address) {
+    *address = map->PML4_index;
+    *address <<= 9;
+    *address |= map->PDP_index;
+    *address <<= 9;
+    *address |= map->PD_index;
+    *address <<= 9;
+    *address |= map->PT_index;
+    *address <<= 12;
+}
+
+void vmm_init() {
+
+}
+
+vmm_directory_t * __vmm_ensure(vmm_entry_t * entry, uint64_t paddr, uint64_t size, vmm_flags_t flags) {
+    if (IS_PRESENT(entry)) {
+        return (vmm_directory_t*)TO_IDENTITY_MAP(GET_PDPP_DIR(entry));
+    }
+
+    vmm_directory_t * new_dir = (vmm_directory_t*) allocate_phys_page();
+    memset(new_dir, 0, PAGE_SIZE_DIR);
+    entry->directory.P = 1;
+    entry->directory.US = 1;
+    entry->directory.PS = huge;
+    entry->directory.PDPP = (uint64_t)new_dir >> 12;
+    return new_dir;
+}
+
+void * vmm_map_page(vmm_vspace_t * root, void * vaddr, void * paddr, uint64_t page_size, vmm_flags_t flags) {
+    if (root == NULL) panic("vmm_map: root is NULL");
+    if (vaddr % page_size != 0) panic("vmm_map: vaddr is not aligned to page size");
+    if (paddr % page_size != 0) panic("vmm_map: paddr is not aligned to page size");
+    if (page_size != PAGE_SIZE_4KIB && page_size != PAGE_SIZE_2MIB && page_size != PAGE_SIZE_1GIB) {
+        panic("vmm_map: invalid page size");
+    }
+
+    vmm_page_map_index_t map;
+    __a2m((uint64_t)vaddr, &map);
+
+    vmm_entry_t * pml4entry = GET_ENTRY(root, map.PML4_index);
+    vmm_directory_t * pdptable = (vmm_directory_t*)__vmm_ensure_directory(pml4entry, 0);
+    vmm_entry_t * pdptentry = GET_ENTRY(pdptable, map.PDP_index);
+    vmm_directory_t * pdtable = (vmm_directory_t*)__vmm_ensure_directory(pdptentry, (page_size == PAGE_SIZE_1GIB));
+    vmm_entry_t * pdentry = GET_ENTRY(pdtable, map.PD_index);
+    vmm_directory_t * pttable = (vmm_directory_t*)__vmm_ensure_directory(pdentry, (page_size == PAGE_SIZE_2MIB));
+    vmm_entry_t * ptentry = GET_ENTRY(pttable, map.PT_index);
+
+}
+
+void * vmm_unmap_page(vmm_vspace_t * root, void * vaddr) {}
+void * vmm_remap(vmm_vspace_t * root, void * vaddr, void * paddr, uint64_t size, vmm_flags_t flags) {}
+
+void * vmm_request(vmm_vspace_t * root, void * region, uint64_t size, vmm_flags_t flags) {}
+void vmm_free(vmm_vspace_t * root, void * address) {}
+
+vmm_flags_t vmm_mprotect(vmm_vspace_t * root, void * address, uint64_t size, vmm_flags_t flags) {}
+vmm_flags_t vmm_get_page_perms(vmm_vspace_t * root, void * address) {}
+
+void * vmm_get_vaddr(vmm_vspace_t * root, void * paddr) {}
+void * vmm_get_paddr(vmm_vspace_t * root, void * vaddr) {}
+
+vmm_vspace_t * vmm_get_vspace() {
+    vmm_vspace_t * cr3;
+    __asm__("mov %%cr3, %0" : "=r"(cr3));
+    return cr3;
+}
+
+vmm_vspace_t * vmm_swap_vspace(vmm_vspace_t * root) {
+    vmm_vspace_t * cr3;
+    __asm__("mov %%cr3, %0" : "=r"(cr3));
+    __asm__("mov %0, %%cr3" : : "r"(root));
+    return cr3;
+}
+
+vmm_vspace_t * vmm_copy_vspace(vmm_vspace_t * root, ...) {}

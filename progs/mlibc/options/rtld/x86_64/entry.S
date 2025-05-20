@@ -3,7 +3,7 @@
 _start:
 	call relocateSelf
 
-	mov %rsp, %rdi
+	mov %rsp, %rdi 
 	call interpreterMain
 
 	jmp *%rax

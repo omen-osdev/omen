@@ -289,8 +289,6 @@ check_mapping:
         kprintf("Mapping error: %llx != %llx\n", phys_addr, physical_address);
         panic("Mapping error");
     }
-
-    insert_allocation(root, virtual_address, physical_address, size);
 }
 
 void unmap_memory(struct page_directory* root, void* virtual_address)
@@ -341,7 +339,6 @@ void unmap_memory(struct page_directory* root, void* virtual_address)
     }
 
     ptentry->directory.P = 0;
-    remove_allocation(root, virtual_address);
 }
 
 void * allocate_vmm(struct page_directory * pml4, uint64_t size, uint64_t region, uint8_t flags)
@@ -380,30 +377,17 @@ void * allocate_vmm(struct page_directory * pml4, uint64_t size, uint64_t region
 
 void free_vmm(struct page_directory * pml4, void * address)
 {
-    void * physical = check_k_regions((uint64_t)address);
-    if (!physical)
-    {
-        physical = get_physical_address(pml4, address);
-        if (!physical)
-        {
-            panic("free_vmm failed to get physical address\n");
-        }
-        unmap_memory(pml4, address);
-    }
-    
-    uint64_t count = how_many_allocations_for_physaddr(physical);
-    if (count >= 1)
-    {
-        kprintf("Physical address %llx is still in use, not freeing\n", physical);
-        return;
-    }
+    if (address == NULL) panic("Invalid address for free_vmm\n");
+    uint64_t allocs = how_many_allocations_for_vaddr(address);
+    if (allocs == 0) panic("Invalid address for free_vmm\n");
+    void * phaddr = get_physical_address(pml4, address);
+    if (allocs == 1) pmm_free(phaddr);
 
-    if (physical == 0)
-    {
-        panic("free_vmm failed to find physical address\n");
+    void * buffer = check_k_regions((uint64_t)address);
+    if (buffer == 0x0)
+    {   
+        unmap_range(pml4, address, PAGE_SIZE_4KIB);
     }
-
-    pmm_free(physical);
 }
 
 void map_range(struct page_directory* root, void * virtual_start, void * physical_start, uint64_t page_size, uint64_t size, uint8_t flags)
@@ -414,13 +398,14 @@ void map_range(struct page_directory* root, void * virtual_start, void * physica
     {
         pages++;
     }
-    kprintf("Need to map %d pages\n", pages);
+    //kprintf("Need to map %d pages\n", pages);
     for (uint64_t i = 0; i < pages; i++)
     {
         map_address(root, (void*)((uint64_t)virtual_start + (i * page_size)), (void*)((uint64_t)physical_start + (i * page_size)), page_size, flags);
     }
 
-    kprintf("Mapped range from 0x%llx to 0x%llx\n", virtual_start, (uint64_t)virtual_start + size);
+    insert_allocation(root, virtual_start, physical_start, size);
+    //kprintf("Mapped range from 0x%llx to 0x%llx\n", virtual_start, (uint64_t)virtual_start + size);
 }
 
 void unmap_range(struct page_directory* root, void * virtual_start, uint64_t size)
@@ -431,13 +416,14 @@ void unmap_range(struct page_directory* root, void * virtual_start, uint64_t siz
     {
         pages++;
     }
-    kprintf("Need to unmap %d pages\n", pages);
+    //kprintf("Need to unmap %d pages\n", pages);
     for (uint64_t i = 0; i < pages; i++)
     {
-        free_vmm(root, (void*)((uint64_t)virtual_start + (i * PAGE_SIZE_4KIB)));
+        unmap_memory(root, (void*)((uint64_t)virtual_start + (i * PAGE_SIZE_4KIB)));
     }
 
-    kprintf("Unmapped range from 0x%llx to 0x%llx\n", virtual_start, (uint64_t)virtual_start + size);
+    remove_allocation(root, virtual_start);
+    //kprintf("Unmapped range from 0x%llx to 0x%llx\n", virtual_start, (uint64_t)virtual_start + size);
 }
 
 void duplicate_page_directory(struct page_directory* root, struct page_directory* new, uint8_t level, int override, uint8_t root_on_phys)
@@ -679,10 +665,10 @@ void init_vmm()
 
     void * cr3ident = (void*)TO_IDENTITY_MAP(cr3);
     insert_page_directory(cr3ident);
-    insert_allocation(cr3ident, (void*)VMM_REGION_K_IDENT, (void*)0x0, PAGE_SIZE_1GIB);
-    insert_allocation(cr3ident, (void*)VMM_REGION_K_HEAP, (void*)0x0, PAGE_SIZE_1GIB);
-    insert_allocation(cr3ident, (void*)VMM_REGION_DEVICES, (void*)0x0, PAGE_SIZE_1GIB);
-    insert_allocation(cr3ident, (void*)VMM_REGION_U_VDSO, (void*)0x0, PAGE_SIZE_1GIB);
+    insert_allocation(cr3ident, (void*)VMM_REGION_K_IDENT, (void*)0x0, PHYSICAL_MEMORY_SIZE);
+    insert_allocation(cr3ident, (void*)VMM_REGION_K_HEAP, (void*)0x0, PHYSICAL_MEMORY_SIZE);
+    insert_allocation(cr3ident, (void*)VMM_REGION_DEVICES, (void*)0x0, PHYSICAL_MEMORY_SIZE);
+    insert_allocation(cr3ident, (void*)VMM_REGION_U_VDSO, (void*)0x0, PHYSICAL_MEMORY_SIZE);
     struct page_directory* global_cr3 = vmm_copy_kernel(get_current_cr3());
     remove_page_directory((void*)TO_IDENTITY_MAP(cr3));
     //compare_directories(get_current_cr3(), global_cr3, 4);

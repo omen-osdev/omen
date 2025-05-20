@@ -1,0 +1,84 @@
+#ifndef _VMMB_H
+#define _VMMB_H
+#include <omen/libraries/std/stdint.h>
+#include <omen/managers/mem/pmm.h>
+#include <omen/hal/arch/x86/vm.h>
+
+#define PAGE_SIZE_1GIB      0x40000000
+#define PAGE_SIZE_2MIB      0x200000
+#define PAGE_SIZE_4KIB      0x1000
+#define PAGE_SIZE_DIR       0x1000
+
+#define VMM_WRITE_BIT          0x1
+#define VMM_USER_BIT           0x2
+#define VMM_WRITE_THROUGH_BIT  0x4 
+#define VMM_CACHE_DISABLE_BIT  0x8
+#define VMM_GLOBAL_BIT         0x10
+#define VMM_NX_BIT             0x20
+
+#define VMM_WRITE_BIT_SET(flags) ((flags) & VMM_WRITE_BIT)
+#define VMM_USER_BIT_SET(flags) ((flags) & VMM_USER_BIT)
+#define VMM_CACHE_BIT_SET(flags) ((flags) & VMM_CACHE_DISABLE_BIT)
+#define VMM_NX_BIT_SET(flags) ((flags) & VMM_NX_BIT)
+#define VMM_WRITE_THROUGH_BIT_SET(flags) ((flags) & VMM_WRITE_THROUGH_BIT)
+#define VMM_GLOBAL_BIT_SET(flags) ((flags) & VMM_GLOBAL_BIT)
+#define VMM_CACHE_DISABLE_BIT_SET(flags) ((flags) & VMM_CACHE_DISABLE_BIT)
+
+#define VMM_CANONICAL_UPPER_MIN 0xFFFF800000000000
+#define VMM_REGION_K_STACK      0xFFFF900000000000
+#define VMM_REGION_K_HEAP       0xFFFFA00000000000
+#define VMM_REGION_K_IDENT      0xFFFFB00000000000
+#define VMM_REGION_DEVICES      0xFFFFC00000000000
+#define VMM_REGION_U_VDSO       0xFFFFD00000000000
+
+#define VMM_CANONICAL_LOWER_MAX 0x00007FFFFFFFFFFF
+#define VMM_REGION_U_HEAP       0x0000300000000000
+#define VMM_REGION_U_STACK      0x0000400000000000
+#define VMM_REGION_U_SHM_MMAP   0x0000500000000000
+#define COW_WORKING_PAGE        0x00007fff8ffff000
+
+#define VMM_REGION_SIZE         0x000000F000000000
+
+#define VMM_TO_DEVICE_MEMORY(addr) ((uint64_t)(addr) + (uint64_t)VMM_REGION_DEVICES)
+#define VMM_FROM_DEVICE_MEMORY(addr) ((uint64_t)(addr) - (uint64_t)VMM_REGION_DEVICES)
+#define VMM_TO_KERNEL_MEMORY(addr) ((uint64_t)(addr) + (uint64_t)VMM_REGION_K_IDENT)
+#define VMM_FROM_KERNEL_MEMORY(addr) ((uint64_t)(addr) - (uint64_t)VMM_REGION_K_IDENT)
+#define VMM_TO_KERNEL_STACK(addr) ((uint64_t)(addr) + (uint64_t)VMM_REGION_K_STACK)
+#define VMM_FROM_KERNEL_STACK(addr) ((uint64_t)(addr) - (uint64_t)VMM_REGION_K_STACK)
+#define VMM_TO_KERNEL_HEAP(addr) ((uint64_t)(addr) + (uint64_t)VMM_REGION_K_HEAP)
+#define VMM_FROM_KERNEL_HEAP(addr) ((uint64_t)(addr) - (uint64_t)VMM_REGION_K_HEAP)
+#define VMM_TO_USER_STACK(addr) ((uint64_t)(addr) + (uint64_t)VMM_REGION_U_STACK)
+#define VMM_FROM_USER_STACK(addr) ((uint64_t)(addr) - (uint64_t)VMM_REGION_U_STACK)
+#define VMM_TO_USER_HEAP(addr) ((uint64_t)(addr) + (uint64_t)VMM_REGION_U_HEAP)
+#define VMM_FROM_USER_HEAP(addr) ((uint64_t)(addr) - (uint64_t)VMM_REGION_U_HEAP)
+#define VMM_TO_VDSO(addr) ((uint64_t)(addr) + (uint64_t)VMM_REGION_U_VDSO)
+#define VMM_FROM_VDSO(addr) ((uint64_t)(addr) - (uint64_t)VMM_REGION_U_VDSO)
+
+#define TO_IDENTITY_MAP(addr) (uint64_t)(((uint64_t)addr) + (uint64_t)physical_memory_offset)
+#define FROM_IDENTITY_MAP(addr) (uint64_t)(((uint64_t)addr) - (uint64_t)physical_memory_offset)
+
+typedef struct page_directory vmm_vspace_t, vmm_directory_t;
+typedef vm_entry vmm_entry_t;
+typedef vmm_perms vmm_flags_t;
+typedef struct directory_entry vmm_directory_entry_t;
+typedef struct huge_entry vmm_huge_entry_t;
+typedef struct big_entry vmm_big_entry_t;
+typedef struct regular_entry vmm_regular_entry_t;
+typedef struct page_map_index vmm_page_map_index_t;
+
+void vmm_init();
+void * vmm_map(vmm_vspace_t * root, void * vaddr, void * paddr, uint64_t size, vmm_flags_t flags);
+void * vmm_unmap(vmm_vspace_t * root, void * vaddr);
+void * vmm_remap(vmm_vspace_t * root, void * vaddr, void * paddr, uint64_t size, vmm_flags_t flags);
+void * vmm_request(vmm_vspace_t * root, void * region, uint64_t size, vmm_flags_t flags);
+void vmm_free(vmm_vspace_t * root, void * address);
+vmm_flags_t vmm_mprotect(vmm_vspace_t * root, void * address, uint64_t size, vmm_flags_t flags);
+vmm_flags_t vmm_get_page_perms(vmm_vspace_t * root, void * address);
+void * vmm_get_vaddr(vmm_vspace_t * root, void * paddr);
+void * vmm_get_paddr(vmm_vspace_t * root, void * vaddr);
+vmm_vspace_t * vmm_get_vspace();
+vmm_vspace_t * vmm_swap_vspace(vmm_vspace_t * root);
+vmm_vspace_t * vmm_copy_vspace(vmm_vspace_t * root, ...);
+
+
+#endif

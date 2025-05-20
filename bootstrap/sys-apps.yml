@@ -11,7 +11,7 @@ packages:
         - 'make'
         - '-C'
         - '@THIS_SOURCE_DIR@/'
-        - 'build'
+        - 'all'
         environ:
           CC: "@OPTION:cc@"
           CXX: "@OPTION:cxx@"

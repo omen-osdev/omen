@@ -253,7 +253,7 @@ uint8_t global_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
     //kprintf("[PID: %d | TID %d] Interrupt %d on CPU %d\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
     memcpy(current_thread->context->cpu_context, ctx, sizeof(cpu_context_t));
     memcpy(current_thread->context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
-    __asm__("fxsave %0" : : "m" (current_thread->context->fxsave_region));
+    arch_simd_save_context(current_thread->context->fxsave_region);
 
     void (*handler)(cpu_context_t* ctx, uint8_t cpu_id) = (void*)dynamic_interrupt_handlers[interrupt_number];
     if (interrupt_number == DYNAMIC_HANDLER) {
@@ -281,7 +281,7 @@ uint8_t global_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
         panic("No current thread\n");
     }
     //kprintf("[PID: %d | TID %d] Interrupt %d on CPU %d returning\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
-    __asm__("fxrstor %0" : "=m" (current_thread->context->fxsave_region));
+    arch_simd_restore_context(current_thread->context->fxsave_region);
     memcpy(ctx, current_thread->context->cpu_context, sizeof(cpu_context_t));
     memcpy(ctx->info, current_thread->context->cpu_context->info, sizeof(struct cpu_context_info));
     struct tss * tss = arch_get_cpu(cpu_id)->tss;

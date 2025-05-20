@@ -14,6 +14,8 @@
 #define TTY_VALIDATE 0x6
 #define TTY_GET_SIZE 0x7
 #define TTY_INB_TO_OUTB 0x8
+#define TTY_GWINSZ 0x13
+#define TTY_CHECK_VAL 0x69
 #define TTY_DD_NAME "TTY DRIVER\0"
 
 void init_tty_dd();

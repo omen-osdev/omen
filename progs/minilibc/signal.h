@@ -2,7 +2,7 @@
 #define _SIGNAL_STD_H
 #include <stdint.h>
 
-#define NSIG		32
+#define NSIG		65
 typedef unsigned long sigset_t;
 
 #define SIGHUP		 1

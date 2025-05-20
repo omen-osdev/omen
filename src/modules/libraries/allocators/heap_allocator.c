@@ -40,7 +40,7 @@ void _stkalloc(struct page_directory* pd, struct stack * stack, uint64_t length,
         panic("Failed to get physical address\n");
     }
 
-    unmap_memory(pd, guard_address);
+    unmap_range(pd, guard_address, (pages*0x1000)+guard_size);
     //Map the base range only
     //void map_range(struct page_directory* root, void * virtual_start, void * physical_start, uint64_t page_size, uint64_t size, uint8_t flags);
     map_range(pd, base, base_phys, 0x1000, pages*0x1000, VMM_WRITE_BIT | VMM_USER_BIT);

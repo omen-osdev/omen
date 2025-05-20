@@ -2,8 +2,10 @@
 #include <dirent.h>
 #include <string.h>
 #include <stdlib.h>
+#include <termios.h>
 #include <sys/ioctl.h>
 #include <omen/syscall.h>
+#include <omen/ttycheck.h>
 #include <bits/ensure.h>
 #include <frg/vector.hpp>
 #include <mlibc/debug.hpp>
@@ -109,8 +111,10 @@ namespace mlibc{
     // zero (and not one) to indicate that the file is a terminal.
     int sys_isatty(int fd){
         // TODO
-        __ensure(!"Not implemented");
-        return 0;
+        struct winsize ws;
+        auto result = do_syscall(SYS_FILE_IOCTL, fd, TIOCGWINSZ, &ws);
+        auto isatty = (result != TTY_CHECK_VAL);
+        return isatty;
     }
 
     int sys_rmdir(const char *path){

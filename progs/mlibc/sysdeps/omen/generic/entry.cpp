@@ -6,7 +6,7 @@
 #include <frg/vector.hpp>
 #include <mlibc/debug.hpp>
 #include <mlibc/elf/startup.h>
-
+#include <omen/auxv.h>
 #if MLIBC_STATIC_BUILD
 void* __dso_handle;
 #endif
@@ -45,7 +45,7 @@ LibraryGuard::LibraryGuard() {
 		*ev = (char*)((uint64_t)(*ev) + (uint64_t)__dlapi_entrystack());
 		ev++;
 	}
-
+	load_auxv(ev);
 	mlibc::set_startup_data(__mlibc_stack_data.argc, __mlibc_stack_data.argv,
 			__mlibc_stack_data.envp);
 }

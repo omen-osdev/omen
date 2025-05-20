@@ -227,7 +227,8 @@ int tty_init(char* indev, char* outdev, int mode, int inbs, int outbs) {
     tty->outb_size = outbs;
     tty->outb_write = 0;
     tty->outb_read = 0;
-
+    tty->cols = TTY_DEFAULT_COLS;
+    tty->rows = TTY_DEFAULT_ROWS;
     tty->subscribers = kmalloc(sizeof(struct tty_subscriber));
     if (tty->subscribers == 0) {
         kfree(tty->inb);

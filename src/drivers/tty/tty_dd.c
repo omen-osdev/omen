@@ -98,6 +98,12 @@ uint64_t tty_dd_ioctl(uint64_t port, uint32_t op, void* data) {
         case TTY_GET_SIZE: {
             return _tty_get_size(device);
         }
+        case TTY_GWINSZ: {
+            struct tty_winsize* ws = (struct tty_winsize*)data;
+            ws->ws_col = device->cols;
+            ws->ws_row = device->rows;
+            return TTY_CHECK_VAL;
+        }
         default:
             return 0;
     }

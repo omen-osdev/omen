@@ -1,7 +1,7 @@
 #ifndef _SIGNAL_STD_H
 #define _SIGNAL_STD_H
 
-#define NSIG		32
+#define NSIG		65
 typedef unsigned int sigval_t;
 typedef unsigned long sigset_t;
 

@@ -9,6 +9,9 @@
 #define TTY_EVENT_FLUSH_INB 2
 #define TTY_EVENT_FLUSH_OUTB 3
 
+#define TTY_DEFAULT_COLS 80
+#define TTY_DEFAULT_ROWS 25
+
 #define TTY_FLUSH_CHAR 0xd
 
 #define _TTY_MODE_RAW 0x0
@@ -20,6 +23,13 @@
 struct tty_subscriber {
     void (*handler)(void* ttyb, uint8_t event);
     struct tty_subscriber * next;
+};
+
+struct tty_winsize {
+    unsigned short ws_row;
+    unsigned short ws_col;
+    unsigned short ws_xpixel;  /* unused */
+    unsigned short ws_ypixel;  /* unused */
 };
 
 struct tty {
@@ -35,6 +45,8 @@ struct tty {
 
     uint8_t echo;
     uint8_t israw;
+    uint8_t cols;
+    uint8_t rows;
 
     struct line_discipline* line_discipline;
     struct tty_subscriber * subscribers;

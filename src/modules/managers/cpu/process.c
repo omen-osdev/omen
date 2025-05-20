@@ -77,6 +77,7 @@ void * create_args_env_aux(void * protostack_buffer, uint64_t size, char ** argv
         kprintf("protostack[%d] Copying argv[%d] at %p (%s) to final addr:%p\n", i+1, i, argv[i], argv[i], protostack[i + 1]);
         memcpy(protostack[i + 1], argv[i], strlen(argv[i]) + 1);
         kprintf("Protostack string: %s argv string: %s\n", (char*)protostack[i + 1], argv[i]);
+        protostack[i + 1] -= (uint64_t)protostack;
         protostack_offset += (uint64_t)(strlen(argv[i]) + 1);
     }
     protostack[argc + 1] = 0;
@@ -86,6 +87,7 @@ void * create_args_env_aux(void * protostack_buffer, uint64_t size, char ** argv
         kprintf("protostack[%d] Copying envp[%d] at %p (%s) to final addr:%p\n", i+argc+2, i, envp[i], envp[i], protostack[i + argc + 2]);
         memcpy(protostack[i + argc + 2], envp[i], strlen(envp[i]) + 1);
         kprintf("Protostack string: %s envp string: %s\n", (char*)protostack[i + argc + 2], envp[i]);
+        protostack[i + argc + 2] -= (uint64_t)protostack;
         protostack_offset += (uint64_t)(strlen(envp[i]) + 1);
     }
     protostack[argc + envc + 2] = 0;
@@ -110,11 +112,11 @@ void * create_args_env_aux(void * protostack_buffer, uint64_t size, char ** argv
     struct auxv * auxv_ptr = (struct auxv *)&(protostack[argc + envc + 3]);
 
     for (int i = 0; i < argc; i++) {
-        kprintf("argv[%d]: %s\n", i, argv_ptr[i]);
+        kprintf("argv[%d]: %s\n", i, (char*)((uint64_t)argv_ptr[i]+(uint64_t)protostack));
     }
 
     for (int i = 0; i < envc; i++) {
-        kprintf("envp[%d]: %s\n", i, envp_ptr[i]);
+        kprintf("envp[%d]: %s\n", i, (char*)((uint64_t)envp_ptr[i]+(uint64_t)protostack));
     }
 
     for (int i = 0; i < auxc; i++) {
@@ -186,7 +188,7 @@ context_t * create_context(void * cr3, void * ustack, void * kstack, void * init
     memset(context->fxsave_region, 0, 512);
     context->fs_base = 0;
     context->gs_base = 0;
-    __asm__ volatile("fxsave %0" : "=m" (context->fxsave_region));
+    arch_simd_save_context(context->fxsave_region);
 
     cpu_context_t * cpu_context = kmalloc(sizeof(cpu_context_t));
     memset(cpu_context, 0, sizeof(cpu_context_t));
@@ -820,21 +822,21 @@ process_t * sched() {
     }
 
     //Dump the processes array
-    for (int i = 0; i < PROCESS_PRIORITIES; i++) {
-        if (prio_list_size[i] == 0)
-            continue;
-
-        kprintf("PQUEUE %d: ", i);
-        for (int j = 0; j < prio_list_size[i]; j++) {
-            kprintf("[PID:%d|TSB:%llu|NICE:%d|CNICE:%d|LS:%d] ", processes[i][j]->pid, processes[i][j]->last_scheduled, processes[i][j]->nice, processes[i][j]->current_nice, processes[i][j]->last_scheduled);
-        }
-        kprintf("\n");
-    }
+    //for (int i = 0; i < PROCESS_PRIORITIES; i++) {
+    //    if (prio_list_size[i] == 0)
+    //        continue;
+//
+    //    kprintf("PQUEUE %d: ", i);
+    //    for (int j = 0; j < prio_list_size[i]; j++) {
+    //        kprintf("[PID:%d|TSB:%llu|NICE:%d|CNICE:%d|LS:%d] ", processes[i][j]->pid, processes[i][j]->last_scheduled, processes[i][j]->nice, processes[i][j]->current_nice, processes[i][j]->last_scheduled);
+    //    }
+    //    kprintf("\n");
+    //}
 
     for (int i = 0; i < PROCESS_PRIORITIES; i++) {
         for (int j = 0; j < prio_list_size[i]; j++) {
             if (sched_thread(processes[i][j])) {
-                kprintf("Chosen candidate [PID:%d|LS:%llu|NICE:%d|CNICE:%d]\n", processes[i][j]->pid, processes[i][j]->last_scheduled, processes[i][j]->nice, processes[i][j]->current_nice);
+                //kprintf("Chosen candidate [PID:%d|LS:%llu|NICE:%d|CNICE:%d]\n", processes[i][j]->pid, processes[i][j]->last_scheduled, processes[i][j]->nice, processes[i][j]->current_nice);
                 task = processes[i][j];
                 goto found;
             }
@@ -1027,11 +1029,10 @@ void init_process(const char * _init_path, const char * _idle_path, char * tty) 
 #endif
 
     //disable_debugger();
-
+    arch_simd_restore_context(main_thread->context->fxsave_region);
     __asm__("mov %0, %%rsp\n"
             "mov %1, %%cr3\n"
-            "fxrstor %2\n"
-            "ret\n" : : "r" (main_thread->ustack), "r" (main_thread->context->cpu_context->cr3), "m" (main_thread->context->fxsave_region));
+            "ret\n" : : "r" (main_thread->ustack), "r" (main_thread->context->cpu_context->cr3));
     panic("Returned from init process\n");
 }
 

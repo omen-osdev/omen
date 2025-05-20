@@ -66,6 +66,7 @@ debugpt:
 	@sudo make -C $(BUILDENV_DIR) cprogs
 	@xbstrap build --all
 	@objcopy --only-keep-debug ./sysroot/usr/lib/ld.so ./progs/sym/ld.so.sym
+	@objcopy --only-keep-debug ./sysroot/usr/lib/libc.so ./progs/sym/libc.so.sym
 	@make -C $(BUILDENV_DIR) debugpt
 
 debugpt-wsl:
@@ -73,6 +74,7 @@ debugpt-wsl:
 	@sudo make -C $(BUILDENV_DIR) cprogs
 	@xbstrap build --all
 	@objcopy --only-keep-debug ./sysroot/usr/lib/ld.so ./progs/sym/ld.so.sym
+	@objcopy --only-keep-debug ./sysroot/usr/lib/libc.so ./progs/sym/libc.so.sym
 	@make -C $(BUILDENV_DIR) debugpt-wsl
 
 rerun:

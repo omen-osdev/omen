@@ -4,7 +4,7 @@
 #include <omen/libraries/std/stdint.h>
 #include <omen/libraries/allocators/heap_allocator.h>
 
-#define NSIG		32
+#define NSIG		65
 typedef unsigned long sigset_t;
 
 #define SIGHUP		 1
