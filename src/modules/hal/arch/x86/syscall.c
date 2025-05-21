@@ -158,6 +158,16 @@ int64_t write_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     return vfs_file_write(fd, (void*)buffer, size);
 }
 
+int64_t dir_open_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    char * path = SYSCALL_ARG0(ctx);
+    kprintf("[PID: %d | TID %d] DIR_OPEN_SYSCALL(%s)\n", thread->process->pid, thread->id, path);
+    int fd = vfs_dir_open(path);
+    if (fd < 0) {
+        return SYSCALL_ERROR;
+    }
+    return fd;
+}
+
 int64_t open_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char* path = SYSCALL_ARG0(ctx);
     int flags = SYSCALL_ARG1(ctx);
@@ -274,6 +284,17 @@ int64_t sigsuspend_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
     int64_t ret = sigsuspend(&(thread->sigsuspend_mask), mask);
     sched();
     return ret;
+}
+
+int64_t pread_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
+    int fd = (int)SYSCALL_ARG0(ctx);
+    uint64_t offset = SYSCALL_ARG3(ctx);
+
+    uint64_t current_offset = vfs_file_tell(fd);
+    vfs_file_seek(fd, offset, 0x0);
+    uint64_t result = read_syscall_handler(thread, ctx);
+    vfs_file_seek(fd, current_offset, 0x0);
+    return result;
 }
 
 int64_t sigpending_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
@@ -535,6 +556,18 @@ int64_t getppid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
     kprintf("[PID: %d | TID %d] GETPPID_SYSCALL()\n", thread->process->pid, thread->id);
     return thread->process->parent->pid;
+}
+
+int64_t mkdir_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    char * path = (char *)SYSCALL_ARG0(ctx);
+    int mode = SYSCALL_ARG1(ctx);
+
+    kprintf("[PID: %d | TID %d] MKDIR_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, path, mode);
+    int ret = vfs_mkdir(path, mode);
+    if (ret < 0) {
+        return SYSCALL_ERROR;
+    }
+    return SYSCALL_SUCCESS;
 }
 
 int64_t log_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
@@ -874,7 +907,8 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [14] = sigprocmask_syscall_handler,
     [15] = sigreturn_syscall_handler,
     [16] = ioctl_syscall_handler,
-    [17 ... 23] = undefined_syscall_handler,
+    [17] = pread_syscall_handler,
+    [18 ... 23] = undefined_syscall_handler,
     [24] = sched_yield_syscall_handler,
     [25] = undefined_syscall_handler,
     [26] = msync_syscall_handler,
@@ -892,7 +926,9 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [60] = exit_syscall_handler,
     [61] = waitpid_syscall_handler,
     [62] = kill_syscall_handler,
-    [63 ... 95] = undefined_syscall_handler,
+    [63 ... 82] = undefined_syscall_handler,
+    [83] = mkdir_syscall_handler,
+    [84 ... 95] = undefined_syscall_handler,
     [96] = gettimeofday_syscall_handler,
     [97 ... 109] = undefined_syscall_handler,
     [110] = getppid_syscall_handler,
@@ -914,7 +950,8 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [337] = log_syscall_handler,
     [338] = futex_wait_syscall_handler,
     [339] = futex_wake_syscall_handler,
-    [340 ... 511] = undefined_syscall_handler
+    [340] = dir_open_syscall_handler,
+    [341 ... 511] = undefined_syscall_handler
 };
 
 void global_syscall_handler(cpu_context_t* ctx) {

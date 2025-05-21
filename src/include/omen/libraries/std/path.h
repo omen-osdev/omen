@@ -3,7 +3,7 @@
 
 struct path {
     struct vfs_mount *mnt;
-    struct dentry *dentry;
+    struct vfs_dentry *dentry;
 };
 
 static inline int path_equal(const struct path *path1, const struct path *path2)

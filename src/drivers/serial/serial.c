@@ -246,6 +246,29 @@ volatile struct serial_device* get_last_interrupted_serial() {
    return interrupted_serial_device;
 }
 
+void reconfigure_serial_comm(int port, int baud_rate, int parity, int stop_bits, int data_bits) {
+   struct serial_device* device = get_serial(port);
+   if (!device) return;
+   
+   device->config.baud_rate = baud_rate;
+   device->config.parity = parity;
+   device->config.stop_bits = stop_bits;
+   device->config.data_bits = data_bits;
+   
+   uint64_t divisor = SERIAL_MASTER_SPEED / baud_rate;
+   outb(port + 1, 0x00);    // Disable all interrupts
+   outb(port + 3, 0x80);    // Enable DLAB (set baud rate divisor)
+   outb(port + 0, (divisor & 0xFF));    // Set divisor to baud rate (lo byte)
+   outb(port + 1, (divisor >> 8));    //                  (hi byte)
+   outb(port + 3, (data_bits << 0) | (parity << 3) | (stop_bits << 2));    // Set data bits, parity and stop bits
+   outb(port + 2, 0xC7);    // Enable FIFO, clear them, with 14-byte threshold
+   outb(port + 4, 0x0B);    // IRQs enabled, RTS/DSR set
+   //Enable interrupts
+   if (device->interrupts_enabled) {
+      outb(port + 1, 0x01);    // Enable all interrupts
+   }
+}
+
 int init_serial_comm(int port) {
 
    outb(port + 1, 0x00);    // Disable all interrupts
@@ -277,6 +300,7 @@ void enable_serial_int(struct serial_device* device) {
       hook_interrupt(device->irq, device->handler);
       unmask_interrupt(device->irq);
       outb(device->port + 1, 0x01);    // Enable all interrupts
+      device->interrupts_enabled = 1;
    }
 }
  
@@ -285,6 +309,7 @@ void disable_serial_int(struct serial_device* device) {
       mask_interrupt(device->irq);
       unhook_interrupt(device->irq);
       outb(device->port + 1, 0x00);    // Disable all interrupts
+      device->interrupts_enabled = 0;
    }
 }
 
@@ -294,6 +319,7 @@ void init_serial(int inbs, int outbs) {
    for (int i = 0; i < MAX_COM_DEVICES; i++) {
       struct serial_device* device = &(serial_devices[i]);
       if (init_serial_comm(device->port)) {
+         device->interrupts_enabled = 0;
          device->inb_size = inbs;
          device->outb_size = outbs;
          device->inb = (char*)kmalloc(inbs);
@@ -305,6 +331,14 @@ void init_serial(int inbs, int outbs) {
          device->outb_read = 0;
          device->inb_write = 0;
          device->outb_write = 0;
+         device->default_config.baud_rate = 115200;
+         device->default_config.parity = 0;
+         device->default_config.stop_bits = 1;
+         device->default_config.data_bits = 8;
+         device->config.baud_rate = device->default_config.baud_rate;
+         device->config.parity = device->default_config.parity;
+         device->config.stop_bits = device->default_config.stop_bits;
+         device->config.data_bits = device->default_config.data_bits;
          device->read_subscribers = kmalloc(sizeof(struct serial_subscriber));
          device->write_subscribers = kmalloc(sizeof(struct serial_subscriber));
          device->read_subscribers->next = 0;
@@ -317,6 +351,7 @@ void init_serial(int inbs, int outbs) {
             device->valid = 1;
             kprintf("Serial port %x initialized successfully\n", device->port);
             serial_discard(device->port);
+            reconfigure_serial_comm(device->port, device->config.baud_rate, device->config.parity, device->config.stop_bits, device->config.data_bits);
          }
       }
    }

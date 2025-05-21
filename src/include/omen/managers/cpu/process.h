@@ -4,7 +4,6 @@
 #include <generic/config.h>
 #include <omen/hal/hal.h>
 #include <omen/libraries/std/stdint.h>
-#include <omen/libraries/std/path.h>
 #include <omen/managers/mem/vmm.h>
 #include <omen/libraries/allocators/heap_allocator.h>
 #include <omen/managers/cpu/signal.h>
@@ -80,15 +79,6 @@ typedef struct context {
     uint64_t gs_base;
 } context_t;
 
-typedef struct fs_struct {
-    //int users;
-    //Spinlocks...
-    //int umask;
-    //int in_exec;
-    struct path root;
-    struct path pwd;
-} fs_struct_t;
-
 typedef struct thread {
     process_t *process;
     context_t *context;
@@ -114,7 +104,6 @@ typedef struct thread {
     sigset_t sigprocmask;
     sigset_t sigsuspend_mask;
     int unsuspend_signal;
-
     int id;
     uint8_t core_id;
     void* entry;
@@ -151,7 +140,7 @@ typedef struct process {
 
     struct task_signal *signal_queue[NSIG];
     struct sigaction signal_handlers[NSIG];
-
+    struct vfs_struct fs_struct;
     unsigned int locks;
 
     int16_t pid;
@@ -180,6 +169,9 @@ typedef struct process {
 void returnoexit();
 
 void init_process(const char * init_path, const char * idle_path, char * tty);
+void chroot(process_t * task, const char * path);
+char * getcwd(process_t * task);
+void chdir(process_t * task, const char * path);
 process_t * get_current_process();
 thread_t * get_current_thread();
 void create_signal_context(thread_t * thread, int signo, struct sigaction * sigact, cpu_context_t * ctx);

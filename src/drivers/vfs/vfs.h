@@ -60,6 +60,11 @@ struct vfs_file_system_type {
     struct vfs_file_system_type * next;
 };
 
+struct vfs_struct {
+    struct path root;
+    struct path pwd;
+};
+
 struct vfs_partition {
     char name[48];
 	uint32_t lba;
@@ -94,11 +99,16 @@ struct vfs_dentry {
 void dump_mounts();
 uint8_t iterate_mounts(uint8_t (*callback)(struct vfs_mount*, void * data, void* passthrough), void * data, void* passthrough);
 struct vfs_mount* get_mount_from_path(const char* path, char* native_path);
+struct vfs_dentry* get_dentry_from_path(const char* path, char* native_path);
+char * get_path_from_mount_and_dentry(struct vfs_mount * mount, struct vfs_dentry * dentry);
 char* get_full_path_from_fd(int fd);
 char* get_full_path_from_dir(int fd);
 char* get_full_path_from_dev(int fd);
 int is_safe_for_removing(const char* path, uint8_t force);
 void register_filesystem(struct vfs_compatible *);
 void set_main_mount(const char * mountname);
+uint8_t is_absolute_path(const char* path);
+uint8_t goes_behind_root(const char* path);
+char * apply_cwd(struct vfs_struct * cwd, const char* path, uint64_t * size);
 void probe_fs();
 #endif

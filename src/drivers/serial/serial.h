@@ -7,6 +7,7 @@
 
 #include <omen/hal/arch/x86/cpu.h>
 
+#define SERIAL_MASTER_SPEED 115200
 #define SERIAL_READ 1
 #define SERIAL_WRITE 2
 #define SERIAL_BUFFER_SIZE 1024
@@ -31,16 +32,25 @@ struct serial_subscriber {
     struct serial_subscriber * next;
 };
 
+struct serial_configuration {
+    int baud_rate;
+    int parity;
+    int stop_bits;
+    int data_bits;
+};
+
 struct serial_device {
     int valid;
     int port;
     int irq;
+    int interrupts_enabled;
     int echo;
 
     void (*handler)(cpu_context_t* ctx, uint8_t cpuid);
     struct serial_subscriber * read_subscribers;
     struct serial_subscriber * write_subscribers;
-
+    struct serial_configuration config;
+    struct serial_configuration default_config;
     char * inb;
     int inb_size;
     int inb_write;
@@ -57,6 +67,7 @@ void init_serial(int inbs, int outbs);
 struct serial_device* get_serial(int port);
 struct serial_device* get_serial_by_comm(int comm);
 volatile struct serial_device* get_last_interrupted_serial();
+void reconfigure_serial_comm(int port, int baud_rate, int parity, int stop_bits, int data_bits);
 
 void serial_get_ports(int * ports);
 int  serial_count_ports();

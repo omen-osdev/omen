@@ -71,6 +71,27 @@ uint64_t serial_dd_ioctl(uint64_t port, uint32_t op, void* data) {
             serial_discard(port);
             return 1;
         }
+        case SERIAL_GET_CONFIG: {
+            struct serial_ioctl_configuration* config = (struct serial_ioctl_configuration*)data;
+            struct serial_device* device = get_serial((int)port);
+            if (!device) return 0;
+            config->baud_rate = device->config.baud_rate;
+            config->parity = device->config.parity;
+            config->stop_bits = device->config.stop_bits;
+            config->data_bits = device->config.data_bits;
+            return 1;
+        }
+        case SERIAL_SET_CONFIG: {
+            struct serial_ioctl_configuration* config = (struct serial_ioctl_configuration*)data;
+            struct serial_device* device = get_serial((int)port);
+            if (!device) return 0;
+            device->config.baud_rate = config->baud_rate;
+            device->config.parity = config->parity;
+            device->config.stop_bits = config->stop_bits;
+            device->config.data_bits = config->data_bits;
+            reconfigure_serial_comm(device->port, device->config.baud_rate, device->config.parity, device->config.stop_bits, device->config.data_bits);
+            return 1;
+        }
         default:
             return 0;
     }

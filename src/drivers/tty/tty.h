@@ -3,11 +3,14 @@
 #include "ld/line_discipline.h"
 
 #include <omen/libraries/std/stdint.h>
+#include <omen/libraries/std/termios.h>
 
 #define TTY_EVENT_OUTB 0
 #define TTY_EVENT_INB 1
 #define TTY_EVENT_FLUSH_INB 2
 #define TTY_EVENT_FLUSH_OUTB 3
+
+#define MAX_LD 16
 
 #define TTY_DEFAULT_COLS 80
 #define TTY_DEFAULT_ROWS 25
@@ -48,8 +51,9 @@ struct tty {
     uint8_t cols;
     uint8_t rows;
 
-    struct line_discipline* line_discipline;
+    struct line_discipline* line_discipline[MAX_LD];
     struct tty_subscriber * subscribers;
+    struct termios termios;
 
     char * inb;
     int inb_size;
@@ -66,6 +70,9 @@ int tty_init(char* in, char* out, int mode, int inbs, int outbs);
 void tty_destroy(struct tty* tty);
 struct tty* get_tty(int id);
 int is_valid_tty(struct tty* tty);
+
+void _tty_set_termios(struct tty* tty, struct termios* termios);
+struct termios* _tty_get_termios(struct tty* tty);
 
 int _tty_get_size(struct tty* tty);
 void _tty_add_subscriber(struct tty* tty, void (*handler)(void*, uint8_t));

@@ -1,7 +1,9 @@
 #include "tty_dd.h"
 #include "tty.h"
 
+#include <serial/serial_dd.h>
 #include <omen/libraries/std/string.h>
+#include <omen/libraries/std/termios.h>
 #include <omen/apps/debug/debug.h>
 #include <omen/managers/dev/devices.h>
 #include <omen/libraries/allocators/heap_allocator.h>
@@ -103,6 +105,81 @@ uint64_t tty_dd_ioctl(uint64_t port, uint32_t op, void* data) {
             ws->ws_col = device->cols;
             ws->ws_row = device->rows;
             return TTY_CHECK_VAL;
+        }
+        case TTY_GET_SERIAL_SETTINGS: {
+            struct termios* termios = (struct termios*)data;
+            struct termios* current_termios = _tty_get_termios(device);
+            memcpy(termios, current_termios, sizeof(struct termios));
+            return TTY_CHECK_VAL;
+        }
+        case TTY_SET_SERIAL_SETTINGS: {
+            if (device->mode != TTY_MODE_SERIAL) {
+                return 0;
+            }
+            struct termios* termios = (struct termios*)data;
+            _tty_set_termios(device, termios);
+            struct serial_ioctl_configuration iconfig,oconfig;
+            iconfig.baud_rate = termios->ibaud;
+            iconfig.parity = termios->c_cflag & PARENB;
+            iconfig.stop_bits = termios->c_cflag & CSTOPB;
+            iconfig.data_bits = termios->c_cflag & CSIZE;
+            oconfig.baud_rate = termios->obaud;
+            oconfig.parity = termios->c_cflag & PARENB;
+            oconfig.stop_bits = termios->c_cflag & CSTOPB;
+            oconfig.data_bits = termios->c_cflag & CSIZE;
+
+            device_ioctl(device->indev, SERIAL_SET_CONFIG, (void*)&iconfig);
+            device_ioctl(device->outdev, SERIAL_SET_CONFIG, (void*)&oconfig);
+            return 1;
+        }
+        case TTY_SET_SERIAL_SETTINGS_WITHOUT_FLUSH: {
+            if (device->mode != TTY_MODE_SERIAL) {
+                return 0;
+            }
+            struct termios* termios = (struct termios*)data;
+            _tty_set_termios(device, termios);
+            struct serial_ioctl_configuration iconfig,oconfig;
+            iconfig.baud_rate = termios->ibaud;
+            iconfig.parity = termios->c_cflag & PARENB;
+            iconfig.stop_bits = termios->c_cflag & CSTOPB;
+            iconfig.data_bits = termios->c_cflag & CSIZE;
+            oconfig.baud_rate = termios->obaud;
+            oconfig.parity = termios->c_cflag & PARENB;
+            oconfig.stop_bits = termios->c_cflag & CSTOPB;
+            oconfig.data_bits = termios->c_cflag & CSIZE;
+
+            device_ioctl(device->outdev, SERIAL_FLUSH_TX, 0);
+            device_ioctl(device->indev, SERIAL_FLUSH_TX, 0);
+            
+            device_ioctl(device->indev, SERIAL_SET_CONFIG, (void*)&iconfig);
+            device_ioctl(device->outdev, SERIAL_SET_CONFIG, (void*)&oconfig);
+            return 1;
+        }
+        case TTY_SET_SERIAL_SETTINGS_WITH_FLUSH: {
+                    if (device->mode != TTY_MODE_SERIAL) {
+                return 0;
+            }
+            struct termios* termios = (struct termios*)data;
+            _tty_set_termios(device, termios);
+            struct serial_ioctl_configuration iconfig,oconfig;
+            iconfig.baud_rate = termios->ibaud;
+            iconfig.parity = termios->c_cflag & PARENB;
+            iconfig.stop_bits = termios->c_cflag & CSTOPB;
+            iconfig.data_bits = termios->c_cflag & CSIZE;
+            oconfig.baud_rate = termios->obaud;
+            oconfig.parity = termios->c_cflag & PARENB;
+            oconfig.stop_bits = termios->c_cflag & CSTOPB;
+            oconfig.data_bits = termios->c_cflag & CSIZE;
+
+            device_ioctl(device->outdev, SERIAL_FLUSH_TX, 0);
+            device_ioctl(device->indev, SERIAL_FLUSH_TX, 0);
+
+            device_ioctl(device->outdev, SERIAL_DISCARD, 0);
+            device_ioctl(device->indev, SERIAL_DISCARD, 0);
+
+            device_ioctl(device->indev, SERIAL_SET_CONFIG, (void*)&iconfig);
+            device_ioctl(device->outdev, SERIAL_SET_CONFIG, (void*)&oconfig);
+            return 1;
         }
         default:
             return 0;

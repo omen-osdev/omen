@@ -91,7 +91,11 @@ namespace mlibc{
 
     int sys_open_dir(const char *path, int *handle){
         // TODO
-        __ensure(!"Not implemented");
+        auto result = do_syscall(SYS_DIR_OPEN, path);
+        if(result < 0){
+            return -result;
+        }
+        *handle = result;
         return 0;
     }
 
@@ -103,7 +107,21 @@ namespace mlibc{
 
     int sys_pread(int fd, void *buf, size_t n, off_t off, ssize_t *bytes_read){
         // TODO
-        __ensure(!"Not implemented");
+        auto result = do_syscall(SYS_FILE_PREAD, fd, buf, n, off);
+        if(result < 0){
+            *bytes_read = 0;
+            return -result;
+        }
+        *bytes_read = result;
+        return 0;
+    }
+
+    int sys_mkdir(const char *path, mode_t mode) {
+	    auto result = do_syscall(SYS_MKDIR, path, mode);
+        if(result < 0){
+            return -result;
+        }
+
         return 0;
     }
 
