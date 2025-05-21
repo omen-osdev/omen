@@ -489,6 +489,10 @@ process_t * duplicate_process(thread_t * parent_thread) {
     task->current_thread = 0;
     task->main_thread = 0;
     task->pid = get_next_pid();
+    task->fs_struct.root.vfs_mount = parent->fs_struct.root.vfs_mount;
+    task->fs_struct.root.dentry = parent->fs_struct.root.dentry;
+    task->fs_struct.cwd.vfs_mount = parent->fs_struct.cwd.vfs_mount;
+    task->fs_struct.cwd.dentry = parent->fs_struct.cwd.dentry;
     task->nice = parent->nice;
     task->current_nice = task->nice;
     task->exit_code = 0;
@@ -544,7 +548,10 @@ void alter_process_on_exec(process_t * task, struct loaded_elf * ld, char const 
     task->thread_count = 0;
     task->current_thread = 0;
     task->main_thread = 0;
-
+    task->fs_struct.root.vfs_mount = saved_task.fs_struct.root.vfs_mount;
+    task->fs_struct.root.dentry = saved_task.fs_struct.root.dentry;
+    task->fs_struct.cwd.vfs_mount = saved_task.fs_struct.cwd.vfs_mount;
+    task->fs_struct.cwd.dentry = saved_task.fs_struct.cwd.dentry;
     task->heap_base = 0;
     task->heap_end = 0;
     task->heap_max_size = 0;
@@ -921,7 +928,7 @@ void thread_exit(thread_t * thread) {
     sched();
 }
 
-process_t * create_user_process(struct page_directory* pd, void * init, char * tty) {
+process_t * create_user_process(struct page_directory* pd, void * init, char * tty, struct vfs_struct * fs) {
     process_t * task = get_free_process_slot();
     if (task == 0x0) {
         panic("No more processes available\n");
@@ -940,7 +947,10 @@ process_t * create_user_process(struct page_directory* pd, void * init, char * t
     task->heap_base = 0;
     task->heap_end = 0;
     task->heap_max_size = 0;
-    
+    task->fs_struct.root.vfs_mount = fs->root.vfs_mount;
+    task->fs_struct.root.dentry = fs->root.dentry;
+    task->fs_struct.cwd.vfs_mount = fs->cwd.vfs_mount;
+    task->fs_struct.cwd.dentry = fs->cwd.dentry;
     task->nice = 10;
     task->current_nice = task->nice;
     task->exit_code = 0;
@@ -1002,8 +1012,15 @@ void init_process(const char * _init_path, const char * _idle_path, char * tty) 
     for (int i = 0; i < MAX_PROCESSES; i++) {
         process_list[i].pid = -1;
     }
+
+    struct vfs_struct fs;
+    fs.root.vfs_mount = get_mount_from_path("/");
+    fs.root.dentry = get_dentry_from_path("/");
+    fs.cwd.vfs_mount = get_mount_from_path("/");
+    fs.cwd.dentry = get_dentry_from_path("/");
+
     process_count = 0;
-    process_t * init_proc = create_user_process(get_pml4(), (void*)_idle, tty);
+    process_t * init_proc = create_user_process(get_pml4(), (void*)_idle, tty, &fs);
     init_proc->pid = 0;
     current_process = init_proc;
     const char ** argv = kmalloc(2 * sizeof(char*));
@@ -1057,4 +1074,63 @@ void process_signals(thread_t * thread) {
             kfree(signal);
         }
     }
+}
+
+void chdir(process_t * task, const char * path) {
+    if (goes_behind_root(path)) {
+        kprintf("chdir: Path goes behind root\n");
+        return;
+    }
+
+    char * root_path = get_path_from_mount_and_dentry(task->fs_struct.root.vfs_mount, task->fs_struct.root.dentry);
+    char * cwd_path = get_path_from_mount_and_dentry(task->fs_struct.cwd.vfs_mount, task->fs_struct.cwd.dentry);
+    
+    if (is_absolute_path(path)) {
+        char * new_path = kmalloc(strlen(root_path) + strlen(path) + 1);
+        strcpy(new_path, root_path);
+        strcat(new_path, path);
+        task->fs_struct.cwd.dentry = get_dentry_from_path(new_path);
+        kfree(new_path);
+    } else {
+        char * new_path = kmalloc(strlen(cwd_path) + strlen(path) + 1);
+        strcpy(new_path, cwd_path);
+        strcat(new_path, path);
+        task->fs_struct.cwd.dentry = get_dentry_from_path(new_path);
+        kfree(new_path);
+    }
+}
+
+char * getcwd(process_t * task) {
+    char * cwd_path = get_path_from_mount_and_dentry(task->fs_struct.cwd.vfs_mount, task->fs_struct.cwd.dentry);
+    char * root_path = get_path_from_mount_and_dentry(task->fs_struct.root.vfs_mount, task->fs_struct.root.dentry);
+
+    //Subtract the root path from the cwd path
+    //First check if the cwd path contains the root path
+    if (strncmp(cwd_path, root_path, strlen(root_path)) == 0) {
+        char * new_path = kmalloc(strlen(cwd_path) - strlen(root_path) + 1);
+        strcpy(new_path, cwd_path + strlen(root_path));
+        return new_path;
+    } else {
+        //Panic
+        kprintf("getcwd: CWD path does not contain root path\n");
+        //Print root path
+        kprintf("Root path: %s\n", root_path);
+        //Print cwd path
+        kprintf("CWD path: %s\n", cwd_path);
+        return 0x0;
+    }
+}
+
+void chroot(process_t * task, const char * path) {
+    if (goes_behind_root(path)) {
+        kprintf("chroot: Path goes behind root\n");
+        return;
+    }
+
+    char * root_path = get_path_from_mount_and_dentry(task->fs_struct.root.vfs_mount, task->fs_struct.root.dentry);
+    char * new_path = kmalloc(strlen(root_path) + strlen(path) + 1);
+    strcpy(new_path, root_path);
+    strcat(new_path, path);
+    task->fs_struct.root.dentry = get_dentry_from_path(new_path);
+    kfree(new_path);
 }

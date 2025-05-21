@@ -8,7 +8,7 @@
 using sc_word_t = long;
 
 /* list */
-#define SYS_COUNT               28
+#define SYS_COUNT               32
 
 #define SYS_FILE_READ           0
 #define SYS_FILE_WRITE          1
@@ -24,6 +24,7 @@ using sc_word_t = long;
 #define SYS_SIGPROCMASK         14
 #define SYS_SIGRETURN           15
 #define SYS_FILE_IOCTL          16
+#define SYS_FILE_PREAD          17
 #define SYS_NANOSLEEP           35
 #define SYS_GETPID              39
 #define SYS_FORK                57
@@ -31,6 +32,7 @@ using sc_word_t = long;
 #define SYS_EXIT                60
 #define SYS_WAITPID             61
 #define SYS_KILL                62
+#define SYS_MKDIR               83
 #define SYS_GETPPID             110
 #define SYS_ARCH_PRCTL          158
 #define SYS_GET_TID             186
@@ -40,6 +42,7 @@ using sc_word_t = long;
 #define SYS_LOG                 337
 #define SYS_FUTEX_WAIT          338
 #define SYS_FUTEX_WAKE          339
+#define SYS_DIR_OPEN            340
 
 /* extern functions */
 sc_word_t do_syscall0(long sc);

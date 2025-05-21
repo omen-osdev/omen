@@ -302,6 +302,14 @@ struct vfs_mount* get_mount_from_path(const char* path, char* native_path) {
     return 0;
 }
 
+struct vfs_dentry* get_dentry_from_path(const char* path, char* native_path) {
+    struct vfs_mount * mount = get_mount_from_path(path, native_path);
+    if (mount == 0) return 0;
+    struct vfs_dentry * dentry = mount->fst->dir_open(mount->internal_index, native_path);
+    if (dentry == 0) return 0;
+    return dentry;
+}
+
 void set_main_mount(const char * mountname) {
     struct vfs_mount * mount = mount_list_head;
     while (mount != 0 && mount->device != 0 && mount->fst != 0 && mount->partition != 0) {
@@ -350,4 +358,68 @@ void init_vfs() {
     detect_partition_fs();
     dump_mounts();
     kprintf("### VFS STARTUP END ###\n");
+}
+
+uint8_t is_absolute_path(const char* path) {
+    if (path[0] == '/') return 1;
+    return 0;
+}
+
+/*
+Example: /home/user/file.txt does not go behind root
+Example: /home/user/../file.txt does not go behind root
+Example: /home/user/../../file.txt does not go behind root
+Example: /home/user/../../../file.txt goes behind root as we are nesting 2 directories and going back two
+*/
+uint8_t goes_behind_root(const char* path) {
+    if (path[0] == '/') {
+        char * path_copy = kmalloc(strlen(path) + 1);
+        strcpy(path_copy, path);
+        char * token = strtok(path_copy, "/");
+        int depth = 1;
+        while (token != 0) {
+            if (strcmp(token, "..") == 0) {
+                depth++;
+            } else {
+                depth--;
+            }
+            token = strtok(0, "/");
+        }
+        kfree(path_copy);
+        if (depth > 0) return 1;
+    }
+    return 0;
+}
+
+
+char * apply_cwd(struct vfs_struct * cwd, const char* path, uint64_t * size) {
+    if (path == 0 || goes_behind_root(path)) {
+        kprintf("[VFS] Path goes behind root\n");
+        return 0;
+    }
+    
+    if (is_absolute_path(path)) {
+        char * root_path = get_path_from_mount_and_dentry(cwd->root.vfs_mount, cwd->root.dentry);
+        char * full_path = kmalloc(strlen(root_path) + strlen(path) + 1);
+        if (full_path == 0) return 0;
+        strcpy(full_path, root_path);
+        strcat(full_path, path);
+        if (size != 0) {
+            *size = strlen(full_path);
+        }
+        return full_path;
+    } else {
+        char * cwd_path = get_path_from_mount_and_dentry(cwd->cwd.vfs_mount, cwd->cwd.dentry);
+        char * full_path = kmalloc(strlen(cwd_path) + strlen(path) + 1);
+        if (full_path == 0) return 0;
+        strcpy(full_path, cwd_path);
+        if (full_path[strlen(full_path) - 1] != '/') {
+            strcat(full_path, "/");
+        }
+        strcat(full_path, path);
+        if (size != 0) {
+            *size = strlen(full_path);
+        }
+        return full_path;
+    }
 }

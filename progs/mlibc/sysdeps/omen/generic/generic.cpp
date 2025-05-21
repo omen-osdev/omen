@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <asm/prctl.h>
+#include <asm/ioctls.h>
 #include <omen/syscall.h>
 #include <omen/vdso.h>
 #include <omen/auxv.h>
@@ -172,7 +173,6 @@ namespace mlibc{
             return -result;
         }
 
-
         return 0;
     }
 
@@ -229,6 +229,37 @@ namespace mlibc{
             return -result;
         }
 
+        return 0;
+    }
+
+    int sys_tcgetattr(int fd, struct termios *attr) {
+        int result;
+        return sys_ioctl(fd, TCGETS, (void*)attr, &result);
+    }
+
+    int sys_tcsetattr(int fd, int optional_action, const struct termios *attr) {
+        int ret;
+        switch (optional_action) {
+            case TCSANOW:
+                optional_action = TCSETS; break;
+            case TCSADRAIN:
+                optional_action = TCSETSW; break;
+            case TCSAFLUSH:
+                optional_action = TCSETSF; break;
+            default:
+                __ensure(!"Unsupported tcsetattr");
+        }
+
+        return sys_ioctl(fd, optional_action, (void *)attr, &ret);
+    }
+
+    int sys_access(const char* filename, int mode){
+        int fd;
+        if(int e = sys_open(filename, O_RDONLY, 0, &fd)){
+            return e;
+        }
+
+        sys_close(fd);
         return 0;
     }
 }

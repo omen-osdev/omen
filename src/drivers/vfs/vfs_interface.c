@@ -2,12 +2,20 @@
 #include "vfs.h"
 #include <omen/libraries/allocators/heap_allocator.h>
 #include <omen/apps/debug/debug.h>
+#include <omen/apps/panic/panic.h>
 #include <omen/libraries/std/string.h>
 
 #define PRINT_ENABLE 0
 #define vfs_print(...) if (PRINT_ENABLE) kprintf(__VA_ARGS__)
 
-void vfs_normalize_path(char * path) {
+void vfs_normalize_path(struct vfs_struct * cwd, char * rpath) {
+    if (cwd == 0 || rpath == 0) {
+        panic("vfs_normalize_path: Invalid arguments");
+    }
+    char * path = apply_cwd(cwd, rpath, 0);
+    if (path == 0) {
+        panic("vfs_normalize_path: Invalid path");
+    }
     //kprintf("Normalizing: %s\n", path);
     //Substitute . and .. in the path
     char * path_ptr = path;
@@ -160,7 +168,14 @@ int64_t vfs_file_ioctl(int fd, int request, void* arg) {
     return res;
 }
 
-int vfs_file_creat(char* path, int mode) {
+int vfs_file_creat(struct vfs_struct * cwd, char* rpath, int mode) {
+    if (cwd == 0 || rpath == 0) {
+        panic("vfs_file_creat: Invalid arguments");
+    }
+    char * path = apply_cwd(cwd, rpath, 0);
+    if (path == 0) {
+        panic("vfs_file_creat: Invalid path");
+    }
     char * npath = kmalloc(strlen(path) + 1);
     strcpy(npath, path);
     vfs_normalize_path(npath);
@@ -230,7 +245,15 @@ int64_t vfs_file_tell(int fd) {
     return res;
 }
 
-int vfs_dir_open(char* path) {
+int vfs_dir_open(struct vfs_struct * cwd, char* rpath) {
+    if (cwd == 0 || rpath == 0) {
+        panic("vfs_dir_open: Invalid arguments");
+    }
+
+    char * path = apply_cwd(cwd, rpath, 0);
+    if (path == 0) {
+        panic("vfs_dir_open: Invalid path");
+    }
     char * npath = kmalloc(strlen(path) + 1);
     strcpy(npath, path);
     vfs_normalize_path(npath);
@@ -305,7 +328,16 @@ int vfs_dir_load(int fd) {
     return res;
 }
 
-void vfs_dir_list(char* path) {
+void vfs_dir_list(struct vfs_struct * cwd, char* rpath) {
+    if (cwd == 0 || rpath == 0) {
+        kprintf("vfs_dir_list: Invalid arguments\n");
+        return;
+    }
+    char * path = apply_cwd(cwd, rpath, 0);
+    if (path == 0) {
+        kprintf("vfs_dir_list: Invalid path\n");
+        return;
+    }
     char * npath = kmalloc(strlen(path) + 1);
     strcpy(npath, path);
     vfs_normalize_path(npath);
@@ -336,8 +368,12 @@ void vfs_dir_list(char* path) {
     return;
 }
 
-int vfs_file_search(const char * name, char * cpath) {
-    if (cpath == 0 || name == 0) {
+int vfs_file_search(struct vfs_struct * cwd, const char * name, char * rcpath) {
+    if (cwd == 0 | cpath == 0 || name == 0) {
+        return VFS_ERROR;
+    }
+    char * cpath = apply_cwd(cwd, rcpath, 0);
+    if (cpath == 0) {
         return VFS_ERROR;
     }
     char * path = kmalloc(strlen(cpath) + 1);
@@ -420,7 +456,14 @@ int vfs_dir_read(int fd, char* name, uint32_t * name_len, uint32_t * type) {
     return res;
 }
 
-int vfs_mkdir(char* cpath, int mode) {
+int vfs_mkdir(struct vfs_struct * cwd, char* rcpath, int mode) {
+    if (cwd == 0 || rcpath == 0) {
+        panic("vfs_mkdir: Invalid arguments");
+    }
+    char * cpath = apply_cwd(cwd, rcpath, 0);
+    if (cpath == 0) {
+        return VFS_ERROR;
+    }
     char * path = kmalloc(strlen(cpath) + 1);
     strcpy(path, cpath);
     vfs_normalize_path(path);
@@ -436,9 +479,16 @@ int vfs_mkdir(char* cpath, int mode) {
     return res;
 }
 
-int vfs_rename(char* path, const char* name) {return VFS_ERROR;}
+int vfs_rename(struct vfs_struct * cwd, char* path, const char* name) {return VFS_ERROR;}
 
-int vfs_remove(char* cpath, uint8_t force) {
+int vfs_remove(struct vfs_struct * cwd, char* rcpath, uint8_t force) {
+    if (cwd == 0 || rcpath == 0) {
+        panic("vfs_remove: Invalid arguments");
+    }
+    char * cpath = apply_cwd(cwd, rcpath, 0);
+    if (cpath == 0) {
+        return VFS_ERROR;
+    }
     char * path = kmalloc(strlen(cpath) + 1);
     strcpy(path, cpath);
     vfs_normalize_path(path);
@@ -458,9 +508,16 @@ int vfs_remove(char* cpath, uint8_t force) {
     return res;
 }
 
-int vfs_chmod(char* path, int mode) {return VFS_ERROR;}
+int vfs_chmod(struct vfs_struct * cwd, char* path, int mode) {return VFS_ERROR;}
 
-void vfs_debug_by_path(char* cpath) {
+void vfs_debug_by_path(struct vfs_struct * cwd, char* rcpath) {
+    if (cwd == 0 || rcpath == 0) {
+        panic("vfs_debug_by_path: Invalid arguments");
+    }
+    char * cpath = apply_cwd(cwd, rcpath, 0);
+    if (cpath == 0) {
+        panic("vfs_debug_by_path: Invalid path");
+    }
     char * path = kmalloc(strlen(cpath) + 1);
     strcpy(path, cpath);
     vfs_normalize_path(path);
