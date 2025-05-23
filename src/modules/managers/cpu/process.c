@@ -454,15 +454,15 @@ int16_t get_next_pid() {
 
 void open_stdfiles(process_t *task, char * tty) {
     int stdin, stdout, stderr;
-    stdin = vfs_file_open(tty, O_RDONLY, 0);
+    stdin = vfs_file_open(task->fs, tty, O_RDONLY, 0);
     if (stdin < 0) {
         panic("Failed to open stdin\n");
     }
-    stdout = vfs_file_open(tty, O_WRONLY, 0);
+    stdout = vfs_file_open(task->fs,tty, O_WRONLY, 0);
     if (stdout < 0) {
         panic("Failed to open stdout\n");
     }
-    stderr = vfs_file_open(tty, O_WRONLY, 0);
+    stderr = vfs_file_open(task->fs,tty, O_WRONLY, 0);
     if (stderr < 0) {
         panic("Failed to open stderr\n");
     }
@@ -489,10 +489,7 @@ process_t * duplicate_process(thread_t * parent_thread) {
     task->current_thread = 0;
     task->main_thread = 0;
     task->pid = get_next_pid();
-    task->fs_struct.root.vfs_mount = parent->fs_struct.root.vfs_mount;
-    task->fs_struct.root.dentry = parent->fs_struct.root.dentry;
-    task->fs_struct.cwd.vfs_mount = parent->fs_struct.cwd.vfs_mount;
-    task->fs_struct.cwd.dentry = parent->fs_struct.cwd.dentry;
+    task->fs = copy_vfs_struct(parent->fs);
     task->nice = parent->nice;
     task->current_nice = task->nice;
     task->exit_code = 0;
@@ -548,10 +545,7 @@ void alter_process_on_exec(process_t * task, struct loaded_elf * ld, char const 
     task->thread_count = 0;
     task->current_thread = 0;
     task->main_thread = 0;
-    task->fs_struct.root.vfs_mount = saved_task.fs_struct.root.vfs_mount;
-    task->fs_struct.root.dentry = saved_task.fs_struct.root.dentry;
-    task->fs_struct.cwd.vfs_mount = saved_task.fs_struct.cwd.vfs_mount;
-    task->fs_struct.cwd.dentry = saved_task.fs_struct.cwd.dentry;
+    task->fs = copy_vfs_struct(saved_task.fs);
     task->heap_base = 0;
     task->heap_end = 0;
     task->heap_max_size = 0;
@@ -597,7 +591,7 @@ int exec(process_t * task, char const *path, char const **argv, char const **env
 
     char * dynpath = kmalloc(256);
     strcpy(dynpath, path);
-    int fd = vfs_file_open(dynpath, 0, 0);
+    int fd = vfs_file_open(task->fs, dynpath, 0, 0);
     if (fd < 0) {
         kprintf("Could not open file %s\n", dynpath);
         return -1;
@@ -627,7 +621,7 @@ int exec(process_t * task, char const *path, char const **argv, char const **env
     kfree(md5_buffer);
 
     vmm_unmap_userspace(task->vmm);
-    struct loaded_elf * ld = elf_load_elf(task->vmm, buf, size);
+    struct loaded_elf * ld = elf_load_elf(task->fs, task->vmm, buf, size);
     alter_process_on_exec(task, ld, argv, envp);
     kfree(buf);
     return 0;
@@ -947,10 +941,7 @@ process_t * create_user_process(struct page_directory* pd, void * init, char * t
     task->heap_base = 0;
     task->heap_end = 0;
     task->heap_max_size = 0;
-    task->fs_struct.root.vfs_mount = fs->root.vfs_mount;
-    task->fs_struct.root.dentry = fs->root.dentry;
-    task->fs_struct.cwd.vfs_mount = fs->cwd.vfs_mount;
-    task->fs_struct.cwd.dentry = fs->cwd.dentry;
+    task->fs = copy_vfs_struct(fs);
     task->nice = 10;
     task->current_nice = task->nice;
     task->exit_code = 0;
@@ -1013,14 +1004,10 @@ void init_process(const char * _init_path, const char * _idle_path, char * tty) 
         process_list[i].pid = -1;
     }
 
-    struct vfs_struct fs;
-    fs.root.vfs_mount = get_mount_from_path("/");
-    fs.root.dentry = get_dentry_from_path("/");
-    fs.cwd.vfs_mount = get_mount_from_path("/");
-    fs.cwd.dentry = get_dentry_from_path("/");
+    struct vfs_struct * fs = get_struct_from_path("/");
 
     process_count = 0;
-    process_t * init_proc = create_user_process(get_pml4(), (void*)_idle, tty, &fs);
+    process_t * init_proc = create_user_process(get_pml4(), (void*)_idle, tty, fs);
     init_proc->pid = 0;
     current_process = init_proc;
     const char ** argv = kmalloc(2 * sizeof(char*));
@@ -1082,27 +1069,31 @@ void chdir(process_t * task, const char * path) {
         return;
     }
 
-    char * root_path = get_path_from_mount_and_dentry(task->fs_struct.root.vfs_mount, task->fs_struct.root.dentry);
-    char * cwd_path = get_path_from_mount_and_dentry(task->fs_struct.cwd.vfs_mount, task->fs_struct.cwd.dentry);
+    char * root_path = get_root_path_from_struct(task->fs);
+    char * cwd_path = get_cwd_path_from_struct(task->fs);
     
     if (is_absolute_path(path)) {
         char * new_path = kmalloc(strlen(root_path) + strlen(path) + 1);
         strcpy(new_path, root_path);
         strcat(new_path, path);
-        task->fs_struct.cwd.dentry = get_dentry_from_path(new_path);
+        struct vfs_struct * fs = get_struct_from_path(new_path);
+        task->fs->pwd.path = fs->pwd.path;
+        task->fs->pwd.mnt = fs->pwd.mnt;
         kfree(new_path);
     } else {
         char * new_path = kmalloc(strlen(cwd_path) + strlen(path) + 1);
         strcpy(new_path, cwd_path);
         strcat(new_path, path);
-        task->fs_struct.cwd.dentry = get_dentry_from_path(new_path);
+        struct vfs_struct * fs = get_struct_from_path(new_path);
+        task->fs->pwd.path = fs->pwd.path;
+        task->fs->pwd.mnt = fs->pwd.mnt;
         kfree(new_path);
     }
 }
 
 char * getcwd(process_t * task) {
-    char * cwd_path = get_path_from_mount_and_dentry(task->fs_struct.cwd.vfs_mount, task->fs_struct.cwd.dentry);
-    char * root_path = get_path_from_mount_and_dentry(task->fs_struct.root.vfs_mount, task->fs_struct.root.dentry);
+    char * cwd_path = get_cwd_path_from_struct(task->fs);
+    char * root_path = get_root_path_from_struct(task->fs);
 
     //Subtract the root path from the cwd path
     //First check if the cwd path contains the root path
@@ -1127,10 +1118,12 @@ void chroot(process_t * task, const char * path) {
         return;
     }
 
-    char * root_path = get_path_from_mount_and_dentry(task->fs_struct.root.vfs_mount, task->fs_struct.root.dentry);
+    char * root_path = get_root_path_from_struct(task->fs);
     char * new_path = kmalloc(strlen(root_path) + strlen(path) + 1);
     strcpy(new_path, root_path);
     strcat(new_path, path);
-    task->fs_struct.root.dentry = get_dentry_from_path(new_path);
+    struct vfs_struct * fs = get_struct_from_path(new_path);
+    task->fs->root.path = fs->pwd.path;
+    task->fs->root.mnt = fs->pwd.mnt;
     kfree(new_path);
 }

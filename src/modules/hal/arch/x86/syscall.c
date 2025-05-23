@@ -161,7 +161,7 @@ int64_t write_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 int64_t dir_open_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char * path = SYSCALL_ARG0(ctx);
     kprintf("[PID: %d | TID %d] DIR_OPEN_SYSCALL(%s)\n", thread->process->pid, thread->id, path);
-    int fd = vfs_dir_open(path);
+    int fd = vfs_dir_open(thread->process->fs, path);
     if (fd < 0) {
         return SYSCALL_ERROR;
     }
@@ -179,13 +179,127 @@ int64_t open_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
         return SYSCALL_ERROR;
     }
     
-    int fd = vfs_file_open(path, flags, mode);
+    int fd = vfs_file_open(thread->process->fs, path, flags, mode);
     if (fd < 0) {
         return SYSCALL_ERROR;
     }
 
     thread->process->open_files[thread->process->open_files_count++] = fd;
     return fd;
+}
+
+int64_t getcwd_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    char * buffer = (char *)SYSCALL_ARG0(ctx);
+    size_t size = SYSCALL_ARG1(ctx);
+    kprintf("[PID: %d | TID %d] GETCWD_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, buffer, size);
+    
+    if (buffer == NULL || size == 0) {
+        return SYSCALL_ERROR;
+    }
+    
+    char * cwd = getcwd(thread->process);
+    if (cwd == NULL) {
+        kprintf("Could not get cwd\n");
+        return SYSCALL_ERROR;
+    }
+
+    if (strlen(cwd) > size) {
+        kprintf("Buffer too small\n");
+        return SYSCALL_ERROR;
+    } else {
+        memcpy(buffer, cwd, strlen(cwd));
+    }
+
+    return SYSCALL_SUCCESS;
+}
+
+int64_t chdir_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    char * path = (char *)SYSCALL_ARG0(ctx);
+    kprintf("[PID: %d | TID %d] CHDIR_SYSCALL(%s)\n", thread->process->pid, thread->id, path);
+    
+    if (path == NULL) {
+        return SYSCALL_ERROR;
+    }
+    
+    chdir(thread->process, path);
+    return SYSCALL_SUCCESS;
+}
+
+int64_t rmdir_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    char * path = (char *)SYSCALL_ARG0(ctx);
+    kprintf("[PID: %d | TID %d] RMDIR_SYSCALL(%s)\n", thread->process->pid, thread->id, path);
+    
+    if (path == NULL) {
+        return SYSCALL_ERROR;
+    }
+    
+    int ret = vfs_remove(thread->process->fs, path, 1);
+    if (ret < 0) {
+        return SYSCALL_ERROR;
+    }
+    return SYSCALL_SUCCESS;
+}
+
+int64_t unlinkat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    char * path = (char *)SYSCALL_ARG0(ctx);
+    int flags = SYSCALL_ARG1(ctx);
+    kprintf("[PID: %d | TID %d] UNLINKAT_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, path, flags);
+    kprintf("WARNING: UNLINKAT IS THE SAME AS RMDIR, WE ARE IGNORING AT\n");
+    if (path == NULL) {
+        return SYSCALL_ERROR;
+    }
+    
+    int ret = vfs_remove(thread->process->fs, path, flags);
+    if (ret < 0) {
+        return SYSCALL_ERROR;
+    }
+    return SYSCALL_SUCCESS;
+}
+
+int64_t rename_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    char * oldpath = (char *)SYSCALL_ARG0(ctx);
+    char * newpath = (char *)SYSCALL_ARG1(ctx);
+    kprintf("[PID: %d | TID %d] RENAME_SYSCALL(%s,%s)\n", thread->process->pid, thread->id, oldpath, newpath);
+    
+    if (oldpath == NULL || newpath == NULL) {
+        return SYSCALL_ERROR;
+    }
+    
+    int ret = vfs_rename(thread->process->fs, oldpath, newpath);
+    if (ret < 0) {
+        return SYSCALL_ERROR;
+    }
+    return SYSCALL_SUCCESS;
+}
+
+int64_t renameat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    char * oldpath = (char *)SYSCALL_ARG0(ctx);
+    char * newpath = (char *)SYSCALL_ARG1(ctx);
+    int flags = SYSCALL_ARG2(ctx);
+    kprintf("[PID: %d | TID %d] RENAMEAT_SYSCALL(%s,%s,%d)\n", thread->process->pid, thread->id, oldpath, newpath, flags);
+    kprintf("WARNING: RENAME IS THE SAME AS RENAMEAT\n");
+    if (oldpath == NULL || newpath == NULL) {
+        return SYSCALL_ERROR;
+    }
+    
+    int ret = vfs_rename(thread->process->fs, oldpath, newpath);
+    if (ret < 0) {
+        return SYSCALL_ERROR;
+    }
+    return SYSCALL_SUCCESS;
+}
+
+int64_t readdir_syscall_hanlder(thread_t * thread, cpu_context_t * ctx) {
+    int handle = SYSCALL_ARG0(ctx);
+    void * buffer = (char *)SYSCALL_ARG1(ctx);
+    uint32_t * count = (uint32_t *)SYSCALL_ARG2(ctx);
+
+    int size_read = vfs_dir_read(handle, buffer, count);
+    if (size_read < 0) {
+        return SYSCALL_ERROR;
+    }
+
+    return size_read;
 }
 
 int64_t close_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
@@ -232,7 +346,7 @@ int64_t stat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     stat_t* stat = SYSCALL_ARG1(ctx);
     kprintf("[PID: %d | TID %d] STAT_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, path, stat);
 
-    int fd = vfs_file_open((char*)path, O_RDONLY, 0);
+    int fd = vfs_file_open(thread->process->fs, (char*)path, O_RDONLY, 0);
     if (fd < 0) {
         return SYSCALL_ERROR;
     }
@@ -563,7 +677,7 @@ int64_t mkdir_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     int mode = SYSCALL_ARG1(ctx);
 
     kprintf("[PID: %d | TID %d] MKDIR_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, path, mode);
-    int ret = vfs_mkdir(path, mode);
+    int ret = vfs_mkdir(thread->process->fs, path, mode);
     if (ret < 0) {
         return SYSCALL_ERROR;
     }

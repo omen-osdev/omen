@@ -279,11 +279,23 @@ int is_safe_for_removing(const char* path, uint8_t force) {
     return 1;
 }
 
-struct vfs_mount* get_mount_from_path(const char* path, char* native_path) {
+struct vfs_mount* get_mount_from_path(const char* cpath, char* native_path) {
     struct vfs_mount * mount = mount_list_head;
+    char * path = kmalloc(strlen(cpath) + 1);
+    strcpy(path, cpath);
     if (path[0] == 0) {
         memset(native_path, 0, strlen(path) + 1);
         return main_mount;
+    } else if (!strncmp(path, "/dev/", 5)) {
+        //Remove /dev/ from path
+        char * path_ptr = path + 5;
+        char * path_ptr2 = path;
+        while (*path_ptr != 0) {
+            *path_ptr2 = *path_ptr;
+            path_ptr++;
+            path_ptr2++;
+        }
+        *path_ptr2 = 0;
     } else if (path[0] == '/') {
         strncpy(native_path, path, strlen(path));
         native_path[strlen(path)] = 0;
@@ -399,7 +411,7 @@ char * apply_cwd(struct vfs_struct * cwd, const char* path, uint64_t * size) {
     }
     
     if (is_absolute_path(path)) {
-        char * root_path = get_path_from_mount_and_dentry(cwd->root.vfs_mount, cwd->root.dentry);
+        char * root_path = get_root_path_from_struct(cwd);
         char * full_path = kmalloc(strlen(root_path) + strlen(path) + 1);
         if (full_path == 0) return 0;
         strcpy(full_path, root_path);
@@ -409,7 +421,7 @@ char * apply_cwd(struct vfs_struct * cwd, const char* path, uint64_t * size) {
         }
         return full_path;
     } else {
-        char * cwd_path = get_path_from_mount_and_dentry(cwd->cwd.vfs_mount, cwd->cwd.dentry);
+        char * cwd_path = get_cwd_path_from_struct(cwd);
         char * full_path = kmalloc(strlen(cwd_path) + strlen(path) + 1);
         if (full_path == 0) return 0;
         strcpy(full_path, cwd_path);
@@ -422,4 +434,48 @@ char * apply_cwd(struct vfs_struct * cwd, const char* path, uint64_t * size) {
         }
         return full_path;
     }
+}
+
+struct vfs_struct * get_struct_from_path(const char* path) {
+    char * native_path = kmalloc(strlen(path) + 1);
+    struct vfs_mount * mount = get_mount_from_path(path, native_path);
+    if (mount == 0) return 0;
+    struct vfs_struct * cwd = kmalloc(sizeof(struct vfs_struct));
+    if (cwd == 0) return 0;
+    cwd->root.mnt = mount;
+    cwd->root.path = native_path;
+    cwd->pwd.mnt = mount;
+    cwd->pwd.path = native_path;
+    return cwd;
+}
+
+char * get_root_path_from_struct(struct vfs_struct * fs) {
+    if (fs == 0) return 0;
+    char * root_path = kmalloc(strlen(fs->root.mnt->partition->name) + 1);
+    if (root_path == 0) return 0;
+    strcpy(root_path, fs->root.mnt->partition->name);
+    return root_path;
+}
+
+char * get_cwd_path_from_struct(struct vfs_struct * fs) {
+    if (fs == 0) return 0;
+    char * cwd_path = kmalloc(strlen(fs->pwd.mnt->partition->name) + 1);
+    if (cwd_path == 0) return 0;
+    strcpy(cwd_path, fs->pwd.mnt->partition->name);
+    return cwd_path;
+}
+
+struct vfs_struct *copy_vfs_struct(struct vfs_struct * fs) {
+    if (fs == 0) return 0;
+    struct vfs_struct * new_fs = kmalloc(sizeof(struct vfs_struct));
+    if (new_fs == 0) return 0;
+    new_fs->root.mnt = fs->root.mnt;
+    new_fs->root.path = kmalloc(strlen(fs->root.path) + 1);
+    if (new_fs->root.path == 0) return 0;
+    strcpy(new_fs->root.path, fs->root.path);
+    new_fs->pwd.mnt = fs->pwd.mnt;
+    new_fs->pwd.path = kmalloc(strlen(fs->pwd.path) + 1);
+    if (new_fs->pwd.path == 0) return 0;
+    strcpy(new_fs->pwd.path, fs->pwd.path);
+    return new_fs;
 }
