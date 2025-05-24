@@ -145,10 +145,10 @@ void boot_startup() {
     probe_fs();
     kprintf("VFS startup complete...\n");
     vfs_lsdisk();
-    ext2_inhibit_errors(1);
+    //ext2_inhibit_errors(1);
     set_main_mount("hdap2");
     char vfs_tty[32];
-    sprintf(vfs_tty, "%sp0/", tty); 
+    sprintf(vfs_tty, "/dev/%sp0/", tty); 
 
     //Careful, somehow this shit crashes when you rewrite an string 
     //Map ffffffff80000000 - ffffffff803a000 is read only! diagnose this
@@ -159,7 +159,8 @@ void boot_startup() {
     kprintf("Enabling interrupts...\n");
     __asm__("cli");
     unmask_interrupt(PIT_IRQ);
-    vfs_dir_list("/usr/lib/");
+    //struct vfs_struct * cwd = get_struct_from_path("/");
+    //vfs_dir_list(cwd, "/usr/lib/");
     
     init_process("/export/minit.elf", "/export/idle.elf", vfs_tty);
     

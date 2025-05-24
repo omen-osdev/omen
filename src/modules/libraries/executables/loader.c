@@ -234,8 +234,8 @@ void allocate_segment(struct page_directory * root, Elf64_Phdr * program_header,
     map_range(root, (void*)vaddr, get_current_physical_address(new_buffer), 0x1000, page_no * 0x1000, perms);
 }
 
-uint8_t elf_open_file(char * filename, uint8_t ** buffer, uint64_t * filesize) {
-    int fd = vfs_file_open(filename, 0, 0);
+uint8_t elf_open_file(struct vfs_struct * cwd, char * filename, uint8_t ** buffer, uint64_t * filesize) {
+    int fd = vfs_file_open(cwd, filename, 0, 0);
     if (fd < 0) {
         kprintf("Could not open file %s\n", filename);
         return 0;
@@ -259,7 +259,7 @@ uint8_t elf_open_file(char * filename, uint8_t ** buffer, uint64_t * filesize) {
 }
 
 
-struct loaded_elf* elf_load_elf(struct page_directory* root, uint8_t * buffer, uint64_t size) {
+struct loaded_elf* elf_load_elf(struct vfs_struct * cwd, struct page_directory* root, uint8_t * buffer, uint64_t size) {
     if (!parse_elf_file(buffer)) return NULL;
 
     Elf64_Ehdr * elf_header = (Elf64_Ehdr *) buffer;
@@ -335,7 +335,7 @@ struct loaded_elf* elf_load_elf(struct page_directory* root, uint8_t * buffer, u
         //Load dynamic linker
         uint8_t * ld_buffer;
         uint64_t ld_size;
-        if (!elf_open_file(pld.ld_path, &ld_buffer, &ld_size)) {
+        if (!elf_open_file(cwd, pld.ld_path, &ld_buffer, &ld_size)) {
             kprintf("Failed to open dynamic linker\n");
             return NULL;
         }

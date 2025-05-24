@@ -2,6 +2,7 @@
 #define _VFS_H
 
 #include <omen/libraries/std/stdint.h>
+#include <omen/libraries/std/path.h>
 #include <omen/managers/dev/devices.h>
 #include "generic/vfs_compat.h"
 
@@ -100,7 +101,6 @@ void dump_mounts();
 uint8_t iterate_mounts(uint8_t (*callback)(struct vfs_mount*, void * data, void* passthrough), void * data, void* passthrough);
 struct vfs_mount* get_mount_from_path(const char* path, char* native_path);
 struct vfs_dentry* get_dentry_from_path(const char* path, char* native_path);
-char * get_path_from_mount_and_dentry(struct vfs_mount * mount, struct vfs_dentry * dentry);
 char* get_full_path_from_fd(int fd);
 char* get_full_path_from_dir(int fd);
 char* get_full_path_from_dev(int fd);
@@ -110,5 +110,10 @@ void set_main_mount(const char * mountname);
 uint8_t is_absolute_path(const char* path);
 uint8_t goes_behind_root(const char* path);
 char * apply_cwd(struct vfs_struct * cwd, const char* path, uint64_t * size);
+struct vfs_struct * get_struct_from_path(const char* path);
+char * get_root_path_from_struct(struct vfs_struct * fs);
+char * get_cwd_path_from_struct(struct vfs_struct * fs);
+struct vfs_struct * copy_vfs_struct(struct vfs_struct * fs);
+
 void probe_fs();
 #endif

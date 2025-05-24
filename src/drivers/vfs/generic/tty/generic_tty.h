@@ -157,7 +157,7 @@ int tty_compat_file_open(int devno, const char* path, int flags, int mode) {
     if (device == 0)
         return VFS_ERROR;
 
-    if (strlen(path) != 0) return VFS_ERROR;
+    if (strlen(path) != 1 || path[0] != '/') return VFS_ERROR;
 
     return get_fd(path, device->name, flags, mode);
 }

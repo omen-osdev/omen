@@ -8,6 +8,7 @@
 #include <omen/libraries/allocators/heap_allocator.h>
 #include <omen/managers/cpu/signal.h>
 #include <omen/managers/mem/vdso.h>
+#include <vfs/vfs.h>
 
 #define PROCESS_PRIORITIES                  20
 
@@ -140,7 +141,7 @@ typedef struct process {
 
     struct task_signal *signal_queue[NSIG];
     struct sigaction signal_handlers[NSIG];
-    struct vfs_struct fs_struct;
+    struct vfs_struct *fs;
     unsigned int locks;
 
     int16_t pid;

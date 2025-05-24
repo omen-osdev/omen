@@ -3,6 +3,7 @@
 
 #include <omen/managers/mem/vmm.h>
 #include <omen/libraries/std/stdint.h>
+#include <vfs/vfs.h>
 
 #define AT_NULL   0	/* end of vector */
 #define AT_IGNORE 1	/* entry should be ignored */
@@ -55,5 +56,5 @@ struct loaded_elf {
 char * get_auxv_string(uint64_t type);
 void elf_readelf(uint8_t * buffer, uint64_t size);
 void set_vector_vdso(struct auxv* vectors, void * vdso_address);
-struct loaded_elf* elf_load_elf(struct page_directory* root, uint8_t * buffer, uint64_t size);
+struct loaded_elf* elf_load_elf(struct vfs_struct * cwd, struct page_directory* root, uint8_t * buffer, uint64_t size);
 #endif
