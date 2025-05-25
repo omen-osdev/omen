@@ -127,15 +127,17 @@ uint8_t ext2_dentry_get_dentry(struct ext2_partition* partition, const char* par
         uint32_t parsed_bytes = 0;
         uint32_t list_count = 0;
         while (parsed_bytes < root_inode->i_size && list_count < LIST_MAX) {
-            struct ext2_directory_entry *entry = (struct ext2_directory_entry *) (block_buffer + parsed_bytes);
-            if (entry->inode != 0) {
-                if (strncmp(entry->name, name, entry->name_len) == 0) {
-                    memcpy(entry, entry, sizeof(struct ext2_directory_entry));
+            struct ext2_directory_entry *centry = (struct ext2_directory_entry *) (block_buffer + parsed_bytes);
+            if (centry->inode != 0) {
+                EXT2_DEBUG("Checking entry: %s", centry->name);
+                if (strncmp(centry->name, name, strlen(name)) == 0) {
+                    EXT2_DEBUG("Found entry: %s", centry->name);
+                    memcpy(entry, centry, sizeof(struct ext2_directory_entry));
                     kfree(block_buffer);
                     return 0;
                 }
             }
-            parsed_bytes += entry->rec_len;
+            parsed_bytes += centry->rec_len;
             list_count++;
         }
        

@@ -148,8 +148,7 @@ void boot_startup() {
     //ext2_inhibit_errors(1);
     set_main_mount("hdap2");
     char vfs_tty[32];
-    sprintf(vfs_tty, "/dev/%sp0/", tty); 
-
+    sprintf(vfs_tty, "/dev/%sp0", tty); 
     //Careful, somehow this shit crashes when you rewrite an string 
     //Map ffffffff80000000 - ffffffff803a000 is read only! diagnose this
 
@@ -159,10 +158,16 @@ void boot_startup() {
     kprintf("Enabling interrupts...\n");
     __asm__("cli");
     unmask_interrupt(PIT_IRQ);
-    //struct vfs_struct * cwd = get_struct_from_path("/");
-    //vfs_dir_list(cwd, "/usr/lib/");
-    
-    init_process("/export/minit.elf", "/export/idle.elf", vfs_tty);
+    struct vfs_struct * cwd = get_struct_from_path("/");
+    vfs_mkdir(cwd, "/dev", 0);
+    vfs_link_creat(cwd, "/dev/tty", vfs_tty);
+    kprintf("Symlink: %s\n", vfs_read_symlink(cwd, "/dev/tty"));
+    int fd = vfs_file_open(cwd, "/dev/tty", O_RDWR, 0);
+    char test_prompt[] = "Hello from Omen\n";
+    if (fd) vfs_file_write(fd, test_prompt, strlen(test_prompt));
+    vfs_file_close(fd);
+
+    init_process("/export/minit.elf", "/export/idle.elf", "/dev/tty");
     
     panic("¡Returned from the scheduler!\n");
 }

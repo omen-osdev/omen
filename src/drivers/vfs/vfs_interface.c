@@ -81,7 +81,7 @@ int vfs_file_dup(int old, int new) {
 
 int vfs_file_open(struct vfs_struct * cwd, char* path, int flags, int mode) {
     char * npath = kmalloc(strlen(path) + 1);
-    strcpy(npath, path);
+    strcpy(npath, vfs_read_symlink(cwd, path));
     vfs_normalize_path(cwd, npath);
     vfs_print("vfs_file_open(%s, %d, %d)\n", npath, flags, mode);
     char * native_path_buffer = kmalloc(strlen(npath) + 1);
@@ -181,6 +181,44 @@ int vfs_file_creat(struct vfs_struct * cwd, char* path, int mode) {
     int res = VFS_ERROR;
     if (mount != 0) {
         res = mount->fst->file_creat(mount->internal_index, native_path_buffer, mode);
+    }
+    kfree(native_path_buffer);
+    kfree(npath);
+    return res;
+}
+
+char * vfs_read_symlink(struct vfs_struct * cwd, char * path) {
+    vfs_print("vfs_read_symlink(%s)\n", path);
+    if (cwd == 0 || path == 0) {
+        panic("vfs_read_symlink: Invalid arguments");
+    }
+    char * npath = kmalloc(strlen(path) + 1);
+    strcpy(npath, path);
+    vfs_normalize_path(cwd, npath);
+    char * native_path_buffer = kmalloc(strlen(npath) + 1);
+    struct vfs_mount* mount = get_mount_from_path(npath, native_path_buffer);
+    char * res = 0;
+    if (mount != 0) {
+        res = mount->fst->file_readlink(mount->internal_index, native_path_buffer);
+    }
+    kfree(native_path_buffer);
+    kfree(npath);
+    return res;
+}
+
+int vfs_link_creat(struct vfs_struct * cwd, char* path, char* target) {
+    if (cwd == 0 || path == 0 || target == 0) {
+        panic("vfs_link_creat: Invalid arguments");
+    }
+    char * npath = kmalloc(strlen(path) + 1);
+    strcpy(npath, path);
+    vfs_normalize_path(cwd, npath);
+    vfs_print("vfs_link_creat(%s, %s)\n", npath, target);
+    char * native_path_buffer = kmalloc(strlen(npath) + 1);
+    struct vfs_mount* mount = get_mount_from_path(npath, native_path_buffer);
+    int res = VFS_ERROR;
+    if (mount != 0) {
+        res = mount->fst->file_link(mount->internal_index, native_path_buffer, target, 0);
     }
     kfree(native_path_buffer);
     kfree(npath);

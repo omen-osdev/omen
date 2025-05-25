@@ -223,7 +223,6 @@ setup:
 	@echo adds minit >> $(ABSDIR)/$(GDBCFG)
 	@echo b main >> $(ABSDIR)/$(GDBCFG)
 	@echo b __breakpoint >> $(ABSDIR)/$(GDBCFG)
-	@echo b $(KERNEL_ENTRY) >> $(ABSDIR)/$(GDBCFG)
 	@echo c >> $(ABSDIR)/$(GDBCFG)
 
 cleansetup:
@@ -344,6 +343,15 @@ debugpt:
 	@echo "Running GPT QEMU..."
 	tmux split-window -h '$(GDB) $(GDBFLAGS)' & $(QEMU) -S -s $(QFLAGSEXP)$(ISODIR)/$(IMG)
 
+symbols:
+	@echo "Copying symbols..."
+	@mkdir -p $(PROGSSYMDIR)
+# Copy everything from $(SYSROOT)/usr/lib to $(PROGSSYMDIR) with objcopy --only-keep-debug
+	@find $(SYSROOT)/usr/lib -type f -name "*.so*" -exec sh -c 'objcopy --only-keep-debug "$$1" "$(PROGSSYMDIR)/$$(basename $$1).sym"' _ {} \;
+	@find $(SYSROOT)/usr/lib -type f -name "*.ko" -exec sh -c 'objcopy --only-keep-debug "$$1" "$(PROGSSYMDIR)/$$(basename $$1).sym"' _ {} \;
+	@find $(SYSROOT)/usr/bin -type f -executable -exec sh -c 'objcopy --only-keep-debug "$$1" "$(PROGSSYMDIR)/$$(basename $$1).sym"' _ {} \;
+	@echo "Done!"
+
 debugpt-wsl:
 #@make progs
 #	@make kernel
@@ -351,6 +359,7 @@ debugpt-wsl:
 #This is required to be before buildimggpt!
 # Due to eval weird behaviour
 	@sudo make buildimggpt
+	@sudo make symbols
 	@echo "Running GPT QEMU..."
 	cmd.exe /c start cmd /c wsl -e $(GDB) $(GDBFLAGS) & $(QEMU) -S -s $(QFLAGSEXP)$(ISODIR)/$(IMG)
 

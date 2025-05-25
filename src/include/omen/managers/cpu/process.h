@@ -10,6 +10,8 @@
 #include <omen/managers/mem/vdso.h>
 #include <vfs/vfs.h>
 
+#define PROTOSTACK_MAX_SIZE 0x1000
+
 #define PROCESS_PRIORITIES                  20
 
 #define PROCESS_STATUS_ALIVE                0

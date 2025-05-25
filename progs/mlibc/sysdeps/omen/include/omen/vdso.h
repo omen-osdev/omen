@@ -28,8 +28,9 @@ typedef struct vdso {
     struct vdso_entry* entry;
 } __attribute__((packed)) vdso_t;
 
-int vdso_set_data(vdso_t* vdso, uint8_t id, void* info, int64_t size);
-int vdso_get_data(vdso_t* vdso, uint8_t id, void** info, int64_t* size);
-
+int vdso_set_data(uint8_t id, void* info, int64_t size);
+int vdso_get_data(uint8_t id, void** info, int64_t* size);
+void set_vdso_base(void * address);
+vdso_t* get_vdso();
 void * get_trampoline();
 #endif

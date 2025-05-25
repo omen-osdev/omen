@@ -17,5 +17,5 @@ void tty_dump_device(struct vfs_tty* tty);
 uint64_t vfs_tty_get_size(struct vfs_tty* tty);
 uint8_t vfs_tty_read(struct vfs_tty * tty, uint8_t * destination_buffer, uint64_t size, uint64_t skip);
 uint8_t vfs_tty_write(struct vfs_tty * tty, uint8_t * source_buffer, uint64_t size, uint64_t skip);
-uint8_t vfs_tty_ioctl(struct vfs_tty * tty, uint8_t request, void* arg);
+uint8_t vfs_tty_ioctl(struct vfs_tty * tty, int request, void* arg);
 #endif

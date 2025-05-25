@@ -185,6 +185,7 @@ int tty_compat_flush(int partno) {(void)partno; return VFS_ERROR;}
 int tty_compat_dir_open(int partno, const char* path) {(void)partno; (void)path; return VFS_ERROR;}
 int tty_compat_dir_close(int partno, int fd) {(void)partno; (void)fd; return VFS_ERROR;}
 int tty_compat_file_creat(int partno, const char* path, int mode) {(void)partno; (void)path; (void)mode; return VFS_ERROR;}
+int tty_compat_link_creat(int partno, const char* path, const char* target, int mode) {(void)partno; (void)path; (void)target; (void)mode; return VFS_ERROR;}
 int tty_compat_file_dup(int partno, int oldfd, int newfd) {(void)partno; (void)oldfd; (void)newfd; return VFS_ERROR;}
 int tty_compat_dir_creat(int partno, const char* path, int mode) {(void)partno; (void)path; (void)mode; return VFS_ERROR;}
 int tty_compat_dir_read(int partno, int fd, char* name, uint32_t * name_len, uint32_t * type) {(void)partno; (void)fd; (void)name_len; (void)type; return VFS_ERROR;}
@@ -194,6 +195,7 @@ int tty_compat_rename(int partno, const char* path, const char* newpath) {(void)
 int tty_compat_prepare_remove(int partno, const char* path) {(void)partno; (void)path; return VFS_ERROR;}
 int tty_compat_remove(int partno, const char* path) {(void)partno; (void)path; return VFS_ERROR;}
 int tty_compat_chmod(int partno, const char* path, int mode) {(void)partno; (void)path; (void)mode; return VFS_ERROR;}
+char* tty_compat_file_readlink(int partno, const char * path) {(void)partno; (void)path; return 0;}
 
 struct vfs_compatible tty_register = {
     .name = "TTY",
@@ -208,6 +210,7 @@ struct vfs_compatible tty_register = {
     .file_open = tty_compat_file_open,
     .file_close = tty_compat_file_close,
     .file_creat = tty_compat_file_creat,
+    .file_link = tty_compat_link_creat,
     .file_dup = tty_compat_file_dup,
     .file_read = tty_compat_file_read,
     .file_write = tty_compat_file_write,
@@ -223,7 +226,8 @@ struct vfs_compatible tty_register = {
     .dir_creat = tty_compat_dir_creat,
     .dir_read = tty_compat_dir_read,
     .dir_load = tty_compat_dir_load,
-    .prepare_remove = tty_compat_prepare_remove
+    .prepare_remove = tty_compat_prepare_remove,
+    .file_readlink = tty_compat_file_readlink
 };
 
 struct vfs_compatible * tty_registrar = &tty_register;

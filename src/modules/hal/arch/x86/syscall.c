@@ -221,7 +221,19 @@ int64_t chdir_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
         return SYSCALL_ERROR;
     }
     
+    char *cwd = getcwd(thread->process);
+    if (cwd == NULL) {
+        kprintf("Could not get cwd\n");
+        return SYSCALL_ERROR;
+    }
+    kprintf("Current working directory before chdir: %s\n", cwd);
     chdir(thread->process, path);
+    cwd = getcwd(thread->process);
+    if (cwd == NULL) {
+        kprintf("Could not get cwd after chdir\n");
+        return SYSCALL_ERROR;
+    }
+    kprintf("Current working directory after chdir: %s\n", cwd);
     return SYSCALL_SUCCESS;
 }
 
@@ -238,6 +250,24 @@ int64_t rmdir_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
         return SYSCALL_ERROR;
     }
     return SYSCALL_SUCCESS;
+}
+
+int64_t creat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    char * path = (char *)SYSCALL_ARG0(ctx);
+    int mode = SYSCALL_ARG1(ctx);
+    kprintf("[PID: %d | TID %d] CREAT_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, path, mode);
+    
+    if (path == NULL) {
+        return SYSCALL_ERROR;
+    }
+    
+    int fd = vfs_file_creat(thread->process->fs, path, mode);
+    if (fd < 0) {
+        return SYSCALL_ERROR;
+    }
+    
+    thread->process->open_files[thread->process->open_files_count++] = fd;
+    return fd;
 }
 
 int64_t unlinkat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
@@ -1040,9 +1070,15 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [60] = exit_syscall_handler,
     [61] = waitpid_syscall_handler,
     [62] = kill_syscall_handler,
-    [63 ... 82] = undefined_syscall_handler,
+    [63 ... 78] = undefined_syscall_handler,
+    [79] = getcwd_syscall_handler,
+    [80] = chdir_syscall_handler,
+    [81] = undefined_syscall_handler,
+    [82] = rename_syscall_handler,
     [83] = mkdir_syscall_handler,
-    [84 ... 95] = undefined_syscall_handler,
+    [84] = rmdir_syscall_handler,
+    [85] = creat_syscall_handler,
+    [86 ... 95] = undefined_syscall_handler,
     [96] = gettimeofday_syscall_handler,
     [97 ... 109] = undefined_syscall_handler,
     [110] = getppid_syscall_handler,
@@ -1059,13 +1095,17 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [227] = clock_settime_syscall_handler,
     [228] = clock_gettime_syscall_handler,
     [229] = clock_getres_syscall_handler,
-    [230 ... 335] = undefined_syscall_handler,
+    [230 ... 262] = undefined_syscall_handler,
+    [263] = unlinkat_syscall_handler,
+    [264] = renameat_syscall_handler,
+    [265 ... 335] = undefined_syscall_handler,
     [336] = thread_exit_syscall_handler,
     [337] = log_syscall_handler,
     [338] = futex_wait_syscall_handler,
     [339] = futex_wake_syscall_handler,
     [340] = dir_open_syscall_handler,
-    [341 ... 511] = undefined_syscall_handler
+    [341] = readdir_syscall_hanlder,
+    [342 ... 511] = undefined_syscall_handler
 };
 
 void global_syscall_handler(cpu_context_t* ctx) {

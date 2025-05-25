@@ -346,6 +346,11 @@ void ext2_print_inode(struct ext2_inode_descriptor_generic* inode) {
 
 int32_t ext2_inode_from_path_and_parent(struct ext2_partition* partition, uint32_t parent_inode, const char* path) {
     uint32_t block_size = 1024 << (((struct ext2_superblock*)partition->sb)->s_log_block_size);
+
+    if (path != 0 && path[0] == '\0') {
+        return parent_inode; // Return the parent inode if the path is root
+    }
+    
     struct ext2_inode_descriptor_generic * root_inode = (struct ext2_inode_descriptor_generic *)ext2_read_inode(partition, parent_inode);
     if (root_inode == 0) {
         EXT2_WARN("Failed to read root inode");

@@ -19,6 +19,8 @@ int64_t vfs_file_tell(int);
 int64_t vfs_file_ioctl(int, int, void*);
 int vfs_file_stat(int, stat_t*);
 int vfs_file_creat(struct vfs_struct * cwd, char*, int);
+int vfs_link_creat(struct vfs_struct * cwd, char* path, char* target);
+char * vfs_read_symlink(struct vfs_struct * cwd, char * path);
 void vfs_file_flush(int);
 
 int vfs_dir_open(struct vfs_struct * cwd, char*);

@@ -14,14 +14,14 @@
 #define EXT2_RESULT_ERROR (-1)
 #define EXT2_RESULT_OK 1
 
-#define EXT2_FILE_TYPE_UNKNOWN  0
-#define EXT2_FILE_TYPE_REGULAR  1
-#define EXT2_FILE_TYPE_DIRECTORY 2
-#define EXT2_FILE_TYPE_CHARDEV  3
-#define EXT2_FILE_TYPE_BLOCKDEV 4
-#define EXT2_FILE_TYPE_FIFO     5
-#define EXT2_FILE_TYPE_SOCKET   6
-#define EXT2_FILE_TYPE_SYMLINK  7
+#define EXT2_FILE_TYPE_UNKNOWN      0
+#define EXT2_FILE_TYPE_REGULAR      1
+#define EXT2_FILE_TYPE_DIRECTORY    2
+#define EXT2_FILE_TYPE_CHARDEV      3
+#define EXT2_FILE_TYPE_BLOCKDEV     4
+#define EXT2_FILE_TYPE_FIFO         5
+#define EXT2_FILE_TYPE_SOCKET       6
+#define EXT2_FILE_TYPE_SYMLINK      7
 
 struct ext2_partition * ext2_register_partition(const char* disk, uint32_t lba, const char* mountpoint);
 uint8_t ext2_sync(struct ext2_partition * partition);

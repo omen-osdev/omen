@@ -32,17 +32,25 @@ using sc_word_t = long;
 #define SYS_EXIT                60
 #define SYS_WAITPID             61
 #define SYS_KILL                62
+#define SYS_GETCWD              79
+#define SYS_CHDIR               80
+#define SYS_RENAME              82
 #define SYS_MKDIR               83
+#define SYS_RMDIR               84
+#define SYS_CREAT               85
 #define SYS_GETPPID             110
 #define SYS_ARCH_PRCTL          158
 #define SYS_GET_TID             186
 #define SYS_CLOCK_GET           228
 #define SYS_CLOCK_GETRES        229
+#define SYS_UNLINKAT            263
+#define SYS_RENAMEAT            264
 #define SYS_THREAD_EXIT         336
 #define SYS_LOG                 337
 #define SYS_FUTEX_WAIT          338
 #define SYS_FUTEX_WAKE          339
 #define SYS_DIR_OPEN            340
+#define SYS_DIR_READ            341
 
 /* extern functions */
 sc_word_t do_syscall0(long sc);

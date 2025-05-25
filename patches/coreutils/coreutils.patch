@@ -1,3 +1,18 @@
+diff --git a/src/statx.h b/src/statx.h
+index d091805..83a1a91 100644
+--- a/src/statx.h
++++ b/src/statx.h
+@@ -16,6 +16,10 @@
+
+ #ifndef COREUTILS_STATX_H
+ # define COREUTILS_STATX_H
++#define AT_STATX_SYNC_TYPE      0x6000  /* Type of synchronisation required from statx() */
++#define AT_STATX_SYNC_AS_STAT   0x0000  /* - Do whatever stat() does */
++#define AT_STATX_FORCE_SYNC     0x2000  /* - Force the attributes to be sync'd with the server */
++#define AT_STATX_DONT_SYNC      0x4000  /* - Don't sync attributes with the server */
+
+ # if HAVE_STATX && defined STATX_INO
+ /* Much of the format printing requires a struct stat or timespec */
 diff --git a/build-aux/config.sub b/build-aux/config.sub
 index f02d43a..63e596a 100755
 --- a/build-aux/config.sub

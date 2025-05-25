@@ -36,6 +36,7 @@ struct vfs_file_system_type {
     int (*file_open)(int, const char*, int, int);
     int (*file_close)(int, int);
     int (*file_creat)(int, const char*, int);
+    int (*file_link)(int, const char*, const char*, int);
     int (*file_dup)(int, int, int);
     int64_t (*file_read)(int, int, void*, uint64_t);
     int64_t (*file_write)(int, int, void*, uint64_t);
@@ -50,7 +51,8 @@ struct vfs_file_system_type {
     int (*dir_load)(int, int);
     int (*dir_creat)(int, const char*, int);
     int (*prepare_remove)(int partno, const char* path);
-
+    
+    char* (*file_readlink)(int, const char*);
 
     int (*rename)(int, const char*, const char*);
     int (*remove)(int, const char*);

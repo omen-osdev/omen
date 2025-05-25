@@ -92,6 +92,7 @@ void register_filesystem(struct vfs_compatible * registrar) {
     fst->file_open = registrar->file_open;
     fst->file_close = registrar->file_close;
     fst->file_creat = registrar->file_creat;
+    fst->file_link = registrar->file_link;
     fst->file_dup = registrar->file_dup;
     fst->file_read = registrar->file_read;
     fst->file_write = registrar->file_write;
@@ -105,6 +106,7 @@ void register_filesystem(struct vfs_compatible * registrar) {
     fst->dir_load = registrar->dir_load;
     fst->dir_creat = registrar->dir_creat;
     fst->prepare_remove = registrar->prepare_remove;
+    fst->file_readlink = registrar->file_readlink;
     fst->rename = registrar->rename;
     fst->remove = registrar->remove;
     fst->chmod = registrar->chmod;
@@ -283,35 +285,40 @@ struct vfs_mount* get_mount_from_path(const char* cpath, char* native_path) {
     struct vfs_mount * mount = mount_list_head;
     char * path = kmalloc(strlen(cpath) + 1);
     strcpy(path, cpath);
-    if (path[0] == 0) {
-        memset(native_path, 0, strlen(path) + 1);
-        return main_mount;
-    } else if (!strncmp(path, "/dev/", 5)) {
+
+    if (!strncmp(path, "/dev/", 5) || path[0] != '/') {
         //Remove /dev/ from path
-        char * path_ptr = path + 5;
-        char * path_ptr2 = path;
-        while (*path_ptr != 0) {
-            *path_ptr2 = *path_ptr;
-            path_ptr++;
-            path_ptr2++;
+        if (path[0] == '/') {
+            char * path_ptr = path + 5;
+            char * path_ptr2 = path;
+            while (*path_ptr != 0) {
+                *path_ptr2 = *path_ptr;
+                path_ptr++;
+                path_ptr2++;
+            }
+            *path_ptr2 = 0;
         }
-        *path_ptr2 = 0;
-    } else if (path[0] == '/') {
-        strncpy(native_path, path, strlen(path));
-        native_path[strlen(path)] = 0;
-        return main_mount;
-    }
-    
-    while (mount != 0 && mount->device != 0 && mount->fst != 0 && mount->partition != 0) {
-        uint32_t mountpoint_len = strlen(mount->partition->name);
-        if (strncmp(mount->partition->name, path, mountpoint_len) == 0) {
-            memcpy(native_path, path + mountpoint_len, strlen(path) - mountpoint_len);
-            native_path[strlen(path) - mountpoint_len] = 0;
-            return mount;
+
+        while (mount != 0 && mount->device != 0 && mount->fst != 0 && mount->partition != 0) {
+            uint32_t mountpoint_len = strlen(mount->partition->name);
+            if (strncmp(mount->partition->name, path, mountpoint_len) == 0) {
+                memcpy(native_path, path + mountpoint_len, strlen(path) - mountpoint_len);
+                //Native path = {'/', '\0};
+                if (native_path[0] != '/') {
+                    native_path[0] = '/';
+                    native_path[1] = '\0';
+                } else {
+                    native_path[1] = '\0';
+                }
+                return mount;
+            }
+            mount = mount->next;
         }
-        mount = mount->next;
     }
-    return 0;
+
+    strcpy(native_path, cpath);
+
+    return main_mount; //If we are here, we are looking for the main mount
 }
 
 struct vfs_dentry* get_dentry_from_path(const char* path, char* native_path) {
@@ -451,17 +458,25 @@ struct vfs_struct * get_struct_from_path(const char* path) {
 
 char * get_root_path_from_struct(struct vfs_struct * fs) {
     if (fs == 0) return 0;
-    char * root_path = kmalloc(strlen(fs->root.mnt->partition->name) + 1);
+    char * root_path = kmalloc(strlen(fs->root.mnt->partition->name) + strlen(fs->root.path) + 1);
     if (root_path == 0) return 0;
     strcpy(root_path, fs->root.mnt->partition->name);
+    if (fs->root.path[0] != '/') {
+        strcat(root_path, "/");
+    }
+    strcat(root_path, fs->root.path);
     return root_path;
 }
 
 char * get_cwd_path_from_struct(struct vfs_struct * fs) {
     if (fs == 0) return 0;
-    char * cwd_path = kmalloc(strlen(fs->pwd.mnt->partition->name) + 1);
+    char * cwd_path = kmalloc(strlen(fs->pwd.mnt->partition->name) + strlen(fs->pwd.path) + 1);
     if (cwd_path == 0) return 0;
     strcpy(cwd_path, fs->pwd.mnt->partition->name);
+    if (fs->pwd.path[0] != '/') {
+        strcat(cwd_path, "/");
+    }
+    strcat(cwd_path, fs->pwd.path);
     return cwd_path;
 }
 

@@ -42,88 +42,119 @@ process_t process_list[MAX_PROCESSES] = {0};
 process_t * current_process = NULL;
 int process_count = 0;
 
-void * create_args_env_aux(void * protostack_buffer, uint64_t size, char ** argv, char ** envp, struct auxv* auxv) {
-    int argc = 0;
-    int envc = 0;
-    int auxc = 0;
-
-    // Count the number of arguments
-    uint64_t len = 0;
-    if (argv != 0)
-        for (argc = 0; argv[argc] != NULL; argc++) {len+= strlen(argv[argc]) + 1;}
-    if (envp != 0)
-        for (envc = 0; envp[envc] != NULL; envc++) {len+= strlen(envp[envc]) + 1;}
-    if (auxv != 0)
-        for (auxc = 0; (auxv[auxc].a_type != AT_NULL); auxc++) {len+= sizeof(struct auxv);}
-    len += 6*8;
-
-    if ((len+0xf) > size) {
-        panic("Protostack too big\n");
+void parse_stack(void * stack) {
+    //Print the argc, argv, envp, auxv from the stack
+    size_t * pointer_table = (size_t *)stack;
+    size_t argc = *pointer_table++;
+    kprintf("argc: %zu\n", argc);
+    char ** argv = (char **)pointer_table;
+    for (size_t i = 0; i < argc; i++) {
+        if (argv[i] == NULL) {
+            kprintf("argv[%zu] at %p points to NULL\n", i, (void *)&argv[i]);
+        } else {
+            kprintf("argv[%zu] at %p points to: %p, value: %s\n", i, (void *)&argv[i], (void *)argv[i], argv[i]);
+        }
     }
+    pointer_table += argc + 1; // Move past argv pointers
+    char ** envp = (char **)pointer_table;
+    size_t envp_count = 0;
+    while (envp[envp_count] != NULL) {
+        kprintf("envp[%zu] at %p points to: %p, value: %s\n", envp_count, (void *)&envp[envp_count], (void *)envp[envp_count], envp[envp_count]);
+        envp_count++;
+    }
+    pointer_table += envp_count + 1; // Move past envp pointers
+    struct auxv * auxv = (struct auxv *)pointer_table;
+    size_t auxv_count = 0;
+    while (auxv[auxv_count].a_type != AT_NULL) {
+        kprintf("auxv[%zu]: type: %llu, value: %p\n", auxv_count, auxv[auxv_count].a_type, auxv[auxv_count].a_val);
+        auxv_count++;
+    }
+    kprintf("End of auxv\n");
+    kprintf("End of stack parsing\n");
 
-    uint64_t * protostack = (uint64_t)((uint64_t)protostack_buffer - len);
-    //Make sure protostack is aligned to 16 bytes
-    protostack = (uint64_t*)((uint64_t)protostack & ~0xf);
+}
 
-    memset(protostack, 0, len);
+void * create_args_env_aux(void * stack, uint64_t max_size, char ** argv, char ** envp, struct auxv* auxv) {
+    // Create the stack with the following layout:
+    // HIGHEST ADDRESS (stack)
+    // +------------------+
+    // | envp strings     |
+    // | argv strings     |
+    // +------------------+ (stack - pointer_table_size)
+    // | auxv entries     |
+    // |------------------+
+    // | envp pointers    |
+    // | argv pointers    |
+    // | argc             |
+    // +------------------+ (stack - total_size)
+    // LOWEST ADDRESS
 
-    protostack[0] = argc;
-    //                                      argc args  null envs  null   auxv+null
-    uint64_t protostack_offset = (uint64_t)((1 + argc + 1 + envc + 1 + ((auxc+1)*2)) * 8);
+    int argc = 0; if (argv != NULL) {while (argv[argc] != NULL) argc++;} else argc = 0;
+    int envc = 0; if (envp != NULL) {while (envp[envc] != NULL) envc++;} else envc = 0;
+    int auxc = 0; if (auxv != NULL) {while (auxv[auxc].a_type != AT_NULL) auxc++;} else auxc = 0;
 
-    // Copy the arguments to the protostack
+    uint64_t argv_pointers[argc];
+    uint64_t envp_pointers[envc];
+    uint64_t ptr_buffer[PROTOSTACK_MAX_SIZE];
+    uint64_t * ptr = ptr_buffer;
+    uint64_t original_addr = (uint64_t)ptr;
+    kprintf("Argc at address: %p, value: %d\n", (void *)ptr, argc);
+    *ptr++ = argc;
+    for (int i = 0; i < argc; i++) {argv_pointers[i] = (uint64_t) ptr; *ptr = 0x1234; ptr++;}
+    *ptr++ = 0x0;
+    for (int i = 0; i < envc; i++) {envp_pointers[i] = (uint64_t) ptr; *ptr = 0x5678; ptr++;}
+    *ptr++ = 0x0;
+    for (int i = 0; i < auxc; i++) {*(struct auxv*)ptr = auxv[i]; ptr += 2;}
+    ((struct auxv*)ptr)->a_type = AT_NULL;
+    ((struct auxv*)ptr)->a_val  = NULL;
+    ptr += 2;
+    while ((uint64_t)ptr % 0xf) ptr++;
+    
+    char * ascii_ptr = (char *)ptr;
     for (int i = 0; i < argc; i++) {
-        protostack[i + 1] = (uint64_t)protostack + (uint64_t)protostack_offset;
-        kprintf("protostack[%d] Copying argv[%d] at %p (%s) to final addr:%p\n", i+1, i, argv[i], argv[i], protostack[i + 1]);
-        memcpy(protostack[i + 1], argv[i], strlen(argv[i]) + 1);
-        kprintf("Protostack string: %s argv string: %s\n", (char*)protostack[i + 1], argv[i]);
-        protostack[i + 1] -= (uint64_t)protostack;
-        protostack_offset += (uint64_t)(strlen(argv[i]) + 1);
+        memcpy(ascii_ptr, argv[i], strlen(argv[i]) + 1);
+        *(uint64_t*)argv_pointers[i] = (uint64_t)(ascii_ptr - original_addr);
+        ascii_ptr += (strlen(argv[i]) + 1);
     }
-    protostack[argc + 1] = 0;
-    // Copy the environment variables to the protostack
+    
     for (int i = 0; i < envc; i++) {
-        protostack[i + argc + 2] = (uint64_t)protostack + (uint64_t)protostack_offset;
-        kprintf("protostack[%d] Copying envp[%d] at %p (%s) to final addr:%p\n", i+argc+2, i, envp[i], envp[i], protostack[i + argc + 2]);
-        memcpy(protostack[i + argc + 2], envp[i], strlen(envp[i]) + 1);
-        kprintf("Protostack string: %s envp string: %s\n", (char*)protostack[i + argc + 2], envp[i]);
-        protostack[i + argc + 2] -= (uint64_t)protostack;
-        protostack_offset += (uint64_t)(strlen(envp[i]) + 1);
+        memcpy(ascii_ptr, envp[i], strlen(envp[i]) + 1);
+        *(uint64_t*)envp_pointers[i] = (uint64_t)(ascii_ptr - original_addr);
+        ascii_ptr += (strlen(envp[i]) + 1);
     }
-    protostack[argc + envc + 2] = 0;
-    // Copy the auxv to the protostack
-    for (int i = 0; i < auxc; i++) {
-        struct auxv * aux = (struct auxv*)&(protostack[i*2 + argc + envc + 3]);
-        aux->a_type = auxv[i].a_type;
-        aux->a_val = auxv[i].a_val;
-        kprintf("protostack[%d] Copying auxv[%d] at %p (%s) to final addr:%p\n", (i*2)+argc+envc+3, i, auxv[i].a_val, get_auxv_string(auxv[i].a_type), &protostack[i*2 + argc + envc + 3]);
-        kprintf("Protostack type: %s value: %llx\n", get_auxv_string(auxv[i].a_type), auxv[i].a_val);
+
+    uint64_t size = (uint64_t)ascii_ptr - original_addr;
+    //Copy ptr to the stack at the end of the stack
+    if (size > max_size) {
+        panic("Stack size exceeds maximum allowed size");
     }
-    struct auxv * aux = (struct auxv*)&(protostack[argc + envc + 3 + auxc*2]);
-    aux->a_type = AT_NULL;
-    aux->a_val = 0;
-    //Add a NULL terminator to the protostack
-    protostack[argc + envc + auxc*2 + 4] = 0;
+    if (stack == NULL) {
+        panic("Stack pointer is NULL");
+    }
 
-    kprintf("protostack at %p size: %d\n", protostack, len);
-    kprintf("argc: %d envc: %d auxc: %d\n", argc, envc, auxc);
-    char ** argv_ptr = (char **)&(protostack[1]);
-    char ** envp_ptr = (char **)&(protostack[argc + 2]);
-    struct auxv * auxv_ptr = (struct auxv *)&(protostack[argc + envc + 3]);
+    // Copy the stack to the provided stack pointer
 
+    memcpy(stack - size, (void *)(original_addr), size);
+
+    //Correct the pointers in the stack
+    char * stack_ptr = (char *)(stack - size);
+    char  ** argv_ptr = (char **)(stack_ptr + sizeof(uint64_t));
     for (int i = 0; i < argc; i++) {
-        kprintf("argv[%d]: %s\n", i, (char*)((uint64_t)argv_ptr[i]+(uint64_t)protostack));
+        if (argv_ptr[i] != NULL) {
+            argv_ptr[i] += ((uint64_t)(stack - size));
+        } else {
+            argv_ptr[i] = NULL;
+        }
     }
-
+    char  ** envp_ptr = (char **)(stack_ptr + sizeof(uint64_t) + (argc + 1) * sizeof(uint64_t));
     for (int i = 0; i < envc; i++) {
-        kprintf("envp[%d]: %s\n", i, (char*)((uint64_t)envp_ptr[i]+(uint64_t)protostack));
+        if (envp_ptr[i] != NULL) {
+            envp_ptr[i] += ((uint64_t)(stack - size));
+        } else {
+            envp_ptr[i] = NULL;
+        }
     }
-
-    for (int i = 0; i < auxc; i++) {
-        kprintf("auxv[%d]: TYPE: %s VAL: %llx\n", i, get_auxv_string(auxv_ptr[i].a_type), auxv_ptr[i].a_val);
-    }
-
-    return protostack;
+    return stack - size;
 }
 
 void * get_vdso_base() {
@@ -176,6 +207,7 @@ void init_stacks(thread_t * thread, uint64_t size, uint64_t entry) {
     }
     
     thread->ustack = create_args_env_aux(thread->ustack, thread->ustack_size, task->argv, task->envp, task->auxv);
+    //parse_stack(thread->ustack);
     newuctxcreat((uint64_t)&(thread->ustack), (uint64_t)entry);
 
     if (get_pml4() != task->vmm)
@@ -529,7 +561,7 @@ process_t * duplicate_process(thread_t * parent_thread) {
     return task;
 }
 
-void alter_process_on_exec(process_t * task, struct loaded_elf * ld, char const ** argv, char const ** envp) {
+void alter_process_on_exec(process_t * task, struct loaded_elf * ld, char ** argv, char ** envp) {
     process_t saved_task;
     memcpy(&saved_task, task, sizeof(process_t));
     memset(task, 0, sizeof(process_t));
@@ -588,6 +620,23 @@ void alter_process_on_exec(process_t * task, struct loaded_elf * ld, char const 
 }
 
 int exec(process_t * task, char const *path, char const **argv, char const **envp) {
+    
+    int argc = 0;
+    for (int i = 0; argv && argv[i] != NULL; i++) argc++;
+    int envc = 0;
+    for (int i = 0; envp && envp[i] != NULL; i++) envc++;
+    char ** saved_argv = kmalloc(sizeof(char*) * (argc + 1));
+    char ** saved_envp = kmalloc(sizeof(char*) * (envc + 1));
+    for (int i = 0; i < argc; i++) {
+        saved_argv[i] = kmalloc(strlen(argv[i]) + 1);
+        memcpy(saved_argv[i], argv[i], strlen(argv[i]) + 1);
+    }
+    saved_argv[argc] = NULL; // Null-terminate the argv array
+    for (int i = 0; i < envc; i++) {
+        saved_envp[i] = kmalloc(strlen(envp[i]) + 1);
+        memcpy(saved_envp[i], envp[i], strlen(envp[i]) + 1);
+    }
+    saved_envp[envc] = NULL; // Null-terminate the envp array
 
     char * dynpath = kmalloc(256);
     strcpy(dynpath, path);
@@ -622,7 +671,7 @@ int exec(process_t * task, char const *path, char const **argv, char const **env
 
     vmm_unmap_userspace(task->vmm);
     struct loaded_elf * ld = elf_load_elf(task->fs, task->vmm, buf, size);
-    alter_process_on_exec(task, ld, argv, envp);
+    alter_process_on_exec(task, ld, saved_argv, saved_envp);
     kfree(buf);
     return 0;
 }
@@ -1100,6 +1149,12 @@ char * getcwd(process_t * task) {
     if (strncmp(cwd_path, root_path, strlen(root_path)) == 0) {
         char * new_path = kmalloc(strlen(cwd_path) - strlen(root_path) + 1);
         strcpy(new_path, cwd_path + strlen(root_path));
+        //If the cwd path is just the root path, return "/"
+        if (strlen(new_path) == 0) {
+            kfree(new_path);
+            new_path = kmalloc(2);
+            strcpy(new_path, "/");
+        }
         return new_path;
     } else {
         //Panic

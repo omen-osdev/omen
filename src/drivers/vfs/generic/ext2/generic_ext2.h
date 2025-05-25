@@ -10,7 +10,7 @@
 
 #define MAX_EXT2_PARTITIONS 32
 #define MAX_EXT2_OPEN_FILES 65536
-
+#define EXT2_MAX_SYMLINK_SIZE 4096
 struct ext2_partition* ext2_partitions[MAX_EXT2_PARTITIONS] = {0};
 //VFS_ERROR cannot return the object
 // 0 all okey
@@ -120,6 +120,62 @@ int ext2_compat_file_creat(int partno, const char* path, int mode) {
     }
 
     return get_fd(path, partition->name, 0, mode);
+}
+
+int ext2_compat_link_creat(int partno, const char* path, const char* target, int mode) {
+    if (partno < 0 || partno >= MAX_EXT2_PARTITIONS) 
+        return VFS_ERROR;
+    kprintf("creating file: partno: %d, path: %s in mode: %d\n", partno, path, mode);
+    struct ext2_partition * partition = ext2_partitions[partno];
+    if (partition == 0)
+        return VFS_ERROR;
+    
+    //uint8_t ext2_create_file(struct ext2_partition * partition, const char* path, uint32_t type, uint32_t permissions);
+    int64_t res = ext2_create_file(partition, path, EXT2_FILE_TYPE_SYMLINK, mode);
+    if (res != EXT2_RESULT_OK) {
+        return VFS_ERROR;
+    }
+
+    //Write the target to the symlink
+    int64_t written = ext2_write_file(partition, path, (void*)target, strlen(target), 0);
+    if (written < 0) {
+        kprintf("Error writing to symlink: %s\n", path);
+        return VFS_ERROR;
+    }
+    kprintf("Symlink created: %s -> %s\n", path, target);
+
+    return get_fd(path, partition->name, 0, mode);
+}
+
+char* ext2_compat_file_readlink(int partno, const char * path) {
+    if (partno < 0 || partno >= MAX_EXT2_PARTITIONS) 
+        return 0;
+
+    struct ext2_directory_entry entry;
+    if (ext2_get_dentry(ext2_partitions[partno], path, &entry) != EXT2_RESULT_OK) {
+        kprintf("Error getting dentry for symlink: %s\n", path);
+        return 0;
+    }
+    if (entry.file_type != EXT2_FILE_TYPE_SYMLINK) {
+        kprintf("Path %s is not a symlink\n", path);
+        return (char*)path;
+    }
+
+    struct ext2_partition * partition = ext2_partitions[partno];
+    if (partition == 0)
+        return 0;
+
+    //Read the symlink
+    uint64_t link_size = ext2_get_file_size(partition, path);
+    char * target = kmalloc(link_size + 1);
+    int64_t res = ext2_read_file(partition, path, (uint8_t*)target, link_size, 0);
+    if (res < 0) {
+        kprintf("Error reading symlink: %s\n", path);
+        kfree(target);
+        return 0;
+    }
+    
+    return target;
 }
 
 int ext2_compat_file_dup(int partno, int oldfd, int newfd) {
@@ -325,6 +381,7 @@ struct vfs_compatible ext2_register = {
     .file_open = ext2_compat_file_open,
     .file_close = ext2_compat_file_close,
     .file_creat = ext2_compat_file_creat,
+    .file_link = ext2_compat_link_creat,
     .file_dup = ext2_compat_file_dup,
     .file_read = ext2_compat_file_read,
     .file_write = ext2_compat_file_write,
@@ -340,7 +397,8 @@ struct vfs_compatible ext2_register = {
     .dir_creat = ext2_compat_dir_creat,
     .dir_read = ext2_compat_dir_read,
     .dir_load = ext2_compat_dir_load,
-    .prepare_remove = ext2_compat_prepare_remove
+    .prepare_remove = ext2_compat_prepare_remove,
+    .file_readlink = ext2_compat_file_readlink,
 };
 
 struct vfs_compatible * ext2_registrar = &ext2_register;

@@ -1,4 +1,5 @@
 #include <omen/managers/boot/boot.h>
+#include <omen/apps/debug/debug.h>
 
 __attribute__((noreturn)) void _halt() {
     while (1) {
@@ -7,6 +8,7 @@ __attribute__((noreturn)) void _halt() {
 }
 
 __attribute__((noreturn)) void _start() {
+    BREAKPOINT();
     boot_startup();
     _halt();
 }

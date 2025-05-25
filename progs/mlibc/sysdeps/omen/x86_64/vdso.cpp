@@ -1,6 +1,8 @@
 #include <omen/vdso.h>
 
-int vdso_set_data(vdso_t* vdso, uint8_t id, void* info, int64_t size) {
+vdso_t * vdso = 0;
+
+int vdso_set_data(uint8_t id, void* info, int64_t size) {
     vdso_entry_t* entry = vdso->entry;
     while (entry) {
         if (entry->id == id) {
@@ -14,7 +16,7 @@ int vdso_set_data(vdso_t* vdso, uint8_t id, void* info, int64_t size) {
     return -1;
 }
 
-int vdso_get_data(vdso_t* vdso, uint8_t id, void** info, int64_t* size) {
+int vdso_get_data(uint8_t id, void** info, int64_t* size) {
     vdso_entry_t* entry = vdso->entry;
     if (info == 0) {
         return -1;
@@ -33,4 +35,11 @@ int vdso_get_data(vdso_t* vdso, uint8_t id, void** info, int64_t* size) {
     *size = 0;
 
     return -1;
+}
+
+void set_vdso_base(void * address) {
+    vdso = (vdso_t*)address;
+}
+vdso_t* get_vdso() {
+    return vdso;
 }

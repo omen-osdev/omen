@@ -5,7 +5,6 @@
 #include <asm/ioctls.h>
 #include <omen/syscall.h>
 #include <omen/vdso.h>
-#include <omen/auxv.h>
 #include <bits/ensure.h>
 #include <frg/vector.hpp>
 #include <mlibc/debug.hpp>
@@ -37,6 +36,35 @@ namespace mlibc{
     int sys_futex_tid(){
         auto result = do_syscall(SYS_GET_TID);
         return static_cast<int>(result);
+    }
+
+    uid_t sys_getuid() {
+        return 0;
+    }
+
+    uid_t sys_geteuid() {
+        return 0;
+    }
+
+    gid_t sys_getgid() {
+        return 0;
+    }
+
+    gid_t sys_getegid() {
+        return 0;
+    }
+
+    int sys_gethostname(char *buf, size_t bufsize) {
+        if (bufsize < 5) {
+            return ENAMETOOLONG;
+        }
+        buf[0] = 'O';
+        buf[1] = 'M';
+        buf[2] = 'E';
+        buf[3] = 'N';
+        buf[4] = '\0';
+
+        return 0;
     }
 
     int sys_futex_wait(int *pointer, int expected, const struct timespec *time){
@@ -160,10 +188,9 @@ namespace mlibc{
     }
 
     int sys_sigaction(int how, const struct sigaction *__restrict action, struct sigaction *__restrict old_action){
-        vdso_t * vdso = (vdso_t*)getauxval(AT_SYSINFO_EHDR);
         void * trampoline;
         int64_t size;
-        vdso_get_data(vdso, VDSO_ENTRY_SIGNAL_TRAMP, &trampoline, &size);
+        vdso_get_data(VDSO_ENTRY_SIGNAL_TRAMP, &trampoline, &size);
 
         *((int*)&(action->sa_flags)) |= SA_RESTORER;
         *(void**) &(action->sa_restorer) = trampoline;

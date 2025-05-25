@@ -2,7 +2,6 @@ rtld_dso_sources += files(
 	'generic/generic.cpp',
 	'generic/filesystem.cpp',
 	host_machine.cpu_family() / 'arch-syscall.cpp',
-	host_machine.cpu_family() / 'auxv.cpp',
 	host_machine.cpu_family() / 'vdso.cpp',
 )
 
@@ -11,7 +10,6 @@ libc_sources += files(
 	'generic/generic.cpp',
 	'generic/filesystem.cpp',
 	host_machine.cpu_family() / 'arch-syscall.cpp',
-	host_machine.cpu_family() / 'auxv.cpp',
 	host_machine.cpu_family() / 'vdso.cpp',
 )
 
@@ -66,6 +64,8 @@ if not no_headers
 	)
 	install_headers(
 		'include/omen/syscall.h',
+		'include/omen/vdso.h',
+		'include/omen/ttycheck.h',
 		subdir: 'omen'
 	)
 endif

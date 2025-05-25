@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <unistd.h>
 #include <dirent.h>
 #include <string.h>
 #include <stdlib.h>
@@ -101,7 +102,12 @@ namespace mlibc{
 
     int sys_read_entries(int handle, void *buffer, size_t max_size, size_t *bytes_read){
         // TODO
-        __ensure(!"Not implemented");
+        auto result = do_syscall(SYS_DIR_READ, handle, buffer, max_size);
+        if(result < 0){
+            *bytes_read = 0;
+            return -result;
+        }
+        *bytes_read = result;
         return 0;
     }
 
@@ -136,26 +142,41 @@ namespace mlibc{
     }
 
     int sys_rmdir(const char *path){
-        // TODO
-        __ensure(!"Not implemented");
+        auto result = do_syscall(SYS_RMDIR, path, strlen(path));
+        if(result < 0){
+            return -result;
+        }
+
         return 0;
     }
 
     int sys_unlinkat(int dirfd, const char *path, int flags){
-        // TODO
-        __ensure(!"Not implemented");
+        if(flags != 0){
+            mlibc::infoLogger() << "mlibc warning: sys_unlinkat: flags not supported" << frg::endlog;
+            return EINVAL;
+        }
+
+        auto result = do_syscall(SYS_UNLINKAT, dirfd, path, strlen(path));
+        if(result < 0){
+            return -result;
+        }
+
         return 0;
     }
 
     int sys_rename(const char *path, const char *new_path){
-        // TODO
-        __ensure(!"Not implemented");
+        auto result = do_syscall(SYS_RENAMEAT, path, new_path);
+        if(result < 0){
+            return -result;
+        }
         return 0;
     }
 
     int sys_renameat(int olddirfd, const char *old_path, int newdirfd, const char *new_path){
-        // TODO
-        __ensure(!"Not implemented");
+        auto result = do_syscall(SYS_RENAME, old_path, new_path);
+        if(result < 0){
+            return -result;
+        }
         return 0;
     }
 
@@ -189,4 +210,26 @@ namespace mlibc{
         __ensure(!"Not implemented");
         return 0;
     }
+
+    int sys_getcwd(char* buffer, size_t size){
+        auto result = do_syscall(SYS_GETCWD, buffer, size);
+
+        if(result < 0){
+            return -result;
+        }
+
+        return 0;
+    }
+
+#ifndef MLIBC_BUILDING_RTDL
+    int sys_chdir(const char *path){
+        auto result = do_syscall(SYS_CHDIR, path, strlen(path));
+
+        if(result < 0){
+            return -result;
+        }
+
+        return 0;
+    }
+#endif
 }

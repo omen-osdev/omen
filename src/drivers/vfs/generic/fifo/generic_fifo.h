@@ -175,6 +175,7 @@ int fifo_compat_flush(int partno) {(void)partno; return VFS_ERROR;}
 int fifo_compat_dir_open(int partno, const char* path) {(void)partno; (void)path; return VFS_ERROR;}
 int fifo_compat_dir_close(int partno, int fd) {(void)partno; (void)fd; return VFS_ERROR;}
 int fifo_compat_file_creat(int partno, const char* path, int mode) {(void)partno; (void)path; (void)mode; return VFS_ERROR;}
+int fifo_compat_link_creat(int partno, const char* path, const char* target, int mode) {(void)partno; (void)path; (void)target; (void)mode; return VFS_ERROR;}
 int fifo_compat_file_dup(int partno, int oldfd, int newfd) {(void)partno; (void)oldfd; (void)newfd; return VFS_ERROR;}
 int fifo_compat_dir_creat(int partno, const char* path, int mode) {(void)partno; (void)path; (void)mode; return VFS_ERROR;}
 int fifo_compat_dir_read(int partno, int fd, char* name, uint32_t * name_len, uint32_t * type) {(void)partno; (void)fd; (void)name_len; (void)type; return VFS_ERROR;}
@@ -184,6 +185,7 @@ int fifo_compat_rename(int partno, const char* path, const char* newpath) {(void
 int fifo_compat_prepare_remove(int partno, const char* path) {(void)partno; (void)path; return VFS_ERROR;}
 int fifo_compat_remove(int partno, const char* path) {(void)partno; (void)path; return VFS_ERROR;}
 int fifo_compat_chmod(int partno, const char* path, int mode) {(void)partno; (void)path; (void)mode; return VFS_ERROR;}
+char* fifo_compat_file_readlink(int partno, const char * path) {(void)partno; (void)path; return 0;}
 
 struct vfs_compatible fifo_register = {
     .name = "FIFO",
@@ -198,6 +200,7 @@ struct vfs_compatible fifo_register = {
     .file_open = fifo_compat_file_open,
     .file_close = fifo_compat_file_close,
     .file_creat = fifo_compat_file_creat,
+    .file_link = fifo_compat_link_creat,
     .file_dup = fifo_compat_file_dup,
     .file_read = fifo_compat_file_read,
     .file_write = fifo_compat_file_write,
@@ -213,7 +216,8 @@ struct vfs_compatible fifo_register = {
     .dir_creat = fifo_compat_dir_creat,
     .dir_read = fifo_compat_dir_read,
     .dir_load = fifo_compat_dir_load,
-    .prepare_remove = fifo_compat_prepare_remove
+    .prepare_remove = fifo_compat_prepare_remove,
+    .file_readlink = fifo_compat_file_readlink,
 };
 
 struct vfs_compatible * fifo_registrar = &fifo_register;
