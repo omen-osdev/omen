@@ -50,9 +50,9 @@ typedef unsigned long sigset_t;
 #define MINSIGSTKSZ	2048
 #define SIGSTKSZ	8192
 
-#define SIG_BLOCK    1
-#define SIG_UNBLOCK  2
-#define SIG_SETMASK  3
+#define SIG_BLOCK    0
+#define SIG_UNBLOCK  1
+#define SIG_SETMASK  2
 
 #define SIG_IGN     0
 #define SIG_DFL     1

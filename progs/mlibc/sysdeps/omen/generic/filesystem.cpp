@@ -137,8 +137,8 @@ namespace mlibc{
         // TODO
         struct winsize ws;
         auto result = do_syscall(SYS_FILE_IOCTL, fd, TIOCGWINSZ, &ws);
-        auto isatty = (result != TTY_CHECK_VAL);
-        return isatty;
+        if (result == TTY_CHECK_VAL) return 0;
+        return ENOTTY;
     }
 
     int sys_rmdir(const char *path){

@@ -161,10 +161,12 @@ int64_t write_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 int64_t dir_open_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char * path = SYSCALL_ARG0(ctx);
     kprintf("[PID: %d | TID %d] DIR_OPEN_SYSCALL(%s)\n", thread->process->pid, thread->id, path);
+    
     int fd = vfs_dir_open(thread->process->fs, path);
     if (fd < 0) {
         return SYSCALL_ERROR;
     }
+    add_open_file(thread->process, fd);
     return fd;
 }
 
@@ -184,7 +186,7 @@ int64_t open_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
         return SYSCALL_ERROR;
     }
 
-    thread->process->open_files[thread->process->open_files_count++] = fd;
+    add_open_file(thread->process, fd);
     return fd;
 }
 
@@ -266,7 +268,7 @@ int64_t creat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
         return SYSCALL_ERROR;
     }
     
-    thread->process->open_files[thread->process->open_files_count++] = fd;
+    add_open_file(thread->process, fd);
     return fd;
 }
 
@@ -336,16 +338,21 @@ int64_t close_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     int fd = SYSCALL_ARG0(ctx);
     kprintf("[PID: %d | TID %d] CLOSE_SYSCALL(%d)\n", thread->process->pid, thread->id, fd);
     
-    int open_files_prev = thread->process->open_files_count;
-    for (int i = 0; i < open_files_prev; i++) {
-        if (thread->process->open_files[i] == fd) {
-            vfs_file_close(fd);
-            thread->process->open_files[i] = thread->process->open_files[thread->process->open_files_count - 1];
-            thread->process->open_files_count--;
-            return SYSCALL_SUCCESS;
-        }
+    int pfd = get_open_file(thread->process, fd);
+    if (pfd < 0) {
+        kprintf("File descriptor not found\n");
+        return SYSCALL_ERROR;
     }
-    return SYSCALL_ERROR;
+
+    int ret = vfs_file_close(pfd);
+    if (ret < 0) {
+        kprintf("Could not close file descriptor %d\n", pfd);
+        return SYSCALL_ERROR;
+    }
+
+    remove_open_file(thread->process, fd);
+    kprintf("File descriptor %d closed successfully\n", fd);
+    return SYSCALL_SUCCESS;
 }
 
 int64_t sigreturn_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
@@ -364,7 +371,8 @@ int64_t seek_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
         return SYSCALL_ERROR;
     }
     
-    int ret = vfs_file_seek(fd, offset, whence);
+    int pfd = get_open_file(thread->process, fd);
+    int ret = vfs_file_seek(pfd, offset, whence);
     if (ret < 0) {
         return SYSCALL_ERROR;
     }
@@ -380,10 +388,12 @@ int64_t stat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     if (fd < 0) {
         return SYSCALL_ERROR;
     }
+    
     int ret = vfs_file_stat(fd, stat);
     if (ret < 0) {
         return SYSCALL_ERROR;
     }
+
     vfs_file_close(fd);
     kprintf("File size: %d\n", stat->st_size);
     kprintf("File mode: %d\n", stat->st_mode);
@@ -395,10 +405,6 @@ int64_t sigprocmask_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
     sigset_t* set = (sigset_t*)SYSCALL_ARG1(ctx);
     sigset_t* oldset = (sigset_t*)SYSCALL_ARG2(ctx);
     kprintf("[PID: %d | TID %d] SIGPROCMASK_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, how, set, oldset);
-    if (set == NULL) {
-        kprintf("Invalid set\n");
-        return SYSCALL_ERROR;
-    }
     if (how != SIG_BLOCK && how != SIG_UNBLOCK && how != SIG_SETMASK) {
         kprintf("Invalid how value\n");
         return SYSCALL_ERROR;
@@ -434,10 +440,12 @@ int64_t pread_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
     int fd = (int)SYSCALL_ARG0(ctx);
     uint64_t offset = SYSCALL_ARG3(ctx);
 
-    uint64_t current_offset = vfs_file_tell(fd);
-    vfs_file_seek(fd, offset, 0x0);
+    int pfd = get_open_file(thread->process, fd);
+
+    uint64_t current_offset = vfs_file_tell(pfd);
+    vfs_file_seek(pfd, offset, 0x0);
     uint64_t result = read_syscall_handler(thread, ctx);
-    vfs_file_seek(fd, current_offset, 0x0);
+    vfs_file_seek(pfd, current_offset, 0x0);
     return result;
 }
 
@@ -495,7 +503,8 @@ int64_t fstat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     stat_t* stat = SYSCALL_ARG1(ctx);
 
     kprintf("[PID: %d | TID %d] FSTAT_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, fd, stat);
-    int ret = vfs_file_stat(fd, stat);
+    int pfd = get_open_file(thread->process, fd);
+    int ret = vfs_file_stat(pfd, stat);
     if (ret < 0) {
         return SYSCALL_ERROR;
     }
@@ -510,7 +519,8 @@ int64_t ioctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     uint64_t request = SYSCALL_ARG1(ctx);
     uint64_t arg = SYSCALL_ARG2(ctx);
     kprintf("[PID: %d | TID %d] IOCTL_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, request, arg);
-    int ret = vfs_file_ioctl(fd, request, arg);
+    int pfd = get_open_file(thread->process, fd);
+    int ret = vfs_file_ioctl(pfd, request, arg);
     if (ret < 0) {
         return SYSCALL_ERROR;
     }
@@ -756,7 +766,7 @@ int64_t mmap_syscall_handler(thread_t*thread, cpu_context_t*ctx) {
     int fd = SYSCALL_ARG4(ctx);
     off_t offset = SYSCALL_ARG5(ctx);
     kprintf("[PID: %d | TID %d] MMAP_SYSCALL(%p,%d,%d,%d,%d,%d)\n", thread->process->pid, thread->id, addr, length, prot, flags, fd, offset);
-    
+    int pfd = get_open_file(thread->process, fd);
     //Validate the arguments
     if (length == 0) {
         panic("Length is 0\n");
@@ -792,16 +802,16 @@ int64_t mmap_syscall_handler(thread_t*thread, cpu_context_t*ctx) {
         vma_flags |= VMAREA_EXT_GUARD;
     }
 
-    if (fd < 0 && fd != -1) {
-        panic("Invalid fd\n");
+    if (pfd < 0 && pfd != -1) {
+        panic("Invalid pfd\n");
         return SYSCALL_ERROR;
     }
     if (offset % PAGE_SIZE != 0) {
         panic("Offset is not page aligned\n");
         return SYSCALL_ERROR;
     }
-    if (offset > 0 && fd == 0) {
-        panic("Invalid fd\n");
+    if (offset > 0 && pfd == 0) {
+        panic("Invalid pfd\n");
         return SYSCALL_ERROR;
     }
 
@@ -999,11 +1009,13 @@ int64_t dup_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
         return SYSCALL_ERROR;
     }
 
-    int newfd = vfs_file_dup(fd, -1);
+    int pfd = get_open_file(thread->process, fd);
+
+    int newfd = vfs_file_dup(pfd, -1);
     if (newfd < 0) {
         return SYSCALL_ERROR;
     }
-    thread->process->open_files[thread->process->open_files_count++] = newfd;
+    add_open_file(thread->process, newfd);
     return newfd;
 }
 
@@ -1019,12 +1031,12 @@ int64_t dup2_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
         kprintf("Max open files reached\n");
         return SYSCALL_ERROR;
     }
-
-    int ret = vfs_file_dup(oldfd, newfd);
+    int pfd = get_open_file(thread->process, oldfd);
+    int ret = vfs_file_dup(pfd, newfd);
     if (ret < 0) {
         return SYSCALL_ERROR;
     }
-    thread->process->open_files[thread->process->open_files_count++] = newfd;
+    add_open_file(thread->process, ret);
     return newfd;
 }
 

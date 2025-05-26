@@ -14,11 +14,18 @@
 #define TTY_VALIDATE 0x6
 #define TTY_GET_SIZE 0x7
 #define TTY_INB_TO_OUTB 0x8
-#define TTY_GWINSZ 0x13
 #define TTY_GET_SERIAL_SETTINGS               0x5401
 #define TTY_SET_SERIAL_SETTINGS               0x5402
 #define TTY_SET_SERIAL_SETTINGS_WITHOUT_FLUSH 0x5403
 #define TTY_SET_SERIAL_SETTINGS_WITH_FLUSH    0x5404
+#define TTY_GWINSZ                            0x5413
+
+//#define TIOCSCTTY 0x540E
+//#define TIOCGPGRP 0x540F
+//#define TIOCSPGRP 0x5410
+//#define TIOCGWINSZ 0x5413
+//#define TIOCSWINSZ 0x5414
+//#define TIOCGSID 0x5429
 
 #define TTY_CHECK_VAL 0x69
 #define TTY_DD_NAME "TTY DRIVER\0"

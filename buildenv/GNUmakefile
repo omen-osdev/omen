@@ -221,6 +221,7 @@ setup:
 	@echo end >> $(ABSDIR)/$(GDBCFG)
 	@echo end >> $(ABSDIR)/$(GDBCFG)
 	@echo adds minit >> $(ABSDIR)/$(GDBCFG)
+	@echo b $(KERNEL_ENTRY) >> $(ABSDIR)/$(GDBCFG)
 	@echo b main >> $(ABSDIR)/$(GDBCFG)
 	@echo b __breakpoint >> $(ABSDIR)/$(GDBCFG)
 	@echo c >> $(ABSDIR)/$(GDBCFG)
@@ -343,6 +344,14 @@ debugpt:
 	@echo "Running GPT QEMU..."
 	tmux split-window -h '$(GDB) $(GDBFLAGS)' & $(QEMU) -S -s $(QFLAGSEXP)$(ISODIR)/$(IMG)
 
+dummyfiles:
+	@echo "Creating $(SYSROOT)/etc/passwd..."
+	@mkdir -p $(SYSROOT)/etc
+	@echo "root:omen:0:0:root:/root:/usr/bin/bash" > $(SYSROOT)/etc/passwd
+	@echo "Creating $(SYSROOT)/etc/group..."
+	@echo "root:root:0:" > $(SYSROOT)/etc/group
+
+
 symbols:
 	@echo "Copying symbols..."
 	@mkdir -p $(PROGSSYMDIR)
@@ -358,6 +367,7 @@ debugpt-wsl:
 	@echo "Building GPT..."
 #This is required to be before buildimggpt!
 # Due to eval weird behaviour
+	@sudo make dummyfiles
 	@sudo make buildimggpt
 	@sudo make symbols
 	@echo "Running GPT QEMU..."

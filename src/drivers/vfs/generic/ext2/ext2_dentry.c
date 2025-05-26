@@ -12,7 +12,7 @@
 #include <omen/apps/debug/debug.h>
 #include <omen/libraries/allocators/heap_allocator.h>
 
-#define LIST_MAX 16 //TODO: Changeme
+#define LIST_MAX 65535 //TODO: Changeme
 
 uint8_t ext2_delete_dentry(struct ext2_partition* partition, const char * path) {
     char * name;
@@ -129,9 +129,12 @@ uint8_t ext2_dentry_get_dentry(struct ext2_partition* partition, const char* par
         while (parsed_bytes < root_inode->i_size && list_count < LIST_MAX) {
             struct ext2_directory_entry *centry = (struct ext2_directory_entry *) (block_buffer + parsed_bytes);
             if (centry->inode != 0) {
-                EXT2_DEBUG("Checking entry: %s", centry->name);
-                if (strncmp(centry->name, name, strlen(name)) == 0) {
-                    EXT2_DEBUG("Found entry: %s", centry->name);
+                char buffer[EXT2_NAME_LEN + 1] = {0};
+                strncpy(buffer, centry->name, centry->name_len);
+                buffer[centry->name_len] = '\0';
+                EXT2_DEBUG("Checking entry: %s", buffer);
+                if (strncmp(buffer, name, strlen(name)) == 0) {
+                    EXT2_DEBUG("Found entry: %s", buffer);
                     memcpy(entry, centry, sizeof(struct ext2_directory_entry));
                     kfree(block_buffer);
                     return 0;

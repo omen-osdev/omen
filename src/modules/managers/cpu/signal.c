@@ -81,15 +81,13 @@ int sigprocmask(sigset_t * sigprocmask, int how, const sigset_t * set, sigset_t 
         panic("No such sigprocmask\n");
         return -1;
     }
-    if (set == 0) {
-        panic("No such set\n");
-        return -1;
-    }
 
     if (oldset != 0) {
         *oldset = *sigprocmask;
     }
 
+    if (set == 0) return 0;
+    
     switch (how) {
         case SIG_BLOCK:
             *sigprocmask |= *set;

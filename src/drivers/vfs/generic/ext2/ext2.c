@@ -328,9 +328,15 @@ int64_t ext2_read_file(struct ext2_partition * partition, const char * path, uin
         return EXT2_RESULT_ERROR;
     }
 
-    if ((skip+size) > inode->i_size) {
+    if (skip > inode->i_size) {
+        EXT2_WARN("Trying to skip more bytes than the file size[skip=%d, file_size=%d]", skip, inode->i_size);
+        return 0;
+    }
+
+
+    if (size > inode->i_size) {
         EXT2_WARN("Trying to read past the end of the file[skip=%d, size=%d, file_size=%d]", skip, size, inode->i_size);
-        return EXT2_RESULT_ERROR;
+        size = inode->i_size;
     }
 
 

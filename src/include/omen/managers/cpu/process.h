@@ -191,4 +191,7 @@ void exit(process_t *task, int error_code);
 void sync_files(thread_t *thread, struct vm_area * vma, uint64_t size);
 process_t *get_process_by_pid(int pid);
 void * get_vdso_base();
+int get_open_file(process_t * task, int fd);
+void add_open_file(process_t * task, int fd);
+void remove_open_file(process_t * task, int fd);
 #endif

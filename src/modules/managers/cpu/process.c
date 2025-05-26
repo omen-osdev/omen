@@ -20,6 +20,7 @@
 
 #include <vfs/vfs.h>
 #include <vfs/vfs_interface.h>
+#include <tty/tty_dd.h>
 
 //Always inlined
 extern void newuctxcreat(uint64_t rsp, uint64_t intro);
@@ -108,9 +109,20 @@ void * create_args_env_aux(void * stack, uint64_t max_size, char ** argv, char *
     ((struct auxv*)ptr)->a_type = AT_NULL;
     ((struct auxv*)ptr)->a_val  = NULL;
     ptr += 2;
-    while ((uint64_t)ptr % 0xf) ptr++;
+
     
+
+    uint64_t total_size_ascii = 0;
+    for (int i = 0; i < argc; i++) {
+        total_size_ascii += strlen(argv[i]) + 1; // +1 for null terminator
+    }
+    for (int i = 0; i < envc; i++) {
+        total_size_ascii += strlen(envp[i]) + 1; // +1 for null terminator
+    }
+
+    while ((uint64_t)((ptr+total_size_ascii) - original_addr) % 0xf) ptr++;
     char * ascii_ptr = (char *)ptr;
+
     for (int i = 0; i < argc; i++) {
         memcpy(ascii_ptr, argv[i], strlen(argv[i]) + 1);
         *(uint64_t*)argv_pointers[i] = (uint64_t)(ascii_ptr - original_addr);
@@ -154,6 +166,7 @@ void * create_args_env_aux(void * stack, uint64_t max_size, char ** argv, char *
             envp_ptr[i] = NULL;
         }
     }
+    
     return stack - size;
 }
 
@@ -207,8 +220,9 @@ void init_stacks(thread_t * thread, uint64_t size, uint64_t entry) {
     }
     
     thread->ustack = create_args_env_aux(thread->ustack, thread->ustack_size, task->argv, task->envp, task->auxv);
-    //parse_stack(thread->ustack);
+    kprintf("Thread %d created stack at %p with size %llu\n", thread->id, thread->ustack, thread->ustack_size);
     newuctxcreat((uint64_t)&(thread->ustack), (uint64_t)entry);
+    kprintf("Thread %d created uctx at %p\n", thread->id, &(thread->ustack));
 
     if (get_pml4() != task->vmm)
         unmap_range(get_pml4(), thread->ustack_base, thread->ustack_size);
@@ -484,8 +498,16 @@ int16_t get_next_pid() {
     return -1;
 }
 
+struct winsize {
+	unsigned short ws_row;
+	unsigned short ws_col;
+	unsigned short ws_xpixel;
+	unsigned short ws_ypixel;
+};
+
 void open_stdfiles(process_t *task, char * tty) {
     int stdin, stdout, stderr;
+    if (task->open_files_count > 0) panic("Open files count is not zero\n");
     stdin = vfs_file_open(task->fs, tty, O_RDONLY, 0);
     if (stdin < 0) {
         panic("Failed to open stdin\n");
@@ -502,6 +524,45 @@ void open_stdfiles(process_t *task, char * tty) {
     task->open_files[task->open_files_count++] = stdin;
     task->open_files[task->open_files_count++] = stdout;
     task->open_files[task->open_files_count++] = stderr;
+
+    struct winsize ws;
+    if (vfs_file_ioctl(stdin, TTY_GWINSZ, &ws) != TTY_CHECK_VAL) panic("Failed to get terminal size\n");
+
+}
+
+int get_open_file(process_t * task, int fd) {
+    if (fd < 0 || fd >= MAX_OPEN_FILES) {
+        return -1;
+    }
+    if (task->open_files[fd] == -1) {
+        return -1;
+    }
+    return task->open_files[fd];
+}
+
+void add_open_file(process_t * task, int fd) {
+    if (task->open_files_count >= MAX_OPEN_FILES) {
+        panic("Too many open files\n");
+    }
+    if (fd < 0 || fd >= MAX_OPEN_FILES) {
+        panic("Invalid file descriptor\n");
+    }
+    if (task->open_files[fd] != -1) {
+        panic("File descriptor already in use\n");
+    }
+    task->open_files[fd] = fd;
+    task->open_files_count++;
+}
+
+void remove_open_file(process_t * task, int fd) {
+    if (fd < 0 || fd >= MAX_OPEN_FILES) {
+        panic("Invalid file descriptor\n");
+    }
+    if (task->open_files[fd] == -1) {
+        panic("File descriptor not in use\n");
+    }
+    task->open_files[fd] = -1;
+    task->open_files_count--;
 }
 
 process_t * duplicate_process(thread_t * parent_thread) {
@@ -1020,7 +1081,7 @@ process_t * create_user_process(struct page_directory* pd, void * init, char * t
         task->ppid = 0;
     }
 
-    memset(task->open_files, 0, sizeof(int)*MAX_OPEN_FILES);
+    memset(task->open_files, -1, sizeof(int)*MAX_OPEN_FILES);
     task->open_files_count = 0;
     open_stdfiles(task, tty);
     task->vdso = get_vdso();
