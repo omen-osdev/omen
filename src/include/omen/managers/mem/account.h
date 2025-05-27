@@ -18,6 +18,7 @@ struct vmm_dir_linked_list {
 };
 
 void insert_page_directory(void * new);
+void alter_allocation(void* root, void * virtual_address, void * physical_address, uint64_t size);
 void remove_page_directory(void *  root);
 void copy_page_directory(void * root, void * new_root, void * min_copy_range, void * max_copy_range);
 void insert_allocation(void * root, void * virtual_address, void * physical_address, uint64_t size);

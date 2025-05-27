@@ -8,7 +8,6 @@ __attribute__((noreturn)) void _halt() {
 }
 
 __attribute__((noreturn)) void _start() {
-    BREAKPOINT();
     boot_startup();
     _halt();
 }

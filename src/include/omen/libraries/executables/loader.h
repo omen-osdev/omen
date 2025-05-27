@@ -2,6 +2,7 @@
 #define _LOADER_H
 
 #include <omen/managers/mem/vmm.h>
+#include <omen/managers/cpu/process.h>
 #include <omen/libraries/std/stdint.h>
 #include <vfs/vfs.h>
 
@@ -56,5 +57,5 @@ struct loaded_elf {
 char * get_auxv_string(uint64_t type);
 void elf_readelf(uint8_t * buffer, uint64_t size);
 void set_vector_vdso(struct auxv* vectors, void * vdso_address);
-struct loaded_elf* elf_load_elf(struct vfs_struct * cwd, struct page_directory* root, uint8_t * buffer, uint64_t size);
+struct loaded_elf* elf_load_elf(process_t * proc, int fd, struct vfs_struct * cwd, struct page_directory* root, uint8_t * buffer, uint64_t size);
 #endif

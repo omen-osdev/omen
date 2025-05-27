@@ -13,7 +13,7 @@ const char dcon_hook_str[] = "DCON device registered\n";
 void terminal_writer(const char* buffer, uint64_t size) {
     for(uint64_t i = 0; i < size; i++) {
    	outb(0xe9, buffer[i]);
-   	putchar(buffer[i]);
+   	//putchar(buffer[i]);
    }
 }
 

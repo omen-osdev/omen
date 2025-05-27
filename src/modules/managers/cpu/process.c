@@ -43,6 +43,35 @@ process_t process_list[MAX_PROCESSES] = {0};
 process_t * current_process = NULL;
 int process_count = 0;
 
+
+int postpone_task_switches_counter = 0;
+int task_switches_postponed_flag = 0;
+int IRQ_disable_counter = 0;
+
+void lock_scheduler(void) {
+#ifndef SMP
+    __asm__("cli");
+    IRQ_disable_counter++;
+    postpone_task_switches_counter++;
+#endif
+}
+
+void unlock_scheduler(void) {
+#ifndef SMP
+    postpone_task_switches_counter--;
+    if(postpone_task_switches_counter == 0) {
+        if(task_switches_postponed_flag != 0) {
+            task_switches_postponed_flag = 0;
+            sched();
+        }
+    }
+    IRQ_disable_counter--;
+    if(IRQ_disable_counter == 0) {
+        __asm__("sti");
+    }
+#endif
+}
+
 void parse_stack(void * stack) {
     //Print the argc, argv, envp, auxv from the stack
     size_t * pointer_table = (size_t *)stack;
@@ -110,8 +139,6 @@ void * create_args_env_aux(void * stack, uint64_t max_size, char ** argv, char *
     ((struct auxv*)ptr)->a_val  = NULL;
     ptr += 2;
 
-    
-
     uint64_t total_size_ascii = 0;
     for (int i = 0; i < argc; i++) {
         total_size_ascii += strlen(argv[i]) + 1; // +1 for null terminator
@@ -120,8 +147,14 @@ void * create_args_env_aux(void * stack, uint64_t max_size, char ** argv, char *
         total_size_ascii += strlen(envp[i]) + 1; // +1 for null terminator
     }
 
-    while ((uint64_t)((ptr+total_size_ascii) - original_addr) % 0xf) ptr++;
+    // Make sure the the end of the stack (ptr+total_size_ascii) will be aligned to 16 bytes by increasing ptr
+    uint64_t stack_bottom = (uint64_t)ptr + (uint64_t)total_size_ascii;
     char * ascii_ptr = (char *)ptr;
+    while (stack_bottom % 16 != 0) {
+        ascii_ptr++;
+        stack_bottom++;
+    }
+    ascii_ptr += 8; 
 
     for (int i = 0; i < argc; i++) {
         memcpy(ascii_ptr, argv[i], strlen(argv[i]) + 1);
@@ -731,7 +764,7 @@ int exec(process_t * task, char const *path, char const **argv, char const **env
     kfree(md5_buffer);
 
     vmm_unmap_userspace(task->vmm);
-    struct loaded_elf * ld = elf_load_elf(task->fs, task->vmm, buf, size);
+    struct loaded_elf * ld = elf_load_elf(task, fd, task->fs, task->vmm, buf, size);
     alter_process_on_exec(task, ld, saved_argv, saved_envp);
     kfree(buf);
     return 0;
@@ -912,7 +945,13 @@ void insert_in_prio_queue(process_t ** prioqueue, int * prio_list_size, process_
     }
 }
 
+
+
 process_t * sched() {
+    if(postpone_task_switches_counter != 0) {
+        task_switches_postponed_flag = 1;
+        return;
+    }
     process_t * task = 0x0;
     process_t * processes[PROCESS_PRIORITIES][process_count];
     memset(processes, 0, sizeof(process_t *) * PROCESS_PRIORITIES * process_count);
@@ -947,7 +986,7 @@ process_t * sched() {
     for (int i = 0; i < PROCESS_PRIORITIES; i++) {
         for (int j = 0; j < prio_list_size[i]; j++) {
             if (sched_thread(processes[i][j])) {
-                //kprintf("Chosen candidate [PID:%d|LS:%llu|NICE:%d|CNICE:%d]\n", processes[i][j]->pid, processes[i][j]->last_scheduled, processes[i][j]->nice, processes[i][j]->current_nice);
+                kprintf("Chosen candidate [PID:%d|LS:%llu|NICE:%d|CNICE:%d]\n", processes[i][j]->pid, processes[i][j]->last_scheduled, processes[i][j]->nice, processes[i][j]->current_nice);
                 task = processes[i][j];
                 goto found;
             }
@@ -1110,6 +1149,9 @@ void * get_signal_trampoline(process_t * task) {
 }
 
 void init_process(const char * _init_path, const char * _idle_path, char * tty) {
+    postpone_task_switches_counter = 0;
+    task_switches_postponed_flag = 0;
+
     for (int i = 0; i < MAX_PROCESSES; i++) {
         process_list[i].pid = -1;
     }

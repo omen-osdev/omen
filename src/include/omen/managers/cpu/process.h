@@ -171,6 +171,9 @@ typedef struct process {
 
 void returnoexit();
 
+void lock_scheduler(void);
+void unlock_scheduler(void);
+
 void init_process(const char * init_path, const char * idle_path, char * tty);
 void chroot(process_t * task, const char * path);
 char * getcwd(process_t * task);

@@ -5,6 +5,7 @@
 #include <omen/managers/cpu/process.h>
 #include <omen/libraries/allocators/heap_allocator.h>
 #include <omen/libraries/executables/loader.h>
+#include <omen/managers/cpu/vmarea.h>
 #include <vfs/vfs.h>
 #include <vfs/vfs_interface.h>
 
@@ -209,7 +210,7 @@ void elf_readelf(uint8_t * buffer, uint64_t size) {
     kprintf("  Section header string table index: %d\n", elf_header->e_shstrndx);
 }
 
-void allocate_segment(struct page_directory * root, Elf64_Phdr * program_header, void * buffer, void* base) {
+void allocate_segment(process_t * proc, int fd, struct page_directory * root, Elf64_Phdr * program_header, void * buffer, void* base) {
     if (program_header->p_type != PT_LOAD) return;
 
     kprintf("Allocating on pml4: %llx, buffer: %llx, base: %llx\n", root, buffer, base);
@@ -232,9 +233,10 @@ void allocate_segment(struct page_directory * root, Elf64_Phdr * program_header,
     memset(new_buffer, 0, page_no * 0x1000);
     memcpy(new_buffer + vaddr_offset,  (void*)(buffer+program_header->p_offset), program_header->p_filesz);
     map_range(root, (void*)vaddr, get_current_physical_address(new_buffer), 0x1000, page_no * 0x1000, perms);
+    create_vmarea(proc, vaddr, vaddr+ (page_no * 0x1000), perms, 0, PAGE_SIZE_4KIB, fd, 0);
 }
 
-uint8_t elf_open_file(struct vfs_struct * cwd, char * filename, uint8_t ** buffer, uint64_t * filesize) {
+int elf_open_file(struct vfs_struct * cwd, char * filename, uint8_t ** buffer, uint64_t * filesize) {
     int fd = vfs_file_open(cwd, filename, 0, 0);
     if (fd < 0) {
         kprintf("Could not open file %s\n", filename);
@@ -255,11 +257,11 @@ uint8_t elf_open_file(struct vfs_struct * cwd, char * filename, uint8_t ** buffe
     vfs_file_read(fd, *buffer, *filesize);
     vfs_file_close(fd);
     
-    return 1;
+    return fd;
 }
 
 
-struct loaded_elf* elf_load_elf(struct vfs_struct * cwd, struct page_directory* root, uint8_t * buffer, uint64_t size) {
+struct loaded_elf* elf_load_elf(process_t * proc, int fd, struct vfs_struct * cwd, struct page_directory* root, uint8_t * buffer, uint64_t size) {
     if (!parse_elf_file(buffer)) return NULL;
 
     Elf64_Ehdr * elf_header = (Elf64_Ehdr *) buffer;
@@ -286,7 +288,7 @@ struct loaded_elf* elf_load_elf(struct vfs_struct * cwd, struct page_directory* 
 
     for (int i = 0; i < elf_header->e_phnum; i++) {
         if (program_header[i].p_type == PT_LOAD) {
-            allocate_segment(root, &program_header[i], buffer, 0);
+            allocate_segment(proc, fd, root, &program_header[i], buffer, 0);
         } else if (program_header[i].p_type == PT_PHDR) {
             pld.at_phdr = (void*)(program_header[i].p_vaddr);
         } else if (program_header[i].p_type == PT_INTERP) {
@@ -335,7 +337,8 @@ struct loaded_elf* elf_load_elf(struct vfs_struct * cwd, struct page_directory* 
         //Load dynamic linker
         uint8_t * ld_buffer;
         uint64_t ld_size;
-        if (!elf_open_file(cwd, pld.ld_path, &ld_buffer, &ld_size)) {
+        int ld_fd = elf_open_file(cwd, pld.ld_path, &ld_buffer, &ld_size);
+        if (!ld_fd) {
             kprintf("Failed to open dynamic linker\n");
             return NULL;
         }
@@ -355,7 +358,7 @@ struct loaded_elf* elf_load_elf(struct vfs_struct * cwd, struct page_directory* 
         Elf64_Phdr * ld_program_header = (Elf64_Phdr *) (ld_buffer + ld_elf_header->e_phoff);
         for (int i = 0; i < ld_elf_header->e_phnum; i++) {
             if (ld_program_header[i].p_type == PT_LOAD) {
-                allocate_segment(root, &ld_program_header[i], ld_buffer, DYNAMIC_LINKER_BASE_ADDRESS);
+                allocate_segment(proc, ld_fd, root, &ld_program_header[i], ld_buffer, DYNAMIC_LINKER_BASE_ADDRESS);
             }
         }
 

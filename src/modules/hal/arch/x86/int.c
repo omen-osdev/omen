@@ -53,24 +53,38 @@ void PageFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {
     kprintf("Page Fault Address: %lx\n", (uint64_t)faulting_address);
     kprintf("Error code: %lx\n", ctx->error_code);
     thread_t * thread = get_current_thread();
-    if (!thread) panic("Page fault in kernel mode, no task detected!\n");
+    if (!thread) panic("Page fault, no task detected!\n");
     thread->context->cpu_context->cr3 = to_identity_map(ctx->cr3);
 
     struct vm_area* vma = is_in_vmarea(thread->process, (void*)faulting_address);
-    if (thread->process && vma && (vma->flags & VMM_WRITE_BIT) && (vma->extended_flags & VMAREA_EXT_SHARED)) {
+    if (!thread->process) {
+        kprintf("Page fault, no process found for address %lx\n", faulting_address);
+        kprintf("Thread TID: %d\n", thread->id);
+        panic("Page fault, no process found!\n");
+    }
+
+    if (!vma) {
+        kprintf("Page fault, no VMA found for address %lx\n", faulting_address);
+        kprintf("Process PID: %d, TID: %d\n", thread->process->pid, thread->id);
+        dump_vmareas(thread->process);
+        panic("Page fault, no VMA found!\n");
+    }
+
+    if ((vma->flags & VMM_WRITE_BIT) && (vma->extended_flags & VMAREA_EXT_SHARED)) {
         kprintf("Page fault in shared area, allowing write and requesting sync\n");
         vma->extended_flags |= VMAREA_EXT_REQ_SYNC;
         mprotect(thread->process->vmm, (void*)faulting_address, vma->page_size, vma->flags);
         thread->context->cpu_context->cr3 = from_identity_map(thread->context->cpu_context->cr3);
         return;
     }
-    if (thread->process && vma && (vma->flags & VMM_WRITE_BIT) && (vma->extended_flags & VMAREA_EXT_COW)) {
+    if ((vma->flags & VMM_WRITE_BIT) && (vma->extended_flags & VMAREA_EXT_COW)) {
         kprintf("Page fault in COW area, duplicating page\n");
         duplicate_vmarea_cow(thread->process, vma);
         thread->context->cpu_context->cr3 = from_identity_map(thread->context->cpu_context->cr3);
+        kprintf("Page fault in COW area, page duplicated\n");
         return;
     }
-    if (thread->process && vma && (vma->flags & VMM_USER_BIT) && (vma->extended_flags & VMAREA_EXT_STACK_GUARD)) {
+    if ((vma->flags & VMM_USER_BIT) && (vma->extended_flags & VMAREA_EXT_STACK_GUARD)) {
         kprintf("Page fault: STACK GUARD\n");
         struct stack stack;
         stack.base = thread->ustack_base;
@@ -90,7 +104,7 @@ void PageFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {
         return;
     }
 
-    panic("Page fault in kernel mode\n");
+    panic("Page fault, wtffff\n");
 }
 
 void DoubleFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {
@@ -119,10 +133,12 @@ void Syscall_Handler(cpu_context_t* ctx, uint8_t cpuid) {
 
 //you may need save_all here
 void PitInt_Handler(cpu_context_t* ctx, uint8_t cpuid) {
+    lock_scheduler();
     tick();
     if (requires_preemption()) {
         sched();
     }
+    unlock_scheduler();
 }
 
 void Serial1Int_Handler(cpu_context_t* ctx, uint8_t cpuid) {

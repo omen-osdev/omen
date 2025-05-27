@@ -275,7 +275,7 @@ void map_address(struct page_directory* root, void * virtual_address, void * phy
         init_entry(ptentry, PAGE_SIZE_4KIB, (uint64_t)physical_address, page_perms);
         flush_tlb_entry(virtual_address);
     } else {
-        kprintf("4k Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, physical_address);
+        //kprintf("4k Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, physical_address);
         init_entry(ptentry, PAGE_SIZE_4KIB, (uint64_t)physical_address, page_perms);
         flush_tlb_entry(virtual_address);
     }
@@ -388,6 +388,24 @@ void free_vmm(struct page_directory * pml4, void * address)
     {   
         unmap_range(pml4, address, PAGE_SIZE_4KIB);
     }
+}
+
+void remap_range(struct page_directory* root, void * virtual_start, void * physical_start, uint64_t page_size, uint64_t size, uint8_t flags)
+{
+    //number of pages to map
+    uint64_t pages = size / page_size;
+    if (size % page_size)
+    {
+        pages++;
+    }
+    //kprintf("Need to map %d pages\n", pages);
+    for (uint64_t i = 0; i < pages; i++)
+    {
+        map_address(root, (void*)((uint64_t)virtual_start + (i * page_size)), (void*)((uint64_t)physical_start + (i * page_size)), page_size, flags);
+    }
+
+    alter_allocation(root, virtual_start, physical_start, size);
+    //kprintf("Mapped range from 0x%llx to 0x%llx\n", virtual_start, (uint64_t)virtual_start + size);
 }
 
 void map_range(struct page_directory* root, void * virtual_start, void * physical_start, uint64_t page_size, uint64_t size, uint8_t flags)
@@ -726,7 +744,7 @@ void * vmm_copy_stack(struct page_directory* stack_root, void * stack_base, uint
 
     void * new_stack_phys = pmm_alloc(stack_size);
     memcpy(TO_IDENTITY_MAP(new_stack_phys), stack_base, stack_size);
-    map_range(stack_root, stack_base, new_stack_phys, PAGE_SIZE_4KIB, stack_size, flags);
+    remap_range(stack_root, stack_base, new_stack_phys, PAGE_SIZE_4KIB, stack_size, flags);
     return stack_base;
 }
 
@@ -753,11 +771,12 @@ void remap_allocate_cow(struct page_directory * pml4, void * section_start, uint
         panic("Failed to allocate memory for cow\n");
         return 0;
     }
-
+    void * old_physical = get_physical_address(pml4, section_start);
     memset(TO_IDENTITY_MAP(physical), 0, size);
     //Add write protection
     flags |= VMM_WRITE_BIT;
-    map_range(pml4, section_start, physical, page_size, size, flags);
+    remap_range(pml4, section_start, physical, page_size, size, flags);
+    memcpy(TO_IDENTITY_MAP(physical), TO_IDENTITY_MAP(old_physical), size);
 }
 
 uint8_t compare_entries(vm_entry* entry1, vm_entry* entry2)

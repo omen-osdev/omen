@@ -247,3 +247,28 @@ void copy_page_directory(void * root, void * new_root, void * min_copy_range, vo
 
     panic("[ACCOUNT] Page directory not found\n");
 }
+
+void alter_allocation(void* root, void * virtual_address, void * physical_address, uint64_t size) {
+    struct vmm_dir_linked_list * node = vmm_dir_list;
+    while (node)
+    {
+        if (node->pd == root)
+        {
+            struct vmm_mapping * mapping = node->mappings;
+            while (mapping)
+            {
+                if (mapping->virtual_address == virtual_address)
+                {
+                    mapping->physical_address = physical_address;
+                    mapping->size = size;
+                    return;
+                }
+                mapping = mapping->next;
+            }
+            panic("[ACCOUNT] Mapping not found\n");
+        }
+        node = node->next;
+    }
+    panic("[ACCOUNT] Page directory not found\n");
+}
+

@@ -19,7 +19,6 @@ namespace mlibc{
 
     [[noreturn]] void sys_libc_panic(){
         sys_libc_log("libc panic!");
-        __builtin_trap();
         for(;;);
     }
 

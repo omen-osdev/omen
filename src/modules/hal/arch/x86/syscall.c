@@ -131,8 +131,16 @@ int64_t read_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
         kprintf("Could not allocate buffer for read\n");
         return SYSCALL_ERROR;
     }
+
+    int pfd = get_open_file(thread->process, fd);
+    if (pfd < 0) {
+        kprintf("Invalid file descriptor %d\n", fd);
+        kfree(rbuffer);
+        return SYSCALL_ERROR;
+    }
+
     memset(rbuffer, 0, size + 1024);
-    int64_t res = vfs_file_read(fd, (void*)rbuffer, size);
+    int64_t res = vfs_file_read(pfd, (void*)rbuffer, size);
     //Print 10 bytes
     kprintf("Read %d bytes\n", res);
     if (res < 0) {
@@ -154,8 +162,16 @@ int64_t write_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)fd;
     (void)buffer;
     (void)size;
-    //kprintf("[PID: %d | TID %d] WRITE_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, buffer, size);
-    return vfs_file_write(fd, (void*)buffer, size);
+
+    kprintf("[PID: %d | TID %d] WRITE_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, buffer, size);
+
+    int pfd = get_open_file(thread->process, fd);
+    if (pfd < 0) {
+        kprintf("Invalid file descriptor %d\n", fd);
+        return SYSCALL_ERROR;
+    }
+
+    return vfs_file_write(pfd, (void*)buffer, size);
 }
 
 int64_t dir_open_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
@@ -381,8 +397,14 @@ int64_t seek_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 
 int64_t stat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char * path = SYSCALL_ARG0(ctx);
-    stat_t* stat = SYSCALL_ARG1(ctx);
+    //size_t path_len = SYSCALL_ARG1(ctx);
+    int flags = SYSCALL_ARG1(ctx);
+    stat_t* stat = SYSCALL_ARG2(ctx);
     kprintf("[PID: %d | TID %d] STAT_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, path, stat);
+    if (flags != 0) {
+        kprintf("Flags not supported in stat syscall\n");
+        return SYSCALL_ERROR;
+    }
 
     int fd = vfs_file_open(thread->process->fs, (char*)path, O_RDONLY, 0);
     if (fd < 0) {
@@ -500,9 +522,16 @@ int64_t kill_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
 
 int64_t fstat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     int fd = SYSCALL_ARG0(ctx);
-    stat_t* stat = SYSCALL_ARG1(ctx);
+    int flags = SYSCALL_ARG1(ctx);
+    stat_t* stat = SYSCALL_ARG2(ctx);
 
     kprintf("[PID: %d | TID %d] FSTAT_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, fd, stat);
+    
+    if (flags != 0) {
+        kprintf("Flags not supported in fstat syscall\n");
+        return SYSCALL_ERROR;
+    }
+
     int pfd = get_open_file(thread->process, fd);
     int ret = vfs_file_stat(pfd, stat);
     if (ret < 0) {
@@ -616,7 +645,7 @@ int64_t fork_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
     kprintf("[PID: %d | TID %d] FORK_SYSCALL()\n", thread->process->pid, thread->id);
     uint64_t child_pid = (uint64_t)fork(thread);
-    kprintf("Child PID: %d | TID %d\n", child_pid);
+    kprintf("Child PID: %d | TID %d\n", child_pid, 0);
     return child_pid;
 }
 
@@ -696,7 +725,7 @@ int64_t exit_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 
 int64_t get_tid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
-    //kprintf("[PID: %d | TID %d] GET_TID_SYSCALL()\n", thread->process->pid, thread->id);
+    kprintf("[PID: %d | TID %d] GET_TID_SYSCALL()\n", thread->process->pid, thread->id);
     return thread->id;
 }
 
@@ -709,6 +738,10 @@ int64_t getpid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 int64_t getppid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
     kprintf("[PID: %d | TID %d] GETPPID_SYSCALL()\n", thread->process->pid, thread->id);
+    if (thread->process->parent == NULL) {
+        kprintf("No parent process\n");
+        return 1;
+    }
     return thread->process->parent->pid;
 }
 
@@ -831,9 +864,10 @@ int64_t mmap_syscall_handler(thread_t*thread, cpu_context_t*ctx) {
         int newfd = -1;
         if (flags & MAP_ANONYMOUS) {
             create_vmarea(thread->process, addr, (addr + length), vmm_flags, vma_flags, PAGE_SIZE_4KIB, newfd, 0);
+            kprintf("MMAP <anon> Giving range: %p-%p, length: %d, prot: %d, flags: %d, fd: %d, offset: %d\n", addr, (void*)(((uint64_t)addr)+length), length, prot, flags, newfd, offset);
             return addr;
         } else {
-            newfd = vfs_file_dup(fd, -1);
+            newfd = vfs_file_dup(pfd, -1);
             if (newfd < 0) {
                 goto cleanup_on_error;
             }
@@ -859,8 +893,9 @@ int64_t mmap_syscall_handler(thread_t*thread, cpu_context_t*ctx) {
         } 
 
         //Reset permissions but keep readonly so it page faults on a write
-        uint8_t roflags = vmm_flags & ~VMM_WRITE_BIT;
+        uint8_t roflags = vmm_flags & ~VMM_WRITE_BIT;   
         mprotect(thread->process->vmm, addr, length, roflags);
+        kprintf("MMAP Giving range: %p-%p, length: %d, prot: %d, flags: %d, fd: %d, offset: %d\n", addr, (void*)(((uint64_t)addr)+length), length, prot, flags, newfd, offset);
         return addr;
     }
 
@@ -1125,8 +1160,7 @@ void global_syscall_handler(cpu_context_t* ctx) {
     thread_t * current_thread = get_current_thread();
     current_thread->syscall_ready = 1;
 
-    if (ctx->rax != 337 && ctx->rax != 186)
-        kprintf("[PID: %d | TID %d] SYSCALL(%d)\n", current_thread->process->pid, current_thread->id, ctx->rax);    
+    kprintf("[PID: %d | TID %d] SYSCALL(%d)\n", current_thread->process->pid, current_thread->id, ctx->rax);    
     memcpy(current_thread->context->cpu_context, ctx, sizeof(cpu_context_t));
     memcpy(current_thread->context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
 
@@ -1141,8 +1175,7 @@ void global_syscall_handler(cpu_context_t* ctx) {
     }
 
     current_thread = get_current_thread();
-    if (ctx->rax != 337 && ctx->rax != 186)
-        kprintf("[PID: %d | TID %d] SYSCALL(%d) RETURNED %d\n", current_thread->process->pid, current_thread->id, ctx->rax, result);
+    kprintf("[PID: %d | TID %d] SYSCALL(%d) RETURNED %d\n", current_thread->process->pid, current_thread->id, ctx->rax, result);
     arch_simd_restore_context(current_thread->context->fxsave_region);
     memcpy(ctx, current_thread->context->cpu_context, sizeof(cpu_context_t));
     memcpy(ctx->info, current_thread->context->cpu_context->info, sizeof(struct cpu_context_info));

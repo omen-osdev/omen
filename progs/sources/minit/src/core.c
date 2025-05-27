@@ -56,7 +56,40 @@ int main(int argc, char* argv[]){
 
     tty_test();
 
+    //Fork, one process busy loops and the other execs bash
+    pid_t pid = fork();
+    printf("init: forked child with pid %d\n", pid);
+    if (pid < 0) {
+        perror("init: fork failed");
+        return EXIT_FAILURE;
+    }
+    if (pid > 0) {
+        //IDLE PROCESS PID = 0
+        while (true); //sleep(1);
+    }
+    while(true);
+    // INIT PROCESS PID = 1
     char* exe_argv[2] = {"/usr/bin/bash", NULL};
+
+    pid = fork();
+    printf("init: forked child with pid %d\n", pid);
+    if (pid < 0) {
+        perror("init: fork failed");
+        return EXIT_FAILURE;
+    }
+
+    if (pid > 0) {
+        // Parent process waits for child to finish
+        //int status    ;
+        //waitpid(pid, &status, 0);
+        //if (WIFEXITED(status)) {
+        //    printf("Child process exited with status %d\n", WEXITSTATUS(status));
+        //} else {
+        //    printf("Child process did not exit normally\n");
+        //}
+        while (true); // sleep(1); // Keep the init process alive
+    }
+    // Child process executes bash
     execvp("/usr/bin/bash", exe_argv);
 
     perror("init: /usr/bin/bash not found");
