@@ -98,8 +98,8 @@ void PageFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {
         remove_vmarea(thread->process, thread->ustack_base);
         thread->ustack_base = stack.base;
         thread->ustack_size = stack.size;
-        create_vmarea(thread->process, thread->ustack_base, thread->ustack_base+thread->ustack_size-1, VMM_USER_BIT | VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
-        create_vmarea(thread->process, thread->ustack_base-thread->ustack_guard_size, thread->ustack_base-1, VMM_USER_BIT, VMAREA_EXT_STACK_GUARD, PAGE_SIZE_4KIB, -1, 0);
+        create_vmarea(thread->process, thread->ustack_base, thread->ustack_base+thread->ustack_size, VMM_USER_BIT | VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
+        create_vmarea(thread->process, thread->ustack_base-thread->ustack_guard_size, thread->ustack_base, VMM_USER_BIT, VMAREA_EXT_STACK_GUARD, PAGE_SIZE_4KIB, -1, 0);
         thread->context->cpu_context->cr3 = from_identity_map(thread->context->cpu_context->cr3);
         return;
     }
@@ -133,12 +133,10 @@ void Syscall_Handler(cpu_context_t* ctx, uint8_t cpuid) {
 
 //you may need save_all here
 void PitInt_Handler(cpu_context_t* ctx, uint8_t cpuid) {
-    lock_scheduler();
     tick();
     if (requires_preemption()) {
         sched();
     }
-    unlock_scheduler();
 }
 
 void Serial1Int_Handler(cpu_context_t* ctx, uint8_t cpuid) {

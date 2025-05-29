@@ -107,7 +107,7 @@ void boot_startup() {
     pmm_init();
     init_paging();
     create_gdt();
-    init_pit(1000); // 1ms
+    init_pit(100); // 10ms
     init_interrupts();
     init_cpus();
     vdso_init();

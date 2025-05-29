@@ -238,15 +238,15 @@ void init_stacks(thread_t * thread, uint64_t size, uint64_t entry) {
     thread->ustack_base = stack.base;
     thread->ustack_size = stack.size;
     thread->ustack_guard_size = stack.guard_size;
-    create_vmarea(task, thread->ustack_base, thread->ustack_base+thread->ustack_size-1, VMM_USER_BIT | VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
-    create_vmarea(task, thread->ustack_base-thread->ustack_guard_size, thread->ustack_base-1, VMM_USER_BIT, VMAREA_EXT_STACK_GUARD, PAGE_SIZE_4KIB, -1, 0);
+    create_vmarea(task, thread->ustack_base, thread->ustack_base+thread->ustack_size, VMM_USER_BIT | VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
+    create_vmarea(task, thread->ustack_base-thread->ustack_guard_size, thread->ustack_base, VMM_USER_BIT, VMAREA_EXT_STACK_GUARD, PAGE_SIZE_4KIB, -1, 0);
     kstackalloc(task->vmm, &stack, size);
     thread->kstack_base = stack.base;
     thread->kstack = stack.top;
     thread->kstack_size = stack.size;
     thread->kstack_guard_size = stack.guard_size;
-    create_vmarea(task, thread->kstack_base, thread->kstack_base+thread->kstack_size-1, VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
-    create_vmarea(task, thread->kstack_base-thread->kstack_guard_size, thread->kstack_base-1, VMM_USER_BIT, VMAREA_EXT_STACK_GUARD, PAGE_SIZE_4KIB, -1, 0);
+    create_vmarea(task, thread->kstack_base, thread->kstack_base+thread->kstack_size, VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
+    create_vmarea(task, thread->kstack_base-thread->kstack_guard_size, thread->kstack_base, VMM_USER_BIT, VMAREA_EXT_STACK_GUARD, PAGE_SIZE_4KIB, -1, 0);
     if (get_pml4() != task->vmm) {
         void * stack_physical = get_physical_address(task->vmm, thread->ustack_base);
         map_range(get_pml4(), thread->ustack_base, (uint64_t)stack_physical, PAGE_SIZE_4KIB, thread->ustack_size, VMM_WRITE_BIT);
@@ -438,7 +438,7 @@ void create_signal_context(thread_t * thread, int signo, struct sigaction * siga
         thread->altstack = stack.top;
         thread->altstack_base = stack.base;
         create_vmarea(thread->process, thread->ustack_base, thread->ustack, VMM_USER_BIT | VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
-        create_vmarea(thread->process, thread->ustack_base-thread->ustack_guard_size, thread->ustack_guard_size, VMM_USER_BIT, VMAREA_EXT_STACK_GUARD, PAGE_SIZE_4KIB, -1, 0);
+        create_vmarea(thread->process, thread->ustack_base-thread->ustack_guard_size, thread->ustack_base, VMM_USER_BIT, VMAREA_EXT_STACK_GUARD, PAGE_SIZE_4KIB, -1, 0);
     } else {
         size = (uint64_t)thread->altstack - (uint64_t)thread->altstack_base;
         if (size % 0x1000) {
@@ -636,7 +636,7 @@ process_t * duplicate_process(thread_t * parent_thread) {
     main_thread->context->cpu_context->info = kmalloc(sizeof(struct cpu_context_info));
     memcpy(main_thread->context->cpu_context->info, parent_thread->context->cpu_context->info, sizeof(struct cpu_context_info));
 
-    duplicate_vmareas(parent, task);
+    duplicate_vmareas(parent, task, VMAREA_CLONE_WITH_COW);
     memcpy(task->open_files, parent->open_files, sizeof(int)*MAX_OPEN_FILES);
     task->open_files_count = parent->open_files_count;
     memcpy(main_thread->context->fxsave_region, parent_thread->context->fxsave_region, 512);

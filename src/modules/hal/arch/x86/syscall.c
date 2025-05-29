@@ -163,7 +163,8 @@ int64_t write_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)buffer;
     (void)size;
 
-    kprintf("[PID: %d | TID %d] WRITE_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, buffer, size);
+    if (size != 1)
+        kprintf("[PID: %d | TID %d] WRITE_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, buffer, size);
 
     int pfd = get_open_file(thread->process, fd);
     if (pfd < 0) {
@@ -1160,7 +1161,8 @@ void global_syscall_handler(cpu_context_t* ctx) {
     thread_t * current_thread = get_current_thread();
     current_thread->syscall_ready = 1;
 
-    kprintf("[PID: %d | TID %d] SYSCALL(%d)\n", current_thread->process->pid, current_thread->id, ctx->rax);    
+    if (ctx->rax != 186 && ctx->rax != 337 && (ctx->rax != 1 || SYSCALL_ARG2(ctx) != 1))
+        kprintf("[PID: %d | TID %d] SYSCALL(%d)\n", current_thread->process->pid, current_thread->id, ctx->rax);    
     memcpy(current_thread->context->cpu_context, ctx, sizeof(cpu_context_t));
     memcpy(current_thread->context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
 
@@ -1175,7 +1177,8 @@ void global_syscall_handler(cpu_context_t* ctx) {
     }
 
     current_thread = get_current_thread();
-    kprintf("[PID: %d | TID %d] SYSCALL(%d) RETURNED %d\n", current_thread->process->pid, current_thread->id, ctx->rax, result);
+    if (ctx->rax != 186 && ctx->rax != 337 && (ctx->rax != 1 || SYSCALL_ARG2(ctx) != 1))
+        kprintf("[PID: %d | TID %d] SYSCALL(%d) RETURNED %d\n", current_thread->process->pid, current_thread->id, ctx->rax, result);
     arch_simd_restore_context(current_thread->context->fxsave_region);
     memcpy(ctx, current_thread->context->cpu_context, sizeof(cpu_context_t));
     memcpy(ctx->info, current_thread->context->cpu_context->info, sizeof(struct cpu_context_info));

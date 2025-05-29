@@ -58,38 +58,44 @@ int main(int argc, char* argv[]){
 
     //Fork, one process busy loops and the other execs bash
     pid_t pid = fork();
-    printf("init: forked child with pid %d\n", pid);
+    printf("First fork result pid: %d\n", pid);
     if (pid < 0) {
-        perror("init: fork failed");
+        perror("First fork fork failed");
         return EXIT_FAILURE;
     }
     if (pid > 0) {
         //IDLE PROCESS PID = 0
-        while (true); //sleep(1);
+        printf("idle process with pid %d looping\n", pid);
+        while (true) sleep(1);
     }
-    while(true);
+    printf("Init process with pid %d\n", getpid());
+
     // INIT PROCESS PID = 1
     char* exe_argv[2] = {"/usr/bin/bash", NULL};
 
     pid = fork();
-    printf("init: forked child with pid %d\n", pid);
+    printf("Second fork result pid %d\n", pid);
     if (pid < 0) {
-        perror("init: fork failed");
+        perror("Second fork failed");
         return EXIT_FAILURE;
     }
 
     if (pid > 0) {
+        printf("Init process with pid %d is waiting for child process to finish\n", getpid());
         // Parent process waits for child to finish
-        //int status    ;
-        //waitpid(pid, &status, 0);
-        //if (WIFEXITED(status)) {
-        //    printf("Child process exited with status %d\n", WEXITSTATUS(status));
-        //} else {
-        //    printf("Child process did not exit normally\n");
-        //}
-        while (true); // sleep(1); // Keep the init process alive
+        int status    ;
+        waitpid(pid, &status, 0);
+        if (WIFEXITED(status)) {
+            printf("Child process exited with status %d\n", WEXITSTATUS(status));
+        } else {
+            printf("Child process did not exit normally\n");
+        }
+        while (true) sleep(1); // Keep the init process alive
     }
+
+
     // Child process executes bash
+    printf("Bash process with pid %d is starting...\n", getpid());
     execvp("/usr/bin/bash", exe_argv);
 
     perror("init: /usr/bin/bash not found");

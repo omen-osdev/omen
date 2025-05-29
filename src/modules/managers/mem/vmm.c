@@ -843,7 +843,8 @@ uint64_t mprotect_page(struct page_directory * root, void* address, uint8_t flag
     struct page_map_index map;
     address_to_map((uint64_t)address, &map);
 
-    //kprintf("Mprotecting vaddr: %llx (phys: %llx) with flags (W: %d, U: %d, NX: %d, CD: %d)\n", address, get_physical_address(root, address), VMM_WRITE_BIT_SET(flags), VMM_USER_BIT_SET(flags), NX_BIT_SET(flags), CACHE_BIT_SET(flags));
+    //kprintf("Mprotecting vaddr: %llx (phys: %llx) with flags (W: %d, U: %d, NX: %d, CD: %d)\n", address, get_physical_address(root, address), 
+    //       VMM_WRITE_BIT_SET(flags), VMM_USER_BIT_SET(flags), VMM_NX_BIT_SET(flags), VMM_CACHE_BIT_SET(flags));
 
     struct page_directory* pdptable, *pdtable, *pttable;
     vm_entry *pml4entry, *pdptentry, *pdentry, *ptentry;
@@ -851,7 +852,7 @@ uint64_t mprotect_page(struct page_directory * root, void* address, uint8_t flag
     pml4entry = GET_ENTRY(root, map.PML4_index);
     if (!IS_PRESENT(pml4entry))
     {
-        return 0;
+        panic("Cant mprotect page, PML4 entry not present\n");
     }
 
     pdptable = (struct page_directory*)get_pdpp(pml4entry, PAGE_SIZE_DIR);
@@ -859,7 +860,7 @@ uint64_t mprotect_page(struct page_directory * root, void* address, uint8_t flag
 
     if (!IS_PRESENT(pdptentry))
     {
-        return 0;
+        panic("Cant mprotect page, PDP entry not present\n");
     }
     
     if (pdptentry->huge.PS)
@@ -873,7 +874,7 @@ uint64_t mprotect_page(struct page_directory * root, void* address, uint8_t flag
 
     if (!IS_PRESENT(pdentry))
     {
-        return 0;
+        panic("Cant mprotect page, PD entry not present\n");
     }
     if (pdptentry->big.PS)
     {
@@ -886,6 +887,7 @@ uint64_t mprotect_page(struct page_directory * root, void* address, uint8_t flag
 
     if (!IS_PRESENT(ptentry))
     {
+        panic("Cant mprotect page, PT entry not present\n");
         return 0;
     }
 
