@@ -52,7 +52,7 @@ int main(int argc, char* argv[]){
     setenv("TERM", "gnome-256color", 1);
 
     chdir(getenv("HOME"));
-    setenv("PS1", "\\[\e[0;92m$USER@$HOSTNAME\e[0;37m: \e[0;94m\\w\e[0;37m\\$\e[0m\\] ", 1); // '#' is used to indicate root user session
+    setenv("PS1", "$USER@$HOSTNAME: ", 1); // '#' is used to indicate root user session
 
     tty_test();
 

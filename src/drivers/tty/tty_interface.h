@@ -23,6 +23,7 @@ uint64_t tty_flush(const char* device);
 uint64_t tty_set_echo(const char* device, uint8_t echo);
 uint64_t tty_set_raw(const char* device, uint8_t raw);
 uint64_t tty_get_size(const char* device);
+uint64_t tty_has_input(const char* device);
 uint64_t tty_validate(const char* device);
 
 uint64_t tty_read_direct(struct tty* tty, uint8_t * buffer, uint32_t skip, uint32_t size);

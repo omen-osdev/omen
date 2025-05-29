@@ -14,6 +14,7 @@ void tty_unregister_device(struct vfs_tty* tty);
 uint8_t tty_search(const char* name);
 int tty_sync(struct vfs_tty* tty);
 void tty_dump_device(struct vfs_tty* tty);
+uint64_t vfs_tty_has_input(struct vfs_tty* tty);
 uint64_t vfs_tty_get_size(struct vfs_tty* tty);
 uint8_t vfs_tty_read(struct vfs_tty * tty, uint8_t * destination_buffer, uint64_t size, uint64_t skip);
 uint8_t vfs_tty_write(struct vfs_tty * tty, uint8_t * source_buffer, uint64_t size, uint64_t skip);

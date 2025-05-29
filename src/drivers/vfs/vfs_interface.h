@@ -22,7 +22,7 @@ int vfs_file_creat(struct vfs_struct * cwd, char*, int);
 int vfs_link_creat(struct vfs_struct * cwd, char* path, char* target);
 char * vfs_read_symlink(struct vfs_struct * cwd, char * path);
 void vfs_file_flush(int);
-
+int vfs_file_event(int fd, int event_kind, int* event_result);
 int vfs_dir_open(struct vfs_struct * cwd, char*);
 int vfs_dir_close(int);
 int vfs_dir_load(int);

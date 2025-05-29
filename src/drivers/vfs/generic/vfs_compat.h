@@ -6,6 +6,10 @@
 #define VFS_COMPAT_MAX_OPEN_DIRECTORIES 4096
 #define VFS_FDE_NAME_MAX_LEN 256
 
+#define VFS_POLLIN 0x1
+#define VFS_POLLOUT 0x2
+#define VFS_POLLEXCEPT 0x4
+
 #define O_RDONLY 0x0000
 #define O_WRONLY 0x0001
 #define O_RDWR 0x0002
@@ -123,7 +127,7 @@ struct vfs_compatible {
     int64_t (*file_ioctl)(int, int, int, void*);
 
     int (*file_stat)(int, int, stat_t*);
-
+    int (*file_event)(int, int, int*);
     int (*dir_open)(int, const char*);
     int (*dir_close)(int, int);
     int (*dir_load)(int, int);

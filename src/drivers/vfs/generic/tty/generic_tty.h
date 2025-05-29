@@ -8,6 +8,8 @@
 #include <omen/apps/debug/debug.h>
 #include <omen/apps/panic/panic.h>
 #include <omen/libraries/std/stdint.h>
+#include <omen/managers/cpu/sline.h>
+#include <omen/managers/cpu/process.h>
 
 #define MAX_TTY_DEVICES 32
 
@@ -71,7 +73,11 @@ int64_t tty_compat_file_read(int devno, int fd, void* buffer, uint64_t size) {
         while (read < size) {
             uint64_t res = vfs_tty_read(device, buffer + read, size - read, entry->offset);
             if (res != 0) kprintf("tty read %d bytes\n", res);
+            else
+                sleep_current(TTY_IO_SLINE);
+//¿CAMBIO DE CONTEXTO EN KSPACE? 30/05/25
             read += res;
+
         }
         return read;
     }
@@ -181,6 +187,31 @@ int tty_compat_file_flush(int devno, int fd) {
     return (int)tty_sync(device);
 }
 
+int tty_compat_file_event(int devno, int events, int* event_result) {
+    if (devno < 0 || devno >= MAX_TTY_DEVICES) 
+        return VFS_ERROR;
+
+    struct vfs_tty * device = tty_devices[devno];
+    if (device == 0)
+        return VFS_ERROR;
+    
+    int event_number = 0;
+    if (events & VFS_POLLIN) {
+        if (vfs_tty_has_input(device)) {
+            event_number++;
+            *event_result |= VFS_POLLIN;
+        }
+    }
+
+    if (events & VFS_POLLOUT) {
+        event_number++;
+        *event_result |= VFS_POLLOUT;
+    }
+
+    return event_number;
+
+}
+
 int tty_compat_flush(int partno) {(void)partno; return VFS_ERROR;}
 int tty_compat_dir_open(int partno, const char* path) {(void)partno; (void)path; return VFS_ERROR;}
 int tty_compat_dir_close(int partno, int fd) {(void)partno; (void)fd; return VFS_ERROR;}
@@ -217,6 +248,7 @@ struct vfs_compatible tty_register = {
     .file_seek = tty_compat_file_seek,
     .file_tell = tty_compat_file_tell,
     .file_stat = tty_compat_stat,
+    .file_event = tty_compat_file_event,
     .file_ioctl = tty_compat_file_ioctl,
     .rename = tty_compat_rename,
     .remove = tty_compat_remove,

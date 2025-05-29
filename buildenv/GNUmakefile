@@ -221,6 +221,8 @@ setup:
 	@echo end >> $(ABSDIR)/$(GDBCFG)
 	@echo end >> $(ABSDIR)/$(GDBCFG)
 	@echo adds minit >> $(ABSDIR)/$(GDBCFG)
+	@echo add-symbol-file /home/norte/omen/progs/sym/bash.sym >> $(ABSDIR)/$(GDBCFG)
+	@echo add-symbol-file /home/norte/omen/progs/sym/libc.so.sym 0x41445a90 >> $(ABSDIR)/$(GDBCFG)
 	@echo b $(KERNEL_ENTRY) >> $(ABSDIR)/$(GDBCFG)
 	@echo b main >> $(ABSDIR)/$(GDBCFG)
 	@echo b __breakpoint >> $(ABSDIR)/$(GDBCFG)
@@ -350,7 +352,17 @@ dummyfiles:
 	@echo "root:omen:0:0:root:/root:/usr/bin/bash" > $(SYSROOT)/etc/passwd
 	@echo "Creating $(SYSROOT)/etc/group..."
 	@echo "root:root:0:" > $(SYSROOT)/etc/group
-
+	@echo "Creating $(SYSROOT)/usr/.bashrc..."
+	@mkdir -p $(SYSROOT)/usr
+	@echo "export PS1='omen:~# '" > $(SYSROOT)/usr/.bashrc
+	@echo "Creating $(SYSROOT)/usr/.bash_history..."
+	@echo "" > $(SYSROOT)/usr/.bash_history
+	@echo "Creating $(SYSROOT)/etc/termcap..."
+	@echo "dumb|Minimal dumb terminal::" > $(SYSROOT)/etc/termcap
+	@echo "Creating $(SYSROOT)/usr/.inputrc..."
+	@echo "set editing-mode vi" > $(SYSROOT)/usr/.inputrc
+	@echo "Creating $(SYSROOT)/etc/inputrc..."
+	@echo "set editing-mode vi" > $(SYSROOT)/etc/inputrc
 
 symbols:
 	@echo "Copying symbols..."

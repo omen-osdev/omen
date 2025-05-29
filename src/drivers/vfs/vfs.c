@@ -100,6 +100,7 @@ void register_filesystem(struct vfs_compatible * registrar) {
     fst->file_tell = registrar->file_tell;
     fst->file_ioctl = registrar->file_ioctl;
     fst->file_stat = registrar->file_stat;
+    fst->file_event = registrar->file_event;
     fst->dir_open = registrar->dir_open;
     fst->dir_close = registrar->dir_close;
     fst->dir_read = registrar->dir_read;

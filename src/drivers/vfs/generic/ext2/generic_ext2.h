@@ -367,6 +367,12 @@ int ext2_compat_remove(int partno, const char* path) {
     return ext2_delete_file(partition, path);
 }
 int ext2_compat_chmod(int partno, const char* path, int mode) {(void)partno;(void)path;(void)mode;return VFS_ERROR;}
+int ext2_compat_file_event(int partno, int fd, int* event_result) {
+    (void)partno;
+    (void)fd;
+    (void)event_result;
+    return VFS_ERROR;
+}
 int64_t ext2_compat_ioctl(int partno, int fd, int request, void * args) {(void)partno;(void)fd;(void)request;(void)args;return VFS_ERROR;}
 
 struct vfs_compatible ext2_register = {
@@ -389,6 +395,7 @@ struct vfs_compatible ext2_register = {
     .file_tell = ext2_compat_file_tell,
     .file_stat = ext2_compat_stat,
     .file_ioctl = ext2_compat_ioctl,
+    .file_event = ext2_compat_file_event,
     .rename = ext2_compat_rename,
     .remove = ext2_compat_remove,
     .chmod = ext2_compat_chmod,

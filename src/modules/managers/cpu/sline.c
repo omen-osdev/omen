@@ -200,6 +200,19 @@ struct timespec * is_sleeping(thread_t * thread) {
     return node->rem;
 }
 
+void sleep_current(int condition) {
+    thread_t * current_thread = get_current_thread();
+    if (current_thread == NULL) {
+        panic("Current thread is NULL\n");
+    }
+    struct timespec * rem = is_sleeping(current_thread);
+    if (rem != NULL) {
+        kprintf("Thread %d is already sleeping\n", current_thread->id);
+        return;
+    }
+    __sleep(current_thread, condition, NULL, NULL);
+}
+
 void sleep(thread_t * thread, int condition) {
     __sleep(thread, condition, NULL, NULL);
 }

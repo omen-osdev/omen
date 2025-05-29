@@ -38,18 +38,37 @@ namespace mlibc{
     }
 
     uid_t sys_getuid() {
+        mlibc::infoLogger() << "mlibc: " << __func__ << " is a stub!" << frg::endlog;
         return 0;
     }
 
     uid_t sys_geteuid() {
+        mlibc::infoLogger() << "mlibc: " << __func__ << " is a stub!" << frg::endlog;
         return 0;
     }
 
     gid_t sys_getgid() {
+        mlibc::infoLogger() << "mlibc: " << __func__ << " is a stub!" << frg::endlog;
         return 0;
     }
 
     gid_t sys_getegid() {
+        mlibc::infoLogger() << "mlibc: " << __func__ << " is a stub!" << frg::endlog;
+        return 0;
+    }
+
+    int sys_setpgid(pid_t pid, pid_t pgid) {
+        (void)pid;
+        (void)pgid;
+        mlibc::infoLogger() << "mlibc: " << __func__ << " is a stub!" << frg::endlog;
+        return 0;
+    }
+
+    //getpgid
+    int sys_getpgid(pid_t pid, pid_t *pgid) {
+        //We always return 0 as pgid, since we don't support process groups.
+        mlibc::infoLogger() << "mlibc: " << __func__ << " is a stub!" << frg::endlog;
+        *pgid = 0;
         return 0;
     }
 

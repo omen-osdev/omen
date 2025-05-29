@@ -187,6 +187,23 @@ int vfs_file_creat(struct vfs_struct * cwd, char* path, int mode) {
     return res;
 }
 
+int vfs_file_event(int fd, int event_kind, int* event_result) {
+    vfs_print("vfs_file_event(%d, %d, %p)\n", fd, event_kind, event_result);
+    char * path = get_full_path_from_fd(fd);
+    if (path == 0) {
+        return VFS_ERROR;
+    }
+    char * native_path_buffer = kmalloc(strlen(path) + 1);
+    struct vfs_mount* mount = get_mount_from_path(path, native_path_buffer);
+    int res = VFS_ERROR;
+    if (mount != 0) {
+        res = mount->fst->file_event(mount->internal_index, event_kind, event_result);
+    }
+    kfree(native_path_buffer);
+    kfree(path);
+    return res;
+}
+
 char * vfs_read_symlink(struct vfs_struct * cwd, char * path) {
     vfs_print("vfs_read_symlink(%s)\n", path);
     if (cwd == 0 || path == 0) {

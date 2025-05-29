@@ -42,6 +42,10 @@ uint64_t vfs_tty_get_size(struct vfs_tty* tty) {
     return tty_get_size(tty->device);
 }
 
+uint64_t vfs_tty_has_input(struct vfs_tty* tty) {
+    return tty_has_input(tty->device);
+}
+
 
 uint8_t vfs_tty_read(struct vfs_tty * tty, uint8_t * destination_buffer, uint64_t size, uint64_t skip) {
     return tty_read(tty->device, destination_buffer, skip, size);

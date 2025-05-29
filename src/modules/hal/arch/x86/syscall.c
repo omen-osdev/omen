@@ -14,6 +14,7 @@
 #include <vfs/vfs_interface.h>
 #include <errno.h>
 #include <asm/prctl.h>
+#include <omen/libraries/std/select.h>
 /*
 
 
@@ -118,6 +119,131 @@ int64_t futex_wait_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 
 int64_t futex_wake_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     kprintf("[PID: %d | TID %d] FUTEX_WAKE()\n", thread->process->pid, thread->id);
+    return SYSCALL_SUCCESS;
+}
+
+int64_t pselect_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    int nfds = SYSCALL_ARG0(ctx);
+    fd_set * readfds = (fd_set *)SYSCALL_ARG1(ctx);
+    fd_set * writefds = (fd_set *)SYSCALL_ARG2(ctx);
+    fd_set * exceptfds = (fd_set *)SYSCALL_ARG3(ctx);
+    struct timespec * timeout = (struct timespec *)SYSCALL_ARG4(ctx);
+    int * num_events = (int *)SYSCALL_ARG5(ctx);
+    kprintf("[PID: %d | TID %d] PSELECT_SYSCALL(%d, %p, %p, %p, %p, %p)\n", 
+           thread->process->pid, thread->id, nfds, readfds, writefds, exceptfds, timeout, num_events);
+    
+    struct timespec current_time;
+    timespec_now(&current_time);
+
+    struct timespec end_time;
+    if (timeout) {
+        end_time.tv_sec = current_time.tv_sec + timeout->tv_sec;
+        end_time.tv_nsec = current_time.tv_nsec + timeout->tv_nsec;
+        if (end_time.tv_nsec >= 1000000000) {
+            end_time.tv_sec += 1;
+            end_time.tv_nsec -= 1000000000;
+        }
+    } else {
+        end_time = (struct timespec){ .tv_sec = 0, .tv_nsec = 0 };
+    }
+
+    uint8_t read_mask[128];
+    uint8_t write_mask[128];
+    uint8_t except_mask[128];
+
+    if(readfds != NULL){
+        memcpy(read_mask, readfds, sizeof(fd_set));
+        memset(readfds, 0, sizeof(fd_set));
+    }else{
+        memset(read_mask, 0, sizeof(fd_set));
+    }
+
+    if(writefds != NULL){
+        memcpy(write_mask, writefds, sizeof(fd_set));
+        memset(writefds, 0, sizeof(fd_set));
+    }else{
+        memset(write_mask, 0, sizeof(fd_set));
+    }
+
+    if(exceptfds != NULL){
+        memcpy(except_mask, exceptfds, sizeof(fd_set));
+        memset(exceptfds, 0, sizeof(fd_set));
+    }else{
+        memset(except_mask, 0, sizeof(fd_set));
+    }
+
+    int event_count = 0;
+    
+    do {
+        if (event_count > 0) {
+            // If we already have events, break out of the loop
+            break;
+        }
+
+        event_count = 0;
+
+        for(int i = 0; i < 128 && i * 8 < nfds; i++){
+            for(int j = 0; j < 8 && (i * 8 + j) < nfds; j++){
+                int fd = i * 8 + j;
+                int pfd = get_open_file(thread->process, fd);
+                if (pfd < 0) {
+                    kprintf("Invalid file descriptor %d\n", fd);
+                    continue;
+                }
+
+                int events = 0;
+                int revents = 0;
+
+                if((read_mask[i] >> j) & 0b1){
+                    events |= VFS_POLLIN;
+                }
+
+                if((write_mask[i] >> j) & 0b1){
+                    events |= VFS_POLLOUT;
+                }
+
+                if((except_mask[i] >> j) & 0b1){
+                    // TODO
+                }
+
+                int evs = vfs_file_event(pfd, events, &revents);
+                if (evs < 0) {
+                    kprintf("Error checking events for fd %d\n", fd);
+                    continue;
+                }
+
+                if (evs > 0) {
+                    event_count += evs;
+                }
+
+                if (revents & VFS_POLLIN) {
+                    if (readfds != NULL) {
+                        readfds->fds_bits[fd / 8] |= (1 << (fd % 8));
+                    }
+                }
+
+                if (revents & VFS_POLLOUT) {
+                    if (writefds != NULL) {
+                        writefds->fds_bits[fd / 8] |= (1 << (fd % 8));
+                    }
+                }
+            }
+        }
+
+        if (end_time.tv_sec != 0 || end_time.tv_nsec == 0) {
+            // Check if we reached the timeout
+            struct timespec now;
+            timespec_now(&now);
+            if (now.tv_sec > end_time.tv_sec || 
+                (now.tv_sec == end_time.tv_sec && now.tv_nsec >= end_time.tv_nsec)) {
+                kprintf("[PID: %d | TID %d] PSELECT_SYSCALL timed out\n", thread->process->pid, thread->id);
+                break;
+            }
+        }
+    } while (1);
+
+    *num_events = event_count;
+
     return SYSCALL_SUCCESS;
 }
 
@@ -571,6 +697,8 @@ int64_t clock_gettime_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     if (ts != NULL) {
         timespec_now(ts);
     }
+
+    return SYSCALL_SUCCESS;
 }
 
 int64_t clock_settime_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
@@ -604,6 +732,12 @@ int64_t gettimeofday_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     if (tv != NULL) {
         timeval_now(tv);
     }
+    return SYSCALL_SUCCESS;
+}
+
+int64_t fcntl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    (void)ctx;
+    kprintf("[PID: %d | TID %d] FCNTL NOT IMPLEMENTED!!!\n", thread->process->pid, thread->id);
     return SYSCALL_SUCCESS;
 }
 
@@ -726,7 +860,7 @@ int64_t exit_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 
 int64_t get_tid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
-    kprintf("[PID: %d | TID %d] GET_TID_SYSCALL()\n", thread->process->pid, thread->id);
+    //kprintf("[PID: %d | TID %d] GET_TID_SYSCALL()\n", thread->process->pid, thread->id);
     return thread->id;
 }
 
@@ -865,7 +999,7 @@ int64_t mmap_syscall_handler(thread_t*thread, cpu_context_t*ctx) {
         int newfd = -1;
         if (flags & MAP_ANONYMOUS) {
             create_vmarea(thread->process, addr, (addr + length), vmm_flags, vma_flags, PAGE_SIZE_4KIB, newfd, 0);
-            kprintf("MMAP <anon> Giving range: %p-%p, length: %d, prot: %d, flags: %d, fd: %d, offset: %d\n", addr, (void*)(((uint64_t)addr)+length), length, prot, flags, newfd, offset);
+            //kprintf("MMAP <anon> Giving range: %p-%p, length: %d, prot: %d, flags: %d, fd: %d, offset: %d\n", addr, (void*)(((uint64_t)addr)+length), length, prot, flags, newfd, offset);
             return addr;
         } else {
             newfd = vfs_file_dup(pfd, -1);
@@ -896,7 +1030,7 @@ int64_t mmap_syscall_handler(thread_t*thread, cpu_context_t*ctx) {
         //Reset permissions but keep readonly so it page faults on a write
         uint8_t roflags = vmm_flags & ~VMM_WRITE_BIT;   
         mprotect(thread->process->vmm, addr, length, roflags);
-        kprintf("MMAP Giving range: %p-%p, length: %d, prot: %d, flags: %d, fd: %d, offset: %d\n", addr, (void*)(((uint64_t)addr)+length), length, prot, flags, newfd, offset);
+        //kprintf("MMAP Giving range: %p-%p, length: %d, prot: %d, flags: %d, fd: %d, offset: %d\n", addr, (void*)(((uint64_t)addr)+length), length, prot, flags, newfd, offset);
         return addr;
     }
 
@@ -1118,7 +1252,9 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [60] = exit_syscall_handler,
     [61] = waitpid_syscall_handler,
     [62] = kill_syscall_handler,
-    [63 ... 78] = undefined_syscall_handler,
+    [63 ... 71] = undefined_syscall_handler,
+    [72] = fcntl_syscall_handler,
+    [73 ... 78] = undefined_syscall_handler,
     [79] = getcwd_syscall_handler,
     [80] = chdir_syscall_handler,
     [81] = undefined_syscall_handler,
@@ -1146,7 +1282,9 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [230 ... 262] = undefined_syscall_handler,
     [263] = unlinkat_syscall_handler,
     [264] = renameat_syscall_handler,
-    [265 ... 335] = undefined_syscall_handler,
+    [265 ... 269] = undefined_syscall_handler,
+    [270] = pselect_syscall_handler,
+    [271 ... 335] = undefined_syscall_handler,
     [336] = thread_exit_syscall_handler,
     [337] = log_syscall_handler,
     [338] = futex_wait_syscall_handler,
@@ -1159,26 +1297,33 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
 void global_syscall_handler(cpu_context_t* ctx) {
 
     thread_t * current_thread = get_current_thread();
+    thread_t * entry_thread = current_thread;
     current_thread->syscall_ready = 1;
 
-    if (ctx->rax != 186 && ctx->rax != 337 && (ctx->rax != 1 || SYSCALL_ARG2(ctx) != 1))
-        kprintf("[PID: %d | TID %d] SYSCALL(%d)\n", current_thread->process->pid, current_thread->id, ctx->rax);    
+    //if (ctx->rax != 186 && ctx->rax != 337 && (ctx->rax != 1 || SYSCALL_ARG2(ctx) != 1))
+    //    kprintf("[PID: %d | TID %d] SYSCALL(%d)\n", current_thread->process->pid, current_thread->id, ctx->rax);    
     memcpy(current_thread->context->cpu_context, ctx, sizeof(cpu_context_t));
     memcpy(current_thread->context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
 
     arch_simd_save_context(current_thread->context->fxsave_region);
 
-    int64_t result = SYSCALL_SUCCESS;
+    current_thread->last_syscall_result = SYSCALL_SUCCESS;
     if (ctx->rax < SYSCALL_HANDLER_COUNT) {
-        result = syscall_handlers[ctx->rax](current_thread, ctx);
+        current_thread->last_syscall_result = syscall_handlers[ctx->rax](current_thread, ctx);
     } else {
         kprintf("Syscall number overflow %d\n", ctx->rax);
-        result = SYSCALL_ERROR;
+        current_thread->last_syscall_result = SYSCALL_ERROR;
     }
 
     current_thread = get_current_thread();
-    if (ctx->rax != 186 && ctx->rax != 337 && (ctx->rax != 1 || SYSCALL_ARG2(ctx) != 1))
-        kprintf("[PID: %d | TID %d] SYSCALL(%d) RETURNED %d\n", current_thread->process->pid, current_thread->id, ctx->rax, result);
+    if (current_thread->process != entry_thread->process) {
+        kprintf("Process changed during syscall!\n");
+        //kprintf("[PID: %d | TID: %d] SYSCALL(%d) RETURNING %d\n", current_thread->process->pid, current_thread->id, ctx->rax, current_thread->last_syscall_result);
+    } else {
+    //if (ctx->rax != 186 && ctx->rax != 337 && (ctx->rax != 1 || SYSCALL_ARG2(ctx) != 1)) {
+    //    //kprintf("[PID: %d | TID: %d] SYSCALL(%d) RETURNING %d\n", entry_thread->process->pid, entry_thread->id, ctx->rax, entry_thread->last_syscall_result);
+    }
+
     arch_simd_restore_context(current_thread->context->fxsave_region);
     memcpy(ctx, current_thread->context->cpu_context, sizeof(cpu_context_t));
     memcpy(ctx->info, current_thread->context->cpu_context->info, sizeof(struct cpu_context_info));
@@ -1209,7 +1354,7 @@ void global_syscall_handler(cpu_context_t* ctx) {
             create_signal_context(current_thread, signo, sigact, ctx);
         }
 
-        SYSRET(ctx, result);
+        SYSRET(ctx, current_thread->last_syscall_result);
     } else {
     __asm__("mov %0, %%rsp\n"
             "mov %1, %%cr3\n"

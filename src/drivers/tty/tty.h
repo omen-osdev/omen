@@ -75,6 +75,7 @@ void _tty_set_termios(struct tty* tty, struct termios* termios);
 struct termios* _tty_get_termios(struct tty* tty);
 
 int _tty_get_size(struct tty* tty);
+int _tty_has_input(struct tty* tty);
 void _tty_add_subscriber(struct tty* tty, void (*handler)(void*, uint8_t));
 void _tty_remove_subscriber(struct tty* tty, void (*handler)(void*, uint8_t));
 void _tty_read(struct tty* tty, char* buffer, int size);

@@ -75,6 +75,10 @@ uint64_t tty_get_size(const char* device) {
     return device_ioctl(device, TTY_GET_SIZE, 0);
 }
 
+uint64_t tty_has_input(const char* device) {
+    return device_ioctl(device, TTY_HAS_INPUT, 0);
+}
+
 uint64_t tty_validate(const char* device) {
     return device_ioctl(device, TTY_VALIDATE, 0);
 }

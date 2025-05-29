@@ -16,6 +16,10 @@
 
 #define VFS_MAX_DEVICES 512
 
+#define VFS_POLLIN 0x1
+#define VFS_POLLOUT 0x2
+#define VFS_POLLEXCEPT 0x4
+
 #define VFS_ERROR (-1)
 
 #define PAR_STATUS			0
@@ -44,6 +48,7 @@ struct vfs_file_system_type {
     int64_t (*file_ioctl)(int, int, int, void*);
     int64_t (*file_tell)(int, int);
     int (*file_stat)(int, int, stat_t*);
+    int (*file_event)(int, int, int*);
 
     int (*dir_read)(int, int, char*, uint32_t *, uint32_t *);
     int (*dir_open)(int, const char*);

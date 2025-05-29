@@ -181,6 +181,7 @@ int fifo_compat_dir_creat(int partno, const char* path, int mode) {(void)partno;
 int fifo_compat_dir_read(int partno, int fd, char* name, uint32_t * name_len, uint32_t * type) {(void)partno; (void)fd; (void)name_len; (void)type; return VFS_ERROR;}
 int fifo_compat_dir_load(int partno, int fd) {(void)partno; (void)fd; return VFS_ERROR;}
 int fifo_compat_stat(int partno, int fd, stat_t* st) {(void)partno; (void)fd; (void)st; return VFS_ERROR;}
+int fifo_compat_file_event(int partno, int fd, int* event_result) {(void)partno; (void)fd; (void)event_result; return VFS_ERROR;}
 int fifo_compat_rename(int partno, const char* path, const char* newpath) {(void)partno; (void)path; (void)newpath; return VFS_ERROR;}
 int fifo_compat_prepare_remove(int partno, const char* path) {(void)partno; (void)path; return VFS_ERROR;}
 int fifo_compat_remove(int partno, const char* path) {(void)partno; (void)path; return VFS_ERROR;}
@@ -207,6 +208,7 @@ struct vfs_compatible fifo_register = {
     .file_seek = fifo_compat_file_seek,
     .file_tell = fifo_compat_file_tell,
     .file_stat = fifo_compat_stat,
+    .file_event = fifo_compat_file_event,
     .file_ioctl = fifo_compat_file_ioctl,
     .rename = fifo_compat_rename,
     .remove = fifo_compat_remove,

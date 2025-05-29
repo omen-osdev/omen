@@ -205,12 +205,6 @@ namespace mlibc{
         return 0;
     }
 
-    int sys_fcntl(int fd, int request, va_list args, int *result_value){
-        // TODO
-        __ensure(!"Not implemented");
-        return 0;
-    }
-
     int sys_getcwd(char* buffer, size_t size){
         auto result = do_syscall(SYS_GETCWD, buffer, size);
 
@@ -218,6 +212,54 @@ namespace mlibc{
             return -result;
         }
 
+        return 0;
+    }
+
+    int sys_dup(int fd, int flags, int *newfd) {
+        // TODO
+        auto result = do_syscall(SYS_DUP, fd, flags);
+
+        if(result < 0){
+            return -result;
+        }
+
+        *newfd = result;
+        return 0;
+    }
+    
+    int sys_dup2(int fd, int flags, int newfd) {
+        // TODO
+        auto result = do_syscall(SYS_DUP2, fd, newfd, flags);
+
+        if(result < 0){
+            return -result;
+        }
+
+        return 0;
+    }
+
+    int sys_pselect(int nfds, fd_set* readfds, fd_set* writefds, fd_set *exceptfds, const struct timespec* timeout, const sigset_t* sigmask, int *num_events) {
+        (void)sigmask; // sigmask is not used in this implementation
+        auto result = do_syscall(SYS_PSELECT, nfds, readfds, writefds, exceptfds, timeout, num_events);
+
+        if(result < 0){
+            return -result;
+        }
+        
+        return 0;
+    }
+
+    int sys_fcntl(int fd, int request, va_list args, int* ptr_result){
+        auto result = do_syscall(SYS_FCNTL, fd, request, va_arg(args, uint64_t));
+
+        if(result < 0){
+            return -result;
+        }
+
+        if(ptr_result != NULL){
+            *ptr_result = result;
+        }
+        
         return 0;
     }
 

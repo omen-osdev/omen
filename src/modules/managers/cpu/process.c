@@ -545,11 +545,11 @@ void open_stdfiles(process_t *task, char * tty) {
     if (stdin < 0) {
         panic("Failed to open stdin\n");
     }
-    stdout = vfs_file_open(task->fs,tty, O_WRONLY, 0);
+    stdout = vfs_file_open(task->fs, tty, O_WRONLY, 0x0);
     if (stdout < 0) {
         panic("Failed to open stdout\n");
     }
-    stderr = vfs_file_open(task->fs,tty, O_WRONLY, 0);
+    stderr = vfs_file_open(task->fs, tty, O_WRONLY, 0x0);
     if (stderr < 0) {
         panic("Failed to open stderr\n");
     }

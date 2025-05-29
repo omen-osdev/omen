@@ -9,7 +9,6 @@ using sc_word_t = long;
 
 /* list */
 #define SYS_COUNT               32
-
 #define SYS_FILE_READ           0
 #define SYS_FILE_WRITE          1
 #define SYS_FILE_OPEN           2
@@ -25,6 +24,8 @@ using sc_word_t = long;
 #define SYS_SIGRETURN           15
 #define SYS_FILE_IOCTL          16
 #define SYS_FILE_PREAD          17
+#define SYS_DUP                 32
+#define SYS_DUP2                33
 #define SYS_NANOSLEEP           35
 #define SYS_GETPID              39
 #define SYS_FORK                57
@@ -32,6 +33,7 @@ using sc_word_t = long;
 #define SYS_EXIT                60
 #define SYS_WAITPID             61
 #define SYS_KILL                62
+#define SYS_FCNTL               72
 #define SYS_GETCWD              79
 #define SYS_CHDIR               80
 #define SYS_RENAME              82
@@ -45,6 +47,7 @@ using sc_word_t = long;
 #define SYS_CLOCK_GETRES        229
 #define SYS_UNLINKAT            263
 #define SYS_RENAMEAT            264
+#define SYS_PSELECT             270
 #define SYS_THREAD_EXIT         336
 #define SYS_LOG                 337
 #define SYS_FUTEX_WAIT          338

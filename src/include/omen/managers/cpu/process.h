@@ -94,6 +94,7 @@ typedef struct thread {
     void * kstack_base;
     uint64_t kstack_size;
     uint64_t kstack_guard_size;
+    uint64_t last_syscall_result;
 
     void * altstack;
     void * altstack_base;

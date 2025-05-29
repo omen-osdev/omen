@@ -7,6 +7,7 @@
 #include <omen/apps/panic/panic.h>
 #include <omen/libraries/std/termios.h>
 #include <omen/managers/dev/devices.h>
+#include <omen/managers/cpu/sline.h>
 #include <omen/libraries/allocators/heap_allocator.h>
 
 //TODO: This dependencies are awful
@@ -173,6 +174,7 @@ void tty_read_cb(void* ttyb, char c, int port) {
     struct tty* tty = (struct tty*)ttyb;
     if (!is_valid_tty(tty)) return;
     line_discipline_read(tty->line_discipline[tty->termios.c_line], c);
+    wakeup(TTY_IO_SLINE);
 }
 
 //TODO: Maybe it is best for the line discipline to send itself and contain a field with the tty! idk...
@@ -374,6 +376,11 @@ int is_valid_tty(struct tty* tty) {
 int _tty_get_size(struct tty* tty) {
     if (tty == 0 || !tty->valid) return 0;
     return tty->inb_write - tty->inb_read;
+}
+
+int _tty_has_input(struct tty* tty) {
+    if (tty == 0 || !tty->valid) return 0;
+    return tty->inb_write != tty->inb_read;
 }
 
 void _tty_modes(struct tty* tty, int mode, int value) {
