@@ -17,6 +17,7 @@
 #include <omen/apps/debug/debug.h>
 #include <omen/managers/cpu/vmarea.h>
 #include <omen/managers/cpu/sline.h>
+#include <omen/managers/cpu/context.h>
 
 #include <vfs/vfs.h>
 #include <vfs/vfs_interface.h>
@@ -249,16 +250,21 @@ void init_stacks(thread_t * thread, uint64_t size, uint64_t entry) {
     create_vmarea(task, thread->kstack_base-thread->kstack_guard_size, thread->kstack_base, VMM_USER_BIT, VMAREA_EXT_STACK_GUARD, PAGE_SIZE_4KIB, -1, 0);
     if (get_pml4() != task->vmm) {
         void * stack_physical = get_physical_address(task->vmm, thread->ustack_base);
+        void * kstack_physical = get_physical_address(task->vmm, thread->kstack_base);
         map_range(get_pml4(), thread->ustack_base, (uint64_t)stack_physical, PAGE_SIZE_4KIB, thread->ustack_size, VMM_WRITE_BIT);
+        map_range(get_pml4(), thread->kstack_base, (uint64_t)kstack_physical, PAGE_SIZE_4KIB, thread->kstack_size, VMM_WRITE_BIT);
     }
     
     thread->ustack = create_args_env_aux(thread->ustack, thread->ustack_size, task->argv, task->envp, task->auxv);
     kprintf("Thread %d created stack at %p with size %llu\n", thread->id, thread->ustack, thread->ustack_size);
     newuctxcreat((uint64_t)&(thread->ustack), (uint64_t)entry);
+    newctxcreat((uint64_t)&(thread->kstack), (uint64_t)emulate_syscall_return);
     kprintf("Thread %d created uctx at %p\n", thread->id, &(thread->ustack));
 
-    if (get_pml4() != task->vmm)
+    if (get_pml4() != task->vmm) {
         unmap_range(get_pml4(), thread->ustack_base, thread->ustack_size);
+        unmap_range(get_pml4(), thread->kstack_base, thread->kstack_size);
+    }
 }
 
 context_t * create_context(void * cr3, void * ustack, void * kstack, void * init) {
@@ -333,14 +339,14 @@ void restore_signal_context(thread_t * thread, cpu_context_t * ctx) {
     vdso_set_data(thread->process->vdso, VDSO_ENTRY_SIGNAL_SIGCTXT, NULL, 0);
     vdso_set_data(thread->process->vdso, VDSO_ENTRY_SIGNAL_SIGACTION, NULL, 0);
 
-    thread->context = kmalloc(sizeof(context_t));
-    memcpy(thread->context, thread->signal_context, sizeof(context_t));
-    thread->context->fxsave_region = kmalloc(512);
-    memcpy(thread->context->fxsave_region, thread->signal_context->fxsave_region, 512);
-    thread->context->cpu_context = kmalloc(sizeof(cpu_context_t));
-    memcpy(thread->context->cpu_context, thread->signal_context->cpu_context, sizeof(cpu_context_t));
-    thread->context->cpu_context->info = kmalloc(sizeof(struct cpu_context_info));
-    memcpy(thread->context->cpu_context->info, thread->signal_context->cpu_context->info, sizeof(struct cpu_context_info));
+    thread->user_context = kmalloc(sizeof(context_t));
+    memcpy(thread->user_context, thread->signal_context, sizeof(context_t));
+    thread->user_context->fxsave_region = kmalloc(512);
+    memcpy(thread->user_context->fxsave_region, thread->signal_context->fxsave_region, 512);
+    thread->user_context->cpu_context = kmalloc(sizeof(cpu_context_t));
+    memcpy(thread->user_context->cpu_context, thread->signal_context->cpu_context, sizeof(cpu_context_t));
+    thread->user_context->cpu_context->info = kmalloc(sizeof(struct cpu_context_info));
+    memcpy(thread->user_context->cpu_context->info, thread->signal_context->cpu_context->info, sizeof(struct cpu_context_info));
 
     kfree(thread->signal_context->cpu_context->info);
     kfree(thread->signal_context->cpu_context);
@@ -423,13 +429,13 @@ void create_signal_context(thread_t * thread, int signo, struct sigaction * siga
     }
 
     thread->signal_context = kmalloc(sizeof(context_t));
-    memcpy(thread->signal_context, thread->context, sizeof(context_t));
+    memcpy(thread->signal_context, thread->user_context, sizeof(context_t));
     thread->signal_context->fxsave_region = kmalloc(512);
-    memcpy(thread->signal_context->fxsave_region, thread->context->fxsave_region, 512);
+    memcpy(thread->signal_context->fxsave_region, thread->user_context->fxsave_region, 512);
     thread->signal_context->cpu_context = kmalloc(sizeof(cpu_context_t));
-    memcpy(thread->signal_context->cpu_context, thread->context->cpu_context, sizeof(cpu_context_t));
+    memcpy(thread->signal_context->cpu_context, thread->user_context->cpu_context, sizeof(cpu_context_t));
     thread->signal_context->cpu_context->info = kmalloc(sizeof(struct cpu_context_info));
-    memcpy(thread->signal_context->cpu_context->info, thread->context->cpu_context->info, sizeof(struct cpu_context_info));
+    memcpy(thread->signal_context->cpu_context->info, thread->user_context->cpu_context->info, sizeof(struct cpu_context_info));
 
     uint64_t size = PROCESS_STACK_SIZE;
     if (thread->altstack == 0) {
@@ -485,6 +491,10 @@ void create_signal_context(thread_t * thread, int signo, struct sigaction * siga
     ctx->rsp = (uint64_t)thread->ustack;
 }
 
+uint8_t kcontext_ready(thread_t * thread) {
+    return thread->kernel_context->cpu_context->rip != (uint64_t)emulate_syscall_return;
+}
+
 void init_thread(process_t * task, void * init) {
     if (task->thread_count >= MAX_THREADS) {
         panic("Too many threads\n");
@@ -495,7 +505,8 @@ void init_thread(process_t * task, void * init) {
 
     thread->process = task;
     init_stacks(thread, PROCESS_STACK_SIZE, init);
-    thread->context = create_context(from_identity_map(task->vmm), thread->ustack, thread->kstack, init);
+    thread->user_context = create_context(from_identity_map(task->vmm), thread->ustack, thread->kstack, init);
+    thread->kernel_context = create_context(from_identity_map(task->vmm), thread->kstack, thread->kstack, (void*)emulate_syscall_return);
     thread->entry = init;
     thread->id = task->thread_count - 1;
     thread->core_id = arch_get_bsp_cpu()->core_id;
@@ -627,25 +638,39 @@ process_t * duplicate_process(thread_t * parent_thread) {
     thread_t * main_thread = &(task->threads[0]);
 
     main_thread->process = task;
-    main_thread->context = kmalloc(sizeof(context_t));
-    memcpy(main_thread->context, parent_thread->context, sizeof(context_t));
-    main_thread->context->fxsave_region = kmalloc(512);
-    memcpy(main_thread->context->fxsave_region, parent_thread->context->fxsave_region, 512);
-    main_thread->context->cpu_context = kmalloc(sizeof(cpu_context_t));
-    memcpy(main_thread->context->cpu_context, parent_thread->context->cpu_context, sizeof(cpu_context_t));
-    main_thread->context->cpu_context->info = kmalloc(sizeof(struct cpu_context_info));
-    memcpy(main_thread->context->cpu_context->info, parent_thread->context->cpu_context->info, sizeof(struct cpu_context_info));
+    main_thread->user_context = kmalloc(sizeof(context_t));
+    memcpy(main_thread->user_context, parent_thread->user_context, sizeof(context_t));
+    main_thread->user_context->fxsave_region = kmalloc(512);
+    memcpy(main_thread->user_context->fxsave_region, parent_thread->user_context->fxsave_region, 512);
+    main_thread->user_context->cpu_context = kmalloc(sizeof(cpu_context_t));
+    memcpy(main_thread->user_context->cpu_context, parent_thread->user_context->cpu_context, sizeof(cpu_context_t));
+    main_thread->user_context->cpu_context->info = kmalloc(sizeof(struct cpu_context_info));
+    memcpy(main_thread->user_context->cpu_context->info, parent_thread->user_context->cpu_context->info, sizeof(struct cpu_context_info));
+
+    main_thread->kernel_context = kmalloc(sizeof(context_t));
+    memcpy(main_thread->kernel_context, parent_thread->kernel_context, sizeof(context_t));
+    main_thread->kernel_context->fxsave_region = kmalloc(512);
+    memcpy(main_thread->kernel_context->fxsave_region, parent_thread->kernel_context->fxsave_region, 512);
+    main_thread->kernel_context->cpu_context = kmalloc(sizeof(cpu_context_t));
+    memcpy(main_thread->kernel_context->cpu_context, parent_thread->kernel_context->cpu_context, sizeof(cpu_context_t));
+    main_thread->kernel_context->cpu_context->info = kmalloc(sizeof(struct cpu_context_info));
+    memcpy(main_thread->kernel_context->cpu_context->info, parent_thread->kernel_context->cpu_context->info, sizeof(struct cpu_context_info));
 
     duplicate_vmareas(parent, task, VMAREA_CLONE_WITH_COW);
     memcpy(task->open_files, parent->open_files, sizeof(int)*MAX_OPEN_FILES);
     task->open_files_count = parent->open_files_count;
-    memcpy(main_thread->context->fxsave_region, parent_thread->context->fxsave_region, 512);
+    memcpy(main_thread->user_context->fxsave_region, parent_thread->user_context->fxsave_region, 512);
+    memcpy(main_thread->kernel_context->fxsave_region, parent_thread->kernel_context->fxsave_region, 512);
 
-    main_thread->context->fs_base = parent_thread->context->fs_base;
-    main_thread->context->gs_base = parent_thread->context->gs_base;
+    main_thread->user_context->fs_base = parent_thread->user_context->fs_base;
+    main_thread->user_context->gs_base = parent_thread->user_context->gs_base;
+
+    main_thread->kernel_context->fs_base = parent_thread->kernel_context->fs_base;
+    main_thread->kernel_context->gs_base = parent_thread->kernel_context->gs_base;
 
     task->vmm = vmm_copy(parent->vmm);
-    main_thread->context->cpu_context->cr3 = from_identity_map(task->vmm);
+    main_thread->user_context->cpu_context->cr3 = from_identity_map(task->vmm);
+    main_thread->kernel_context->cpu_context->cr3 = from_identity_map(task->vmm);
     vmm_copy_stack(task->vmm, parent_thread->ustack_base, parent_thread->ustack_size, VMM_USER_BIT | VMM_WRITE_BIT);
     vmm_copy_stack(task->vmm, parent_thread->kstack_base, parent_thread->kstack_size, VMM_WRITE_BIT);
     vmm_copy_stack(task->vmm, parent_thread->altstack_base, parent_thread->altstack_size, VMM_USER_BIT | VMM_WRITE_BIT);
@@ -986,7 +1011,7 @@ process_t * sched() {
     for (int i = 0; i < PROCESS_PRIORITIES; i++) {
         for (int j = 0; j < prio_list_size[i]; j++) {
             if (sched_thread(processes[i][j])) {
-                kprintf("Chosen candidate [PID:%d|LS:%llu|NICE:%d|CNICE:%d]\n", processes[i][j]->pid, processes[i][j]->last_scheduled, processes[i][j]->nice, processes[i][j]->current_nice);
+                //kprintf("Chosen candidate [PID:%d|LS:%llu|NICE:%d|CNICE:%d]\n", processes[i][j]->pid, processes[i][j]->last_scheduled, processes[i][j]->nice, processes[i][j]->current_nice);
                 task = processes[i][j];
                 goto found;
             }
@@ -1051,7 +1076,7 @@ int16_t fork(thread_t * ct) {
     process_t * child = duplicate_process(ct);
     thread_t * main_thread = &(child->threads[0]);
     main_thread->status = THREAD_STATUS_READY;
-    main_thread->context->cpu_context->rax = 0;
+    main_thread->user_context->cpu_context->rax = 0;
     return child->pid;
 }
 
@@ -1185,10 +1210,10 @@ void init_process(const char * _init_path, const char * _idle_path, char * tty) 
 #endif
 
     //disable_debugger();
-    arch_simd_restore_context(main_thread->context->fxsave_region);
+    arch_simd_restore_context(main_thread->user_context->fxsave_region);
     __asm__("mov %0, %%rsp\n"
             "mov %1, %%cr3\n"
-            "ret\n" : : "r" (main_thread->ustack), "r" (main_thread->context->cpu_context->cr3));
+            "ret\n" : : "r" (main_thread->ustack), "r" (main_thread->user_context->cpu_context->cr3));
     panic("Returned from init process\n");
 }
 

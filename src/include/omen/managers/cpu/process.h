@@ -84,7 +84,8 @@ typedef struct context {
 
 typedef struct thread {
     process_t *process;
-    context_t *context;
+    context_t *user_context;
+    context_t *kernel_context;
 
     void * ustack;
     void * ustack_base;
@@ -175,6 +176,7 @@ void returnoexit();
 void lock_scheduler(void);
 void unlock_scheduler(void);
 
+uint8_t kcontext_ready(thread_t * thread);
 void init_process(const char * init_path, const char * idle_path, char * tty);
 void chroot(process_t * task, const char * path);
 char * getcwd(process_t * task);

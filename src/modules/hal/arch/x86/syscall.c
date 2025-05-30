@@ -761,7 +761,7 @@ int64_t waitpid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     int result = waitpid(thread, pid, status, options);
     if (result == -2) {
         sched();
-        return get_current_thread()->context->cpu_context->rax;
+        return get_current_thread()->user_context->cpu_context->rax;
     } else {
         return result;
     }
@@ -813,7 +813,7 @@ int64_t arch_prctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
         case ARCH_GET_CPUID:
             return -ENODEV;
         case ARCH_SET_FS:
-            thread->context->fs_base = (uint64_t)arg2;
+            thread->user_context->fs_base = (uint64_t)arg2;
             break;
         case ARCH_GET_FS: {
             unsigned long * fs_base = (unsigned long *)(unsigned long)arg2;
@@ -821,12 +821,12 @@ int64_t arch_prctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
                 return -EINVAL;
             }
 
-            *fs_base = (unsigned long)thread->context->fs_base;
-            setFsBase(thread->context->fs_base);
+            *fs_base = (unsigned long)thread->user_context->fs_base;
+            setFsBase(thread->user_context->fs_base);
             break;
         }
         case ARCH_SET_GS:
-        thread->context->gs_base = (uint64_t)arg2;
+        thread->user_context->gs_base = (uint64_t)arg2;
             break;
         case ARCH_GET_GS: {
             unsigned long * gs_base = (unsigned long *)(unsigned long)arg2;
@@ -834,7 +834,7 @@ int64_t arch_prctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
                 return -EINVAL;
             }
 
-            *gs_base = (unsigned long)thread->context->gs_base;
+            *gs_base = (unsigned long)thread->user_context->gs_base;
             break;
         }
         default:
@@ -1157,14 +1157,13 @@ int64_t msync_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 int64_t nanosleep_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     struct timespec *duration = SYSCALL_ARG0(ctx);
     struct timespec *rem = SYSCALL_ARG1(ctx);
-    kprintf("[PID: %d | TID %d] NANOSLEEP_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, duration, rem);
+    //kprintf("[PID: %d | TID %d] NANOSLEEP_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, duration, rem);
     if (duration == NULL) {
         kprintf("Invalid duration\n");
         return SYSCALL_ERROR;
     }
 
     nanosleep(thread, duration, rem);
-    sched();
 }
 
 int64_t dup_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
@@ -1302,10 +1301,10 @@ void global_syscall_handler(cpu_context_t* ctx) {
 
     //if (ctx->rax != 186 && ctx->rax != 337 && (ctx->rax != 1 || SYSCALL_ARG2(ctx) != 1))
     //    kprintf("[PID: %d | TID %d] SYSCALL(%d)\n", current_thread->process->pid, current_thread->id, ctx->rax);    
-    memcpy(current_thread->context->cpu_context, ctx, sizeof(cpu_context_t));
-    memcpy(current_thread->context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
+    memcpy(current_thread->user_context->cpu_context, ctx, sizeof(cpu_context_t));
+    memcpy(current_thread->user_context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
 
-    arch_simd_save_context(current_thread->context->fxsave_region);
+    arch_simd_save_context(current_thread->user_context->fxsave_region);
 
     current_thread->last_syscall_result = SYSCALL_SUCCESS;
     if (ctx->rax < SYSCALL_HANDLER_COUNT) {
@@ -1315,7 +1314,7 @@ void global_syscall_handler(cpu_context_t* ctx) {
         current_thread->last_syscall_result = SYSCALL_ERROR;
     }
 
-    current_thread = get_current_thread();
+        current_thread = get_current_thread();
     if (current_thread->process != entry_thread->process) {
         kprintf("Process changed during syscall!\n");
         //kprintf("[PID: %d | TID: %d] SYSCALL(%d) RETURNING %d\n", current_thread->process->pid, current_thread->id, ctx->rax, current_thread->last_syscall_result);
@@ -1323,15 +1322,15 @@ void global_syscall_handler(cpu_context_t* ctx) {
     //if (ctx->rax != 186 && ctx->rax != 337 && (ctx->rax != 1 || SYSCALL_ARG2(ctx) != 1)) {
     //    //kprintf("[PID: %d | TID: %d] SYSCALL(%d) RETURNING %d\n", entry_thread->process->pid, entry_thread->id, ctx->rax, entry_thread->last_syscall_result);
     }
-
-    arch_simd_restore_context(current_thread->context->fxsave_region);
-    memcpy(ctx, current_thread->context->cpu_context, sizeof(cpu_context_t));
-    memcpy(ctx->info, current_thread->context->cpu_context->info, sizeof(struct cpu_context_info));
+    
+    arch_simd_restore_context(current_thread->user_context->fxsave_region);
+    memcpy(ctx, current_thread->user_context->cpu_context, sizeof(cpu_context_t));
+    memcpy(ctx->info, current_thread->user_context->cpu_context->info, sizeof(struct cpu_context_info));
 
     struct tss * tss = arch_get_cpu(current_thread->core_id)->tss;
     tss_set_stack(tss, ctx->info->kstack, 0);
     tss_set_stack(tss, ctx->rsp, 3);
-    setFsBase(current_thread->context->fs_base);
+    setFsBase(current_thread->user_context->fs_base);
 
     if (current_thread->syscall_ready) {
 
@@ -1358,6 +1357,6 @@ void global_syscall_handler(cpu_context_t* ctx) {
     } else {
     __asm__("mov %0, %%rsp\n"
             "mov %1, %%cr3\n"
-            "ret\n" : : "r" (current_thread->ustack), "r" (current_thread->context->cpu_context->cr3));
+            "ret\n" : : "r" (current_thread->ustack), "r" (current_thread->user_context->cpu_context->cr3));
     }
 }

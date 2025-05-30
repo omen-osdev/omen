@@ -5,6 +5,7 @@
 #include <omen/libraries/allocators/heap_allocator.h>
 #include <omen/apps/debug/debug.h>
 #include <omen/libraries/std/string.h>
+#include <omen/managers/cpu/context.h>
 
 struct snode {
     thread_t * thread;
@@ -168,12 +169,15 @@ void __sleep(thread_t * thread, int condition, struct timespec * rem, struct tim
         node->next = queue->head;
         queue->head = node;
     }
+
+    __asm__("int $0x79");
 }
 
 void wakeup(int condition) {
     struct squeue * queue = find_squeue(condition);
     if (queue == NULL) {
-        panic("No squeue found\n");
+        //kprintf("Warning: No threads to wake up for condition %d as queue is null\n", condition);
+        return;
     }
     struct snode * current = queue->head;
     while (current != NULL) {
@@ -181,6 +185,8 @@ void wakeup(int condition) {
         current = current->next;
     }
     destroy_squeue(queue);
+
+    __asm__("int $0x79");
 }
 
 void __wakeup_alarm(int condition, uint64_t ticks, int64_t rearm_ticks) {

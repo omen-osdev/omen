@@ -77,7 +77,6 @@ int64_t tty_compat_file_read(int devno, int fd, void* buffer, uint64_t size) {
                 sleep_current(TTY_IO_SLINE);
 //¿CAMBIO DE CONTEXTO EN KSPACE? 30/05/25
             read += res;
-
         }
         return read;
     }

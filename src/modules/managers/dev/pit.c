@@ -96,7 +96,7 @@ int add_alarm(int64_t ticks, int rearm, void (*callback)(int, uint64_t, int64_t)
     alarm->next = pit.alarms;
     pit.alarms = alarm;
 
-    kprintf("Alarm %d added with %ld ticks\n", alarm->alarm_id, ticks);
+    //kprintf("Alarm %d added with %ld ticks\n", alarm->alarm_id, ticks);
 
     return alarm->alarm_id;
 }

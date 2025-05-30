@@ -8,6 +8,7 @@
 #include <omen/apps/panic/panic.h>
 #include <omen/managers/mem/vmm.h>
 #include <omen/managers/cpu/process.h>
+#include <omen/managers/cpu/context.h>
 #include <omen/managers/cpu/vmarea.h>
 #include <omen/managers/dev/pit.h>
 #include <omen/libraries/std/string.h>
@@ -54,7 +55,7 @@ void PageFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {
     kprintf("Error code: %lx\n", ctx->error_code);
     thread_t * thread = get_current_thread();
     if (!thread) panic("Page fault, no task detected!\n");
-    thread->context->cpu_context->cr3 = to_identity_map(ctx->cr3);
+    thread->user_context->cpu_context->cr3 = to_identity_map(ctx->cr3);
 
     struct vm_area* vma = is_in_vmarea(thread->process, (void*)faulting_address);
     if (!thread->process) {
@@ -74,13 +75,13 @@ void PageFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {
         kprintf("Page fault in shared area, allowing write and requesting sync\n");
         vma->extended_flags |= VMAREA_EXT_REQ_SYNC;
         mprotect(thread->process->vmm, (void*)faulting_address, vma->page_size, vma->flags);
-        thread->context->cpu_context->cr3 = from_identity_map(thread->context->cpu_context->cr3);
+        thread->user_context->cpu_context->cr3 = from_identity_map(thread->user_context->cpu_context->cr3);
         return;
     }
     if ((vma->flags & VMM_WRITE_BIT) && (vma->extended_flags & VMAREA_EXT_COW)) {
         kprintf("Page fault in COW area, duplicating page\n");
         duplicate_vmarea_cow(thread->process, vma);
-        thread->context->cpu_context->cr3 = from_identity_map(thread->context->cpu_context->cr3);
+        thread->user_context->cpu_context->cr3 = from_identity_map(thread->user_context->cpu_context->cr3);
         kprintf("Page fault in COW area, page duplicated\n");
         return;
     }
@@ -100,7 +101,7 @@ void PageFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {
         thread->ustack_size = stack.size;
         create_vmarea(thread->process, thread->ustack_base, thread->ustack_base+thread->ustack_size, VMM_USER_BIT | VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
         create_vmarea(thread->process, thread->ustack_base-thread->ustack_guard_size, thread->ustack_base, VMM_USER_BIT, VMAREA_EXT_STACK_GUARD, PAGE_SIZE_4KIB, -1, 0);
-        thread->context->cpu_context->cr3 = from_identity_map(thread->context->cpu_context->cr3);
+        thread->user_context->cpu_context->cr3 = from_identity_map(thread->user_context->cpu_context->cr3);
         return;
     }
 
@@ -265,9 +266,9 @@ uint8_t global_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
     }
     
     //kprintf("[PID: %d | TID %d] Interrupt %d on CPU %d\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
-    memcpy(current_thread->context->cpu_context, ctx, sizeof(cpu_context_t));
-    memcpy(current_thread->context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
-    arch_simd_save_context(current_thread->context->fxsave_region);
+    memcpy(current_thread->user_context->cpu_context, ctx, sizeof(cpu_context_t));
+    memcpy(current_thread->user_context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
+    arch_simd_save_context(current_thread->user_context->fxsave_region);
 
     void (*handler)(cpu_context_t* ctx, uint8_t cpu_id) = (void*)dynamic_interrupt_handlers[interrupt_number];
     if (interrupt_number == DYNAMIC_HANDLER) {
@@ -295,16 +296,60 @@ uint8_t global_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
         panic("No current thread\n");
     }
     //kprintf("[PID: %d | TID %d] Interrupt %d on CPU %d returning\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
-    arch_simd_restore_context(current_thread->context->fxsave_region);
-    memcpy(ctx, current_thread->context->cpu_context, sizeof(cpu_context_t));
-    memcpy(ctx->info, current_thread->context->cpu_context->info, sizeof(struct cpu_context_info));
+    arch_simd_restore_context(current_thread->user_context->fxsave_region);
+    memcpy(ctx, current_thread->user_context->cpu_context, sizeof(cpu_context_t));
+    memcpy(ctx->info, current_thread->user_context->cpu_context->info, sizeof(struct cpu_context_info));
     struct tss * tss = arch_get_cpu(cpu_id)->tss;
     tss_set_stack(tss, ctx->info->kstack, 0);
     tss_set_stack(tss, ctx->rsp, 3);
-    setFsBase(current_thread->context->fs_base);
+    setFsBase(current_thread->user_context->fs_base);
 
     if (IS_EXCEPTION_INUM(interrupt_number)) return 1;
     local_apic_eoi(cpu_id, interrupt_number);
+    return 0;
+}
+
+uint8_t kswap_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
+
+    //TODO: Get current proces
+    thread_t * current_thread = get_current_thread();
+    thread_t * old_thread = current_thread;
+    if (!current_thread) {
+        panic("No current thread\n");
+    }
+    
+    //kprintf("[PID: %d | TID %d] Interrupt %d on CPU %d\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
+    memcpy(current_thread->kernel_context->cpu_context, ctx, sizeof(cpu_context_t));
+    memcpy(current_thread->kernel_context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
+    arch_simd_save_context(current_thread->kernel_context->fxsave_region);
+
+    sched();
+
+    current_thread = get_current_thread();
+    if (!current_thread) {
+        panic("No current thread\n");
+    }
+    //kprintf("[PID: %d | TID %d] Interrupt %d on CPU %d returning\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
+    if ((uint64_t)current_thread->kernel_context->cpu_context->rip == (uint64_t)emulate_syscall_return) {
+        kprintf("KSWAP_IRQ handler returned with interrupt number %d\n", current_thread->kernel_context->cpu_context->interrupt_number);
+        arch_simd_restore_context(old_thread->kernel_context->fxsave_region);
+        memcpy(ctx, old_thread->kernel_context->cpu_context, sizeof(cpu_context_t));
+        memcpy(ctx->info, old_thread->kernel_context->cpu_context->info, sizeof(struct cpu_context_info));
+        ctx->rip = current_thread->kernel_context->cpu_context->rip;
+        struct tss * tss = arch_get_cpu(cpu_id)->tss;
+        tss_set_stack(tss, ctx->info->kstack, 0);
+        tss_set_stack(tss, ctx->rsp, 3);
+        setFsBase(old_thread->kernel_context->fs_base);
+    } else {
+        arch_simd_restore_context(current_thread->kernel_context->fxsave_region);
+        memcpy(ctx, current_thread->kernel_context->cpu_context, sizeof(cpu_context_t));
+        memcpy(ctx->info, current_thread->kernel_context->cpu_context->info, sizeof(struct cpu_context_info));
+        struct tss * tss = arch_get_cpu(cpu_id)->tss;
+        tss_set_stack(tss, ctx->info->kstack, 0);
+        tss_set_stack(tss, ctx->rsp, 3);
+        setFsBase(current_thread->kernel_context->fs_base);
+    }
+
     return 0;
 }
 
@@ -312,16 +357,20 @@ void int_hardcore_wrapper(cpu_context_t* ctx, uint8_t cpu_id) {
 
     if (eoi_pending()) {
         kprintf("Interrupt %d pending EOI\n", ctx->interrupt_number);
-        panic("EOI pending entering interrupt handler\n");
+        if (ctx->interrupt_number != 0xe && ctx->interrupt_number != KSWAP_IRQ)
+            panic("EOI pending entering interrupt handler\n");
     }
 
-    uint8_t res = global_interrupt_handler(ctx, cpu_id);
+    uint8_t res = (ctx->interrupt_number == KSWAP_IRQ) ? kswap_interrupt_handler(ctx, cpu_id) : global_interrupt_handler(ctx, cpu_id);
+    
     if (eoi_pending()) {
         if (res == 1) {
-            panic("EOI pending returning from exception\n");
+            kprintf("EOI pending returning from exception\n");
         } else {
-            panic("EOI pending returning from interrupt\n");
+            kprintf("EOI pending returning from interrupt\n");
         }
+        if (ctx->interrupt_number != 0xe && ctx->interrupt_number != KSWAP_IRQ)
+            panic("EOI pending returning from interrupt handler\n");
     }
 }
 
