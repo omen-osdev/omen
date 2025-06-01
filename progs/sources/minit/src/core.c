@@ -65,7 +65,7 @@ int main(int argc, char* argv[]){
     }
     if (pid > 0) {
         //IDLE PROCESS PID = 0
-        printf("idle process with pid %d looping\n", pid);
+        printf("idle process with pid %d looping\n", getpid());
         while (true);
     }
     printf("Init process with pid %d\n", getpid());

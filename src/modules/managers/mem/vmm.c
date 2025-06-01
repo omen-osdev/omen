@@ -18,6 +18,7 @@
 
 #define PHYSICAL_MEMORY_SIZE    0x000000F000000000
 uint64_t physical_memory_offset = 0;
+uint64_t current_cr3 = 0;
 
 #define IS_PRESENT(entry) ((entry)->directory.P)
 #define IS_WRITEABLE(entry) ((entry)->directory.RW)

@@ -309,8 +309,8 @@ uint8_t global_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
     return 0;
 }
 
-uint8_t kswap_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
-
+uint8_t ksleep_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
+    
     //TODO: Get current proces
     thread_t * current_thread = get_current_thread();
     thread_t * old_thread = current_thread;
@@ -318,10 +318,11 @@ uint8_t kswap_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
         panic("No current thread\n");
     }
     
-    //kprintf("[PID: %d | TID %d] Interrupt %d on CPU %d\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
+    kprintf("[PID: %d | TID %d] WRITING CONTEXT!!!!\n", current_thread->process->pid, current_thread->id);
     memcpy(current_thread->kernel_context->cpu_context, ctx, sizeof(cpu_context_t));
     memcpy(current_thread->kernel_context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
     arch_simd_save_context(current_thread->kernel_context->fxsave_region);
+    current_thread->kcontext_ready = 1;
 
     sched();
 
@@ -330,8 +331,8 @@ uint8_t kswap_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
         panic("No current thread\n");
     }
     //kprintf("[PID: %d | TID %d] Interrupt %d on CPU %d returning\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
-    if ((uint64_t)current_thread->kernel_context->cpu_context->rip == (uint64_t)emulate_syscall_return) {
-        kprintf("KSWAP_IRQ handler returned with interrupt number %d\n", current_thread->kernel_context->cpu_context->interrupt_number);
+    if (!current_thread->kcontext_ready) {
+        kprintf("KSLEEP_IRQ handler returned with interrupt number %d\n", current_thread->kernel_context->cpu_context->interrupt_number);
         arch_simd_restore_context(old_thread->kernel_context->fxsave_region);
         memcpy(ctx, old_thread->kernel_context->cpu_context, sizeof(cpu_context_t));
         memcpy(ctx->info, old_thread->kernel_context->cpu_context->info, sizeof(struct cpu_context_info));
@@ -348,8 +349,53 @@ uint8_t kswap_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
         tss_set_stack(tss, ctx->info->kstack, 0);
         tss_set_stack(tss, ctx->rsp, 3);
         setFsBase(current_thread->kernel_context->fs_base);
+        current_thread->kcontext_ready = 0;
     }
 
+
+    uint64_t eop = eoi_pending();
+    if (eop) local_apic_eoi(cpu_id, eop);
+
+    return 0;
+}
+
+uint8_t kwakeup_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
+    thread_t * current_thread = get_current_thread();
+    thread_t * old_thread = current_thread;
+    if (!current_thread) {
+        panic("No current thread\n");
+    }
+    sched();
+
+    current_thread = get_current_thread();
+    if (!current_thread) {
+        panic("No current thread\n");
+    }
+
+    //kprintf("[PID: %d | TID %d] Interrupt %d on CPU %d returning\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
+    if (!current_thread->kcontext_ready) {
+        kprintf("KSLEEP_IRQ handler returned with interrupt number %d\n", current_thread->kernel_context->cpu_context->interrupt_number);
+        arch_simd_restore_context(old_thread->kernel_context->fxsave_region);
+        memcpy(ctx, old_thread->kernel_context->cpu_context, sizeof(cpu_context_t));
+        memcpy(ctx->info, old_thread->kernel_context->cpu_context->info, sizeof(struct cpu_context_info));
+        ctx->rip = current_thread->kernel_context->cpu_context->rip;
+        struct tss * tss = arch_get_cpu(cpu_id)->tss;
+        tss_set_stack(tss, ctx->info->kstack, 0);
+        tss_set_stack(tss, ctx->rsp, 3);
+        setFsBase(old_thread->kernel_context->fs_base);
+    } else {
+        arch_simd_restore_context(current_thread->kernel_context->fxsave_region);
+        memcpy(ctx, current_thread->kernel_context->cpu_context, sizeof(cpu_context_t));
+        memcpy(ctx->info, current_thread->kernel_context->cpu_context->info, sizeof(struct cpu_context_info));
+        struct tss * tss = arch_get_cpu(cpu_id)->tss;
+        tss_set_stack(tss, ctx->info->kstack, 0);
+        tss_set_stack(tss, ctx->rsp, 3);
+        setFsBase(current_thread->kernel_context->fs_base);
+        current_thread->kcontext_ready = 0;
+    }
+
+    uint64_t eop = eoi_pending();
+    if (eop) local_apic_eoi(cpu_id, eop);
     return 0;
 }
 
@@ -357,11 +403,22 @@ void int_hardcore_wrapper(cpu_context_t* ctx, uint8_t cpu_id) {
 
     if (eoi_pending()) {
         kprintf("Interrupt %d pending EOI\n", ctx->interrupt_number);
-        if (ctx->interrupt_number != 0xe && ctx->interrupt_number != KSWAP_IRQ)
+        if (ctx->interrupt_number != 0xe && ctx->interrupt_number != KSLEEP_IRQ && ctx->interrupt_number != KWAKEUP_IRQ)
             panic("EOI pending entering interrupt handler\n");
     }
 
-    uint8_t res = (ctx->interrupt_number == KSWAP_IRQ) ? kswap_interrupt_handler(ctx, cpu_id) : global_interrupt_handler(ctx, cpu_id);
+    uint8_t res = 0;
+    switch (ctx->interrupt_number) {
+        case KSLEEP_IRQ:
+            res = ksleep_interrupt_handler(ctx, cpu_id);
+            break;
+        case KWAKEUP_IRQ:
+            res = kwakeup_interrupt_handler(ctx, cpu_id);
+            break;
+        default:
+            res = global_interrupt_handler(ctx, cpu_id);
+            break;
+    }
     
     if (eoi_pending()) {
         if (res == 1) {
@@ -369,7 +426,7 @@ void int_hardcore_wrapper(cpu_context_t* ctx, uint8_t cpu_id) {
         } else {
             kprintf("EOI pending returning from interrupt\n");
         }
-        if (ctx->interrupt_number != 0xe && ctx->interrupt_number != KSWAP_IRQ)
+        if (ctx->interrupt_number != 0xe && ctx->interrupt_number != KSLEEP_IRQ && ctx->interrupt_number != KWAKEUP_IRQ)
             panic("EOI pending returning from interrupt handler\n");
     }
 }

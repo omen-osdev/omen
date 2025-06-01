@@ -4,7 +4,6 @@ ALIGN 4096
 extern global_syscall_handler
 global syscall_entry
 global syscall_enable
-global emulate_return
 
 syscall_enable:
 	; setup user gdt
@@ -85,34 +84,6 @@ syscall_entry:
     mov rsi, [rax + 0x18]
 
     call global_syscall_handler
-    cli
-    pop    rax
-    mov    cr3, rax
-    pop    qword [gs:0x8]
-    pop    rax
-    pop    rbx
-    pop    rcx
-    pop    rdx
-    pop    rsi
-    pop    rdi
-    pop    rbp
-    pop    r8
-    pop    r9
-    pop    r10
-    pop    r11
-    pop    r12
-    pop    r13
-    pop    r14
-    pop    r15
-
-    mov r11, [rsp + 0x20]
-    mov rcx, [rsp + 0x10]
-
-    mov rsp, [rsp + 0x28]
-    swapgs
-    o64 sysret
-
-emulate_return:
     cli
     pop    rax
     mov    cr3, rax

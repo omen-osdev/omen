@@ -86,6 +86,7 @@ typedef struct thread {
     process_t *process;
     context_t *user_context;
     context_t *kernel_context;
+    uint64_t kcontext_ready;
 
     void * ustack;
     void * ustack_base;

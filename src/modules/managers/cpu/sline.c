@@ -149,8 +149,11 @@ struct snode * find_snode(struct squeue * queue, thread_t * thread) {
     return NULL;
 }
 
+extern void save_context(cpu_context_t * ctx);
+
 void __sleep(thread_t * thread, int condition, struct timespec * rem, struct timespec * duration) {
     // Check if the thread is already sleeping
+    kprintf("Process %d - Thread %d is going to sleep on condition %d\n", thread->process->pid, thread->id, condition);
     thread->status = THREAD_STATUS_INTERRUPTIBLE_SLEEP;
     // Add the thread to the squeue
     struct squeue * queue = find_squeue(condition);
@@ -170,7 +173,9 @@ void __sleep(thread_t * thread, int condition, struct timespec * rem, struct tim
         queue->head = node;
     }
 
-    __asm__("int $0x79");
+    save_kcontext();
+    sched();
+    load_kcontext();
 }
 
 void wakeup(int condition) {
@@ -182,11 +187,14 @@ void wakeup(int condition) {
     struct snode * current = queue->head;
     while (current != NULL) {
         current->thread->status = THREAD_STATUS_READY;
+        kprintf("Waking up process %d - thread %d from condition %d\n", current->thread->process->pid, current->thread->id, condition);
         current = current->next;
     }
     destroy_squeue(queue);
-
-    __asm__("int $0x79");
+    
+    save_kcontext();
+    sched();
+    load_kcontext();
 }
 
 void __wakeup_alarm(int condition, uint64_t ticks, int64_t rearm_ticks) {
@@ -220,6 +228,14 @@ void sleep_current(int condition) {
 }
 
 void sleep(thread_t * thread, int condition) {
+    if (thread == NULL) {
+        panic("Thread is NULL\n");
+    }
+    struct timespec * rem = is_sleeping(thread);
+    if (rem != NULL) {
+        kprintf("Thread %d is already sleeping\n", thread->id);
+        return;
+    }
     __sleep(thread, condition, NULL, NULL);
 }
 

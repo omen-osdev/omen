@@ -258,7 +258,7 @@ void init_stacks(thread_t * thread, uint64_t size, uint64_t entry) {
     thread->ustack = create_args_env_aux(thread->ustack, thread->ustack_size, task->argv, task->envp, task->auxv);
     kprintf("Thread %d created stack at %p with size %llu\n", thread->id, thread->ustack, thread->ustack_size);
     newuctxcreat((uint64_t)&(thread->ustack), (uint64_t)entry);
-    newctxcreat((uint64_t)&(thread->kstack), (uint64_t)emulate_syscall_return);
+    newctxcreat((uint64_t)&(thread->kstack), (uint64_t)_idle);
     kprintf("Thread %d created uctx at %p\n", thread->id, &(thread->ustack));
 
     if (get_pml4() != task->vmm) {
@@ -492,7 +492,7 @@ void create_signal_context(thread_t * thread, int signo, struct sigaction * siga
 }
 
 uint8_t kcontext_ready(thread_t * thread) {
-    return thread->kernel_context->cpu_context->rip != (uint64_t)emulate_syscall_return;
+    return thread->kcontext_ready;
 }
 
 void init_thread(process_t * task, void * init) {
@@ -506,7 +506,8 @@ void init_thread(process_t * task, void * init) {
     thread->process = task;
     init_stacks(thread, PROCESS_STACK_SIZE, init);
     thread->user_context = create_context(from_identity_map(task->vmm), thread->ustack, thread->kstack, init);
-    thread->kernel_context = create_context(from_identity_map(task->vmm), thread->kstack, thread->kstack, (void*)emulate_syscall_return);
+    thread->kernel_context = create_context(from_identity_map(task->vmm), thread->kstack, thread->kstack, (void*)_idle);
+    thread->kcontext_ready = 0;
     thread->entry = init;
     thread->id = task->thread_count - 1;
     thread->core_id = arch_get_bsp_cpu()->core_id;
@@ -943,8 +944,11 @@ int16_t waitpid(thread_t * thread, int pid, int * status, int options) {
     //Wait for a process to exit
     thread->waiting = 1;
     thread->waitpid_status_address = status;
-    sleep(thread, SLEEP_WAITPID);
-
+    while (thread->waiting == 1) {
+        kprintf("PID %d THREAD %d is waiting for child process to exit\n", thread->process->pid, thread->id);
+        sleep(thread, SLEEP_WAITPID);
+        kprintf("PID %d THREAD %d woke up from waitpid\n", thread->process->pid, thread->id);
+    }
     return -2;
 }
 
