@@ -5,7 +5,6 @@
 #include <omen/libraries/allocators/heap_allocator.h>
 #include <omen/apps/debug/debug.h>
 #include <omen/libraries/std/string.h>
-#include <omen/managers/cpu/context.h>
 
 struct snode {
     thread_t * thread;
@@ -173,9 +172,7 @@ void __sleep(thread_t * thread, int condition, struct timespec * rem, struct tim
         queue->head = node;
     }
 
-    save_kcontext();
-    sched();
-    load_kcontext();
+    __asm__ volatile("int $0x78");
 }
 
 void wakeup(int condition) {
@@ -191,10 +188,6 @@ void wakeup(int condition) {
         current = current->next;
     }
     destroy_squeue(queue);
-    
-    save_kcontext();
-    sched();
-    load_kcontext();
 }
 
 void __wakeup_alarm(int condition, uint64_t ticks, int64_t rearm_ticks) {

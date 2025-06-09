@@ -11,8 +11,8 @@
 #define PCIA_IRQ 0x2b
 #define SR1_IRQ 0x23
 #define SR2_IRQ 0x24
-#define KSLEEP_IRQ 0x79
-#define KWAKEUP_IRQ 0x78
+#define KSAVE_IRQ 0x78
+#define KWAKE_IRQ 0x79
 
 #define PIC1_COMMAND 0x20
 #define PIC1_DATA 0x21

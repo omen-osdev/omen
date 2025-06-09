@@ -73,8 +73,9 @@ int64_t tty_compat_file_read(int devno, int fd, void* buffer, uint64_t size) {
         while (read < size) {
             uint64_t res = vfs_tty_read(device, buffer + read, size - read, entry->offset);
             if (res != 0) kprintf("tty read %d bytes\n", res);
-            else
+            else {
                 sleep_current(TTY_IO_SLINE);
+            }
 //¿CAMBIO DE CONTEXTO EN KSPACE? 30/05/25
             read += res;
         }

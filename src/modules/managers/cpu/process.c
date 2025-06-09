@@ -17,7 +17,6 @@
 #include <omen/apps/debug/debug.h>
 #include <omen/managers/cpu/vmarea.h>
 #include <omen/managers/cpu/sline.h>
-#include <omen/managers/cpu/context.h>
 
 #include <vfs/vfs.h>
 #include <vfs/vfs_interface.h>
