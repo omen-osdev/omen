@@ -1303,7 +1303,6 @@ void global_syscall_handler(cpu_context_t* ctx) {
     //    kprintf("[PID: %d | TID %d] SYSCALL(%d)\n", current_thread->process->pid, current_thread->id, ctx->rax);    
     memcpy(current_thread->user_context->cpu_context, ctx, sizeof(cpu_context_t));
     memcpy(current_thread->user_context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
-
     arch_simd_save_context(current_thread->user_context->fxsave_region);
 
     current_thread->last_syscall_result = SYSCALL_SUCCESS;
@@ -1323,6 +1322,13 @@ void global_syscall_handler(cpu_context_t* ctx) {
     //    //kprintf("[PID: %d | TID: %d] SYSCALL(%d) RETURNING %d\n", entry_thread->process->pid, entry_thread->id, ctx->rax, entry_thread->last_syscall_result);
     }
     
+    if (!current_thread->syscall_ready && current_thread->sleep_context_ready)
+        panic("Syscall not ready but sleep context is ready!\n");
+
+    if (current_thread->sleep_context_ready) {
+        __asm__ volatile("int $0x79");
+    }
+
     arch_simd_restore_context(current_thread->user_context->fxsave_region);
     memcpy(ctx, current_thread->user_context->cpu_context, sizeof(cpu_context_t));
     memcpy(ctx->info, current_thread->user_context->cpu_context->info, sizeof(struct cpu_context_info));
@@ -1333,7 +1339,6 @@ void global_syscall_handler(cpu_context_t* ctx) {
     setFsBase(current_thread->user_context->fs_base);
 
     if (current_thread->syscall_ready) {
-
         int signo;
         struct sigaction * sigact = select_signal(current_thread, &signo);
         if (sigact == NULL) {

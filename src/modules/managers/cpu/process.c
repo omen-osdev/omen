@@ -240,6 +240,7 @@ void init_stacks(thread_t * thread, uint64_t size, uint64_t entry) {
     thread->ustack_guard_size = stack.guard_size;
     create_vmarea(task, thread->ustack_base, thread->ustack_base+thread->ustack_size, VMM_USER_BIT | VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
     create_vmarea(task, thread->ustack_base-thread->ustack_guard_size, thread->ustack_base, VMM_USER_BIT, VMAREA_EXT_STACK_GUARD, PAGE_SIZE_4KIB, -1, 0);
+
     kstackalloc(task->vmm, &stack, size);
     thread->kstack_base = stack.base;
     thread->kstack = stack.top;
@@ -247,22 +248,35 @@ void init_stacks(thread_t * thread, uint64_t size, uint64_t entry) {
     thread->kstack_guard_size = stack.guard_size;
     create_vmarea(task, thread->kstack_base, thread->kstack_base+thread->kstack_size, VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
     create_vmarea(task, thread->kstack_base-thread->kstack_guard_size, thread->kstack_base, VMM_USER_BIT, VMAREA_EXT_STACK_GUARD, PAGE_SIZE_4KIB, -1, 0);
+
+    kstackalloc(task->vmm, &stack, size);
+    thread->sstack_base = stack.base;
+    thread->sstack = stack.top;
+    thread->sstack_size = stack.size;
+    thread->sstack_guard_size = stack.guard_size;
+    create_vmarea(task, thread->sstack_base, thread->sstack_base+thread->sstack_size, VMM_WRITE_BIT, 0, PAGE_SIZE_4KIB, -1, 0);
+    create_vmarea(task, thread->sstack_base-thread->sstack_guard_size, thread->sstack_base, VMM_USER_BIT, VMAREA_EXT_STACK_GUARD, PAGE_SIZE_4KIB, -1, 0);
+
     if (get_pml4() != task->vmm) {
         void * stack_physical = get_physical_address(task->vmm, thread->ustack_base);
         void * kstack_physical = get_physical_address(task->vmm, thread->kstack_base);
+        void * sstack_physical = get_physical_address(task->vmm, thread->sstack_base);
         map_range(get_pml4(), thread->ustack_base, (uint64_t)stack_physical, PAGE_SIZE_4KIB, thread->ustack_size, VMM_WRITE_BIT);
         map_range(get_pml4(), thread->kstack_base, (uint64_t)kstack_physical, PAGE_SIZE_4KIB, thread->kstack_size, VMM_WRITE_BIT);
+        map_range(get_pml4(), thread->sstack_base, (uint64_t)sstack_physical, PAGE_SIZE_4KIB, thread->sstack_size, VMM_WRITE_BIT);
     }
     
     thread->ustack = create_args_env_aux(thread->ustack, thread->ustack_size, task->argv, task->envp, task->auxv);
     kprintf("Thread %d created stack at %p with size %llu\n", thread->id, thread->ustack, thread->ustack_size);
     newuctxcreat((uint64_t)&(thread->ustack), (uint64_t)entry);
     newctxcreat((uint64_t)&(thread->kstack), (uint64_t)_idle);
+    newctxcreat((uint64_t)&(thread->sstack), (uint64_t)_idle);
     kprintf("Thread %d created uctx at %p\n", thread->id, &(thread->ustack));
 
     if (get_pml4() != task->vmm) {
         unmap_range(get_pml4(), thread->ustack_base, thread->ustack_size);
         unmap_range(get_pml4(), thread->kstack_base, thread->kstack_size);
+        unmap_range(get_pml4(), thread->sstack_base, thread->sstack_size);
     }
 }
 
@@ -490,10 +504,6 @@ void create_signal_context(thread_t * thread, int signo, struct sigaction * siga
     ctx->rsp = (uint64_t)thread->ustack;
 }
 
-uint8_t kcontext_ready(thread_t * thread) {
-    return thread->kcontext_ready;
-}
-
 void init_thread(process_t * task, void * init) {
     if (task->thread_count >= MAX_THREADS) {
         panic("Too many threads\n");
@@ -505,8 +515,8 @@ void init_thread(process_t * task, void * init) {
     thread->process = task;
     init_stacks(thread, PROCESS_STACK_SIZE, init);
     thread->user_context = create_context(from_identity_map(task->vmm), thread->ustack, thread->kstack, init);
-    thread->kernel_context = create_context(from_identity_map(task->vmm), thread->kstack, thread->kstack, (void*)_idle);
-    thread->kcontext_ready = 0;
+    thread->sleep_context = create_context(from_identity_map(task->vmm), thread->sstack, thread->sstack, (void*)_idle);
+    thread->sleep_context_ready = 0;
     thread->entry = init;
     thread->id = task->thread_count - 1;
     thread->core_id = arch_get_bsp_cpu()->core_id;
@@ -647,32 +657,33 @@ process_t * duplicate_process(thread_t * parent_thread) {
     main_thread->user_context->cpu_context->info = kmalloc(sizeof(struct cpu_context_info));
     memcpy(main_thread->user_context->cpu_context->info, parent_thread->user_context->cpu_context->info, sizeof(struct cpu_context_info));
 
-    main_thread->kernel_context = kmalloc(sizeof(context_t));
-    memcpy(main_thread->kernel_context, parent_thread->kernel_context, sizeof(context_t));
-    main_thread->kernel_context->fxsave_region = kmalloc(512);
-    memcpy(main_thread->kernel_context->fxsave_region, parent_thread->kernel_context->fxsave_region, 512);
-    main_thread->kernel_context->cpu_context = kmalloc(sizeof(cpu_context_t));
-    memcpy(main_thread->kernel_context->cpu_context, parent_thread->kernel_context->cpu_context, sizeof(cpu_context_t));
-    main_thread->kernel_context->cpu_context->info = kmalloc(sizeof(struct cpu_context_info));
-    memcpy(main_thread->kernel_context->cpu_context->info, parent_thread->kernel_context->cpu_context->info, sizeof(struct cpu_context_info));
+    main_thread->sleep_context = kmalloc(sizeof(context_t));
+    memcpy(main_thread->sleep_context, parent_thread->sleep_context, sizeof(context_t));
+    main_thread->sleep_context->fxsave_region = kmalloc(512);
+    memcpy(main_thread->sleep_context->fxsave_region, parent_thread->sleep_context->fxsave_region, 512);
+    main_thread->sleep_context->cpu_context = kmalloc(sizeof(cpu_context_t));
+    memcpy(main_thread->sleep_context->cpu_context, parent_thread->sleep_context->cpu_context, sizeof(cpu_context_t));
+    main_thread->sleep_context->cpu_context->info = kmalloc(sizeof(struct cpu_context_info));
+    memcpy(main_thread->sleep_context->cpu_context->info, parent_thread->sleep_context->cpu_context->info, sizeof(struct cpu_context_info));
 
     duplicate_vmareas(parent, task, VMAREA_CLONE_WITH_COW);
     memcpy(task->open_files, parent->open_files, sizeof(int)*MAX_OPEN_FILES);
     task->open_files_count = parent->open_files_count;
     memcpy(main_thread->user_context->fxsave_region, parent_thread->user_context->fxsave_region, 512);
-    memcpy(main_thread->kernel_context->fxsave_region, parent_thread->kernel_context->fxsave_region, 512);
+    memcpy(main_thread->sleep_context->fxsave_region, parent_thread->sleep_context->fxsave_region, 512);
 
     main_thread->user_context->fs_base = parent_thread->user_context->fs_base;
     main_thread->user_context->gs_base = parent_thread->user_context->gs_base;
 
-    main_thread->kernel_context->fs_base = parent_thread->kernel_context->fs_base;
-    main_thread->kernel_context->gs_base = parent_thread->kernel_context->gs_base;
+    main_thread->sleep_context->fs_base = parent_thread->sleep_context->fs_base;
+    main_thread->sleep_context->gs_base = parent_thread->sleep_context->gs_base;
 
     task->vmm = vmm_copy(parent->vmm);
     main_thread->user_context->cpu_context->cr3 = from_identity_map(task->vmm);
-    main_thread->kernel_context->cpu_context->cr3 = from_identity_map(task->vmm);
+    main_thread->sleep_context->cpu_context->cr3 = from_identity_map(task->vmm);
     vmm_copy_stack(task->vmm, parent_thread->ustack_base, parent_thread->ustack_size, VMM_USER_BIT | VMM_WRITE_BIT);
     vmm_copy_stack(task->vmm, parent_thread->kstack_base, parent_thread->kstack_size, VMM_WRITE_BIT);
+    vmm_copy_stack(task->vmm, parent_thread->sstack_base, parent_thread->sstack_size, VMM_WRITE_BIT);
     vmm_copy_stack(task->vmm, parent_thread->altstack_base, parent_thread->altstack_size, VMM_USER_BIT | VMM_WRITE_BIT);
     //vdso_remap(task->vmm, task->vdso);
     engrave_vmareas(task, parent);

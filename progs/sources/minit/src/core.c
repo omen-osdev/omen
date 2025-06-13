@@ -42,6 +42,31 @@ void tty_test() {
     close(fd);
 }
 
+void sleep_wakeup_test() {
+    printf("Starting sleep_wakeup_test...\n");
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("Fork failed");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pid == 0) {
+        // Child process
+        printf("Child process with PID %d is sleeping for 5 seconds...\n", getpid());
+        sleep(5);
+        printf("Child process woke up and exiting...\n");
+        exit(EXIT_SUCCESS);
+    } else {
+        int status;
+        waitpid(pid, &status, 0);
+        if (WIFEXITED(status)) {
+            printf("Child process exited with status %d\n", WEXITSTATUS(status));
+        } else {
+            printf("Child process did not exit normally\n");
+        }
+    }
+}
+
 int main(int argc, char* argv[]){
     setenv("HOME", "/usr", 1);
     setenv("PWD", getenv("HOME"), 1);
@@ -69,6 +94,9 @@ int main(int argc, char* argv[]){
         while (true);
     }
     printf("Init process with pid %d\n", getpid());
+
+    sleep_wakeup_test();
+
 
     // INIT PROCESS PID = 1
     char* exe_argv[2] = {"/usr/bin/bash", NULL};

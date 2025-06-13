@@ -137,18 +137,18 @@ uint8_t kwake_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
         panic("No current thread\n");
     }
 
-    if (!current_thread->kcontext_ready) return;
+    if (!current_thread->sleep_context_ready) return;
 
     //Load the kernel context into ctx
-    memcpy(ctx, current_thread->kernel_context->cpu_context, sizeof(cpu_context_t));
-    memcpy(ctx->info, current_thread->kernel_context->cpu_context->info, sizeof(struct cpu_context_info));
-    arch_simd_restore_context(current_thread->kernel_context->fxsave_region);
-    current_thread->kcontext_ready = 0;
+    memcpy(ctx, current_thread->sleep_context->cpu_context, sizeof(cpu_context_t));
+    memcpy(ctx->info, current_thread->sleep_context->cpu_context->info, sizeof(struct cpu_context_info));
+    arch_simd_restore_context(current_thread->sleep_context->fxsave_region);
+    current_thread->sleep_context_ready = 0;
     //kprintf("[PID: %d | TID %d] Kwake interrupt on CPU %d returning\n", current_thread->process->pid, current_thread->id, cpu_id);
     struct tss * tss = arch_get_cpu(cpu_id)->tss;
     tss_set_stack(tss, ctx->info->kstack, 0);
     tss_set_stack(tss, ctx->rsp, 3);
-    setFsBase(current_thread->kernel_context->fs_base);
+    setFsBase(current_thread->sleep_context->fs_base);
 }
 
 //you may need save_all here
@@ -318,15 +318,17 @@ uint8_t global_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
     context_t * target_ctx;
 
     if (ctx->interrupt_number == PIT_IRQ) {
-        if (current_thread->kcontext_ready) {
-            target_ctx = current_thread->kernel_context;
-            current_thread->kcontext_ready = 0;
+        if (current_thread->sleep_context_ready) {
+            target_ctx = current_thread->sleep_context;
+            kprintf("KERNEL THREAD [PID: %d | TID: %d] PIT interrupt on CPU %d returning\n", current_thread->process->pid, current_thread->id, cpu_id);
+            current_thread->sleep_context_ready = 0;
         } else {
             target_ctx = current_thread->user_context;
+            kprintf("USER THREAD [PID: %d | TID: %d] PIT interrupt on CPU %d returning\n", current_thread->process->pid, current_thread->id, cpu_id);
         }
-        //kprintf("[PID: %d | TID: %d] Interrupt %d returning\n", current_thread->process->pid, current_thread->id, interrupt_number);
     } else {
         target_ctx = current_thread->user_context;
+        kprintf("NON-PIT [PID: %d | TID: %d] Interrupt %d on CPU %d returning\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
         //if (interrupt_number != 0xe && interrupt_number != KSAVE_IRQ && interrupt_number != KWAKE_IRQ)
         //    kprintf("[PID: %d | TID: %d] Interrupt %d returning\n", current_thread->process->pid, current_thread->id, interrupt_number);
     }
@@ -352,10 +354,12 @@ uint8_t ksleep_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
     }
 
     //kprintf("[PID: %d | TID %d] Interrupt %d on CPU %d\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
-    memcpy(current_thread->kernel_context->cpu_context, ctx, sizeof(cpu_context_t));
-    memcpy(current_thread->kernel_context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
-    arch_simd_save_context(current_thread->kernel_context->fxsave_region);
-    current_thread->kcontext_ready = 1;
+    struct cpu_context_info * info = current_thread->sleep_context->cpu_context->info;
+    memcpy(current_thread->sleep_context->cpu_context, ctx, sizeof(cpu_context_t));
+    current_thread->sleep_context->cpu_context->info = info;
+    memcpy(current_thread->sleep_context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
+    arch_simd_save_context(current_thread->sleep_context->fxsave_region);
+    current_thread->sleep_context_ready = 1;
 
     sched();
 
@@ -366,9 +370,9 @@ uint8_t ksleep_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
 
     //kprintf("[PID: %d | TID %d] Interrupt %d on CPU %d returning\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
     context_t * target_ctx;
-    if (current_thread->kcontext_ready) {
-        target_ctx = current_thread->kernel_context;
-        current_thread->kcontext_ready = 0;
+    if (current_thread->sleep_context_ready) {
+        target_ctx = current_thread->sleep_context;
+        current_thread->sleep_context_ready = 0;
     } else {
         target_ctx = current_thread->user_context;
     }
