@@ -85,8 +85,8 @@ typedef struct context {
 typedef struct thread {
     process_t *process;
     context_t *user_context;
-    context_t *sleep_context;
-    uint64_t sleep_context_ready;
+    context_t *kernel_context;
+    uint64_t kernel_context_ready;
 
     void * ustack;
     void * ustack_base;
@@ -97,12 +97,6 @@ typedef struct thread {
     void * kstack_base;
     uint64_t kstack_size;
     uint64_t kstack_guard_size;
-
-    void * sstack;
-    void * sstack_base;
-    uint64_t sstack_size;
-    uint64_t sstack_guard_size;
-
 
     uint64_t last_syscall_result;
 

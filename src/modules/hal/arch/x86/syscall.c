@@ -760,7 +760,6 @@ int64_t waitpid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 
     int result = waitpid(thread, pid, status, options);
     if (result == -2) {
-        sched();
         return get_current_thread()->user_context->cpu_context->rax;
     } else {
         return result;
@@ -1322,10 +1321,10 @@ void global_syscall_handler(cpu_context_t* ctx) {
     //    //kprintf("[PID: %d | TID: %d] SYSCALL(%d) RETURNING %d\n", entry_thread->process->pid, entry_thread->id, ctx->rax, entry_thread->last_syscall_result);
     }
     
-    if (!current_thread->syscall_ready && current_thread->sleep_context_ready)
+    if (!current_thread->syscall_ready && current_thread->kernel_context_ready)
         panic("Syscall not ready but sleep context is ready!\n");
 
-    if (current_thread->sleep_context_ready) {
+    if (current_thread->kernel_context_ready) {
         __asm__ volatile("int $0x79");
     }
 

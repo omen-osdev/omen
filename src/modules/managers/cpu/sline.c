@@ -153,7 +153,6 @@ extern void save_context(cpu_context_t * ctx);
 void __sleep(thread_t * thread, int condition, struct timespec * rem, struct timespec * duration) {
     // Check if the thread is already sleeping
     kprintf("Process %d - Thread %d is going to sleep on condition %d\n", thread->process->pid, thread->id, condition);
-    thread->status = THREAD_STATUS_INTERRUPTIBLE_SLEEP;
     // Add the thread to the squeue
     struct squeue * queue = find_squeue(condition);
     if (queue == NULL) {
@@ -172,7 +171,15 @@ void __sleep(thread_t * thread, int condition, struct timespec * rem, struct tim
         queue->head = node;
     }
 
-    __asm__ volatile("int $0x78");
+    void * thread_phys_addr = get_physical_address(thread->process->vmm, thread);
+    kprintf("[PID %d] __sleep thread is at physical address: %p\n", thread->process->pid, thread_phys_addr);
+
+    thread->status = THREAD_STATUS_INTERRUPTIBLE_SLEEP;
+    __asm__ volatile ("sti");
+    while (thread->status == THREAD_STATUS_INTERRUPTIBLE_SLEEP) {
+        __asm__ volatile ("pause" : : : "memory");
+    }
+    __asm__ volatile ("cli");
 }
 
 void wakeup(int condition) {
