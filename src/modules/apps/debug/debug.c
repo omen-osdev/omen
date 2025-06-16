@@ -55,6 +55,10 @@ void enable_debugger() {
     debug_enabled = true;
 }
 
+uint8_t is_debugger_enabled() {
+    return debug_enabled;
+}
+
 char * get_debug_device_name() {
     if (writer == NULL) {
         return NULL;

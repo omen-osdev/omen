@@ -13,6 +13,15 @@
 #include <termios.h>
 #include <string.h>
 #include <errno.h>
+
+void disable_debugger() {
+    //Syscall 335
+    __asm__ volatile("mov $335, %%rax\n"
+                         "mov $0, %%rdi\n" // 0 to disable debugger
+                         "syscall\n"
+                         : : : "rax", "rdi");
+}
+
 void tty_test() {
     int fd = open("/dev/tty", O_RDWR);
     if (fd < 0) {
@@ -67,6 +76,57 @@ void sleep_wakeup_test() {
     }
 }
 
+void test_exec() {
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("Fork failed");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pid == 0) {
+        // Child process
+        printf("Executing an invalid process...\n");
+        char* args[] = {"/ls", NULL};
+        execvp(args[0], args);
+        perror("execvp failed");
+        exit(EXIT_FAILURE);
+    } else {
+        // Parent process
+        int status;
+        waitpid(pid, &status, 0);
+        if (WIFEXITED(status)) {
+            printf("Child process exited with status %d\n", WEXITSTATUS(status));
+        } else {
+            printf("Child process did not exit normally\n");
+        }
+    }
+
+    pid = fork();
+    if (pid < 0) {
+        perror("Fork failed");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pid == 0) {
+        // Child process
+        printf("Executing a valid process...\n");
+        char* args[] = {"/usr/bin/ls", NULL};
+        execvp(args[0], args);
+        perror("execvp failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Parent process
+    int status;
+    waitpid(pid, &status, 0);
+    if (WIFEXITED(status)) {
+        printf("Child process exited with status %d\n", WEXITSTATUS(status));
+    } else {
+        printf("Child process did not exit normally\n");
+    }
+
+}
+
 int main(int argc, char* argv[]){
     setenv("HOME", "/usr", 1);
     setenv("PWD", getenv("HOME"), 1);
@@ -96,7 +156,7 @@ int main(int argc, char* argv[]){
     printf("Init process with pid %d\n", getpid());
 
     sleep_wakeup_test();
-
+    test_exec();
 
     // INIT PROCESS PID = 1
     char* exe_argv[2] = {"/usr/bin/bash", NULL};
@@ -124,6 +184,7 @@ int main(int argc, char* argv[]){
 
     // Child process executes bash
     printf("Bash process with pid %d is starting...\n", getpid());
+    //disable_debugger();
     execvp("/usr/bin/bash", exe_argv);
 
     perror("init: /usr/bin/bash not found");

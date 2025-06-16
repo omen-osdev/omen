@@ -192,7 +192,7 @@ struct sigaction * select_signal(thread_t * thread, int * signo);
 process_t * sched();
 int16_t waitpid(thread_t * thread, int pid, int * status, int options);
 int16_t fork(thread_t *thread);
-void execve(process_t *task, const char * path, const char ** argv, const char ** envp);
+int execve(process_t *task, const char * path, const char ** argv, const char ** envp);
 int exec(process_t *task,char const *path, const char ** argv, const char ** envp);
 void thread_exit(thread_t * thread);
 void exit(process_t *task, int error_code);

@@ -811,8 +811,8 @@ int exec(process_t * task, char const *path, char const **argv, char const **env
     return 0;
 }
 
-void execve(process_t* task, const char * path, const char ** argv, const char ** envp) {
-    exec(task, path, argv, envp);
+int execve(process_t* task, const char * path, const char ** argv, const char ** envp) {
+    return exec(task, path, argv, envp);
 }
 
 int sched_sigsuspend_check(thread_t * task) {
@@ -914,8 +914,9 @@ int16_t waitpid(thread_t * thread, int pid, int * status, int options) {
             if (process_list[i].ppid == thread->process->pid) {
                 if (process_list[i].global_status == PROCESS_STATUS_ZOMBIE) {
                     *status = PROCESS_STATUS_ZOMBIE;
-                    //delete_process(&(process_list[i]));
-                    return process_list[i].pid;
+                    int16_t cpid = process_list[i].pid;
+                    delete_process(&(process_list[i]));
+                    return cpid;
                 }
                 if (process_list[i].global_status == PROCESS_STATUS_SIGSTOP && (options & WUNTRACED)) {
                     *status = PROCESS_STATUS_SIGSTOP;

@@ -464,7 +464,7 @@ int64_t renameat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     return SYSCALL_SUCCESS;
 }
 
-int64_t readdir_syscall_hanlder(thread_t * thread, cpu_context_t * ctx) {
+int64_t readdir_syscall_handler(thread_t * thread, cpu_context_t * ctx) {
     int handle = SYSCALL_ARG0(ctx);
     void * buffer = (char *)SYSCALL_ARG1(ctx);
     uint32_t * count = (uint32_t *)SYSCALL_ARG2(ctx);
@@ -796,7 +796,9 @@ int64_t execve_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     } else {
         kprintf("[PID: %d | TID %d] EXECVE_SYSCALL(%s,%s,%s)\n", thread->process->pid, thread->id, path, argv, envp);
     }
-    execve(thread->process, path, argv, envp);
+    if (execve(thread->process, path, argv, envp) != 0) {
+        return SYSCALL_ERROR;
+    }
     return SYSCALL_SUCCESS;
 }
 
@@ -896,7 +898,10 @@ int64_t log_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     //uint64_t length = SYSCALL_ARG1(ctx);
     //enable_debugger();
     //kprintf("[PID: %d | TID %d] LOG_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, message, length);
+    uint8_t dbg = is_debugger_enabled();
+    if (!dbg) enable_debugger();
     kprintf("%s\n", message);
+    if (!dbg) disable_debugger();
     //disable_debugger();
     return SYSCALL_SUCCESS;
 }
@@ -1208,6 +1213,20 @@ int64_t dup2_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     return newfd;
 }
 
+int64_t disable_debugger_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+
+    int enable = SYSCALL_ARG0(ctx);
+    kprintf("[PID: %d | TID %d] DISABLE_DEBUGGER_SYSCALL()\n", thread->process->pid, thread->id);
+    if (enable) {
+        kprintf("Enabling debugger\n");
+        enable_debugger();
+    } else {
+        kprintf("Disabling debugger\n");
+        disable_debugger();
+    }
+    return SYSCALL_SUCCESS;
+}
+
 
 int64_t undefined_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     kprintf("[PID: %d | TID %d] UNDEFINED_SYSCALL(%d)\n", thread->process->pid, thread->id, ctx->rax);
@@ -1282,13 +1301,14 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [264] = renameat_syscall_handler,
     [265 ... 269] = undefined_syscall_handler,
     [270] = pselect_syscall_handler,
-    [271 ... 335] = undefined_syscall_handler,
+    [271 ... 334] = undefined_syscall_handler,
+    [335] = disable_debugger_syscall_handler,
     [336] = thread_exit_syscall_handler,
     [337] = log_syscall_handler,
     [338] = futex_wait_syscall_handler,
     [339] = futex_wake_syscall_handler,
     [340] = dir_open_syscall_handler,
-    [341] = readdir_syscall_hanlder,
+    [341] = readdir_syscall_handler,
     [342 ... 511] = undefined_syscall_handler
 };
 
@@ -1312,7 +1332,7 @@ void global_syscall_handler(cpu_context_t* ctx) {
         current_thread->last_syscall_result = SYSCALL_ERROR;
     }
 
-        current_thread = get_current_thread();
+    current_thread = get_current_thread();
     if (current_thread->process != entry_thread->process) {
         kprintf("Process changed during syscall!\n");
         //kprintf("[PID: %d | TID: %d] SYSCALL(%d) RETURNING %d\n", current_thread->process->pid, current_thread->id, ctx->rax, current_thread->last_syscall_result);

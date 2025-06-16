@@ -23,7 +23,7 @@ void __breakpoint();
 void init_debugger(const char * device_name);
 void disable_debugger();
 void enable_debugger();
-
+uint8_t is_debugger_enabled();
 char * get_debug_device_name();
 
 int64_t atoi(const char * str);

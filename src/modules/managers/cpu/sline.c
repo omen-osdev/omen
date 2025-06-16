@@ -175,11 +175,9 @@ void __sleep(thread_t * thread, int condition, struct timespec * rem, struct tim
     kprintf("[PID %d] __sleep thread is at physical address: %p\n", thread->process->pid, thread_phys_addr);
 
     thread->status = THREAD_STATUS_INTERRUPTIBLE_SLEEP;
-    __asm__ volatile ("sti");
     while (thread->status == THREAD_STATUS_INTERRUPTIBLE_SLEEP) {
-        __asm__ volatile ("pause" : : : "memory");
+        __asm__ volatile ("int $0x78"); // Trigger the sleep interrupt
     }
-    __asm__ volatile ("cli");
 }
 
 void wakeup(int condition) {

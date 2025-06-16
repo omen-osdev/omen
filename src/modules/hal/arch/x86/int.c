@@ -64,8 +64,11 @@ void PageFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {
     }
 
     if (!vma) {
+        enable_debugger();
         kprintf("Page fault, no VMA found for address %lx\n", faulting_address);
         kprintf("Process PID: %d, TID: %d\n", thread->process->pid, thread->id);
+        kprintf("Error code: %lx\n", ctx->error_code);
+
         dump_vmareas(thread->process);
         panic("Page fault, no VMA found!\n");
     }
@@ -174,6 +177,50 @@ void KWakeInt_Handler(cpu_context_t* ctx, uint8_t cpuid) {
     tss_set_stack(tss, target_ctx->cpu_context->info->kstack, 0);
     tss_set_stack(tss, target_ctx->cpu_context->rsp, 3);
     setFsBase(target_ctx->fs_base);
+}
+
+void KSleepInt_Handler(cpu_context_t* ctx, uint8_t cpuid) {
+    thread_t * current_thread = get_current_thread();
+    if (!current_thread) {
+        panic("KWakeInt_Handler: No current thread\n");
+    }
+    if (current_thread->kernel_context_ready == 1) panic("KWakeInt_Handler: Kernel context is already set\n");
+    current_thread->kernel_context_ready = 1;
+    context_t * target_ctx = current_thread->kernel_context;
+
+    void *ustack = (void*)current_thread->user_context->cpu_context->rsp;
+    void *kstack = (void*)current_thread->user_context->cpu_context->info->kstack;
+    arch_simd_save_context(target_ctx->fxsave_region);
+    memcpy(target_ctx->cpu_context, ctx, sizeof(cpu_context_t));
+    memcpy(target_ctx->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
+    target_ctx->cpu_context->info->kstack = kstack;
+    target_ctx->cpu_context->rsp = (uint64_t)ustack;
+
+    sched();
+
+    current_thread = get_current_thread();
+    if (!current_thread) {
+        panic("No current thread\n");
+    }
+
+    if (current_thread->kernel_context_ready) {
+        target_ctx = current_thread->kernel_context;
+        //kprintf("KERNEL THREAD [PID: %d | TID: %d] PIT interrupt on CPU %d returning\n", current_thread->process->pid, current_thread->id, cpu_id);
+        current_thread->kernel_context_ready = 0;
+    } else {
+        target_ctx = current_thread->user_context;
+        //kprintf("USER THREAD [PID: %d | TID: %d] PIT interrupt on CPU %d returning\n", current_thread->process->pid, current_thread->id, cpu_id);
+    }
+
+    //kprintf("[PID: %d | TID %d] Interrupt %d on CPU %d returning\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
+    arch_simd_restore_context(target_ctx->fxsave_region);
+    memcpy(ctx, target_ctx->cpu_context, sizeof(cpu_context_t));
+    memcpy(ctx->info, target_ctx->cpu_context->info, sizeof(struct cpu_context_info));
+    
+    struct tss * tss = arch_get_cpu(cpuid)->tss;
+    tss_set_stack(tss, current_thread->user_context->cpu_context->info->kstack, 0);
+    tss_set_stack(tss, current_thread->user_context->cpu_context->rsp, 3);
+    setFsBase(current_thread->user_context->fs_base);
 }
 
 static void interrupt_exception_handler(cpu_context_t* ctx, uint8_t cpu_id) {
@@ -370,6 +417,9 @@ void int_hardcore_wrapper(cpu_context_t* ctx, uint8_t cpu_id) {
     switch (ctx->interrupt_number) {
         case KWAKE_IRQ:
             KWakeInt_Handler(ctx, cpu_id);
+            break;
+        case KSAVE_IRQ:
+            KSleepInt_Handler(ctx, cpu_id);
             break;
         default:
             res = global_interrupt_handler(ctx, cpu_id);

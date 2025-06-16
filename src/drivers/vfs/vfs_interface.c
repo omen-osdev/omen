@@ -81,7 +81,12 @@ int vfs_file_dup(int old, int new) {
 
 int vfs_file_open(struct vfs_struct * cwd, char* path, int flags, int mode) {
     char * npath = kmalloc(strlen(path) + 1);
-    strcpy(npath, vfs_read_symlink(cwd, path));
+    char * symlink_path = vfs_read_symlink(cwd, path);
+    if (symlink_path == 0) {
+        kfree(npath);
+        return VFS_ERROR;
+    }
+    strcpy(npath, symlink_path);
     vfs_normalize_path(cwd, npath);
     vfs_print("vfs_file_open(%s, %d, %d)\n", npath, flags, mode);
     char * native_path_buffer = kmalloc(strlen(npath) + 1);
