@@ -110,7 +110,7 @@ void test_exec() {
     if (pid == 0) {
         // Child process
         printf("Executing a valid process...\n");
-        char* args[] = {"/usr/bin/ls", NULL};
+        char* args[] = {"/usr/bin/ls", "/usr/bin", NULL};
         execvp(args[0], args);
         perror("execvp failed");
         exit(EXIT_FAILURE);

@@ -4,18 +4,20 @@
 #include <omen/apps/debug/debug.h>
 #include <omen/libraries/std/string.h>
 
-struct file_descriptor_entry open_file_table[VFS_COMPAT_MAX_OPEN_FILES] = {0};
-dir_t open_directory_table[VFS_COMPAT_MAX_OPEN_DIRECTORIES] = {0};
+dir_t entries_table[VFS_COMPAT_MAX_OPEN_FILES] = {0};
+
+#define GET_DIR(fd) ((dir_t*)(&(entries_table[fd])))
+#define GET_FILE(desc) ((struct file_descriptor_entry*)(&(GET_DIR(desc)->fd)))
 
 dir_t * vfs_compat_get_dir(int fd) {
-    if (fd >= VFS_COMPAT_MAX_OPEN_DIRECTORIES) return 0;
-    dir_t * entry = &open_directory_table[fd];
+    if (fd >= VFS_COMPAT_MAX_OPEN_FILES) return 0;
+    dir_t * entry = GET_DIR(fd);
     return entry;
 }
 
 struct file_descriptor_entry * vfs_compat_get_file_descriptor(int fd) {
     if (fd >= VFS_COMPAT_MAX_OPEN_FILES) return 0;
-    struct file_descriptor_entry * entry = &open_file_table[fd];
+    struct file_descriptor_entry * entry = GET_FILE(fd);
     return entry;
 }
 
@@ -24,13 +26,14 @@ int get_fd(const char* path, const char* mount, int flags, int mode) {
     if (strlen(mount) > VFS_FDE_NAME_MAX_LEN) return VFS_ERROR; 
     static int fd = 0;
     for (int i = 0; i < VFS_COMPAT_MAX_OPEN_FILES; i++) {
-        if (open_file_table[fd].loaded == 0) {
-            open_file_table[fd].loaded = 1;
-            open_file_table[fd].flags = flags;
-            open_file_table[fd].mode = mode;
-            open_file_table[fd].offset = 0;
-            strncpy(open_file_table[fd].name, path, strlen(path));
-            strncpy(open_file_table[fd].mount, mount, strlen(mount));
+        struct file_descriptor_entry * entry = GET_FILE(fd);
+        if (entry->loaded == 0) {
+            entry->loaded = 1;
+            entry->flags = flags;
+            entry->mode = mode;
+            entry->offset = 0;
+            strncpy(entry->name, path, strlen(path));
+            strncpy(entry->mount, mount, strlen(mount));
 
             return fd++;
         } else {
@@ -45,24 +48,25 @@ int get_dirfd(const char* path, const char* mount, int flags, int mode) {
     if (strlen(path) >  VFS_FDE_NAME_MAX_LEN) return VFS_ERROR;
     if (strlen(mount) > VFS_FDE_NAME_MAX_LEN) return VFS_ERROR; 
     static int fd = 0;
-    for (int i = 0; i < VFS_COMPAT_MAX_OPEN_DIRECTORIES; i++) {
-        if (open_directory_table[fd].fd.loaded == 0) {
-            open_directory_table[fd].fd.loaded = 1;
-            open_directory_table[fd].fd.flags = flags;
-            open_directory_table[fd].fd.mode = mode;
-            open_directory_table[fd].fd.offset = 0;
-            strncpy(open_directory_table[fd].fd.name, path, strlen(path));
-            strncpy(open_directory_table[fd].fd.mount, mount, strlen(mount));
+    for (int i = 0; i < VFS_COMPAT_MAX_OPEN_FILES; i++) {
+        dir_t * entry = GET_DIR(fd);
+        if (entry->fd.loaded == 0) {
+            entry->fd.loaded = 1;
+            entry->fd.flags = flags;
+            entry->fd.mode = mode;
+            entry->fd.offset = 0;
+            strncpy(entry->fd.name, path, strlen(path));
+            strncpy(entry->fd.mount, mount, strlen(mount));
             
-            open_directory_table[fd].index = 0;
-            open_directory_table[fd].number = 0;
-            open_directory_table[fd].dentries = (struct dentry*) kmalloc(sizeof(struct dentry));
-            memset(open_directory_table[fd].dentries, 0, sizeof(struct dentry));
+            entry->index = 0;
+            entry->number = 0;
+            entry->dentries = (struct dentry*) kmalloc(sizeof(struct dentry));
+            memset(entry->dentries, 0, sizeof(struct dentry));
 
             return fd++;
         } else {
             fd++;
-            if (fd >= VFS_COMPAT_MAX_OPEN_DIRECTORIES) fd = 0;
+            if (fd >= VFS_COMPAT_MAX_OPEN_FILES) fd = 0;
         }
     }
     return VFS_ERROR;
@@ -71,16 +75,18 @@ int get_dirfd(const char* path, const char* mount, int flags, int mode) {
 int dup2_fd(int oldfd, int newfd) {
     if (oldfd >= VFS_COMPAT_MAX_OPEN_FILES) return VFS_ERROR;
     if (newfd >= VFS_COMPAT_MAX_OPEN_FILES) return VFS_ERROR;
-    if (open_file_table[oldfd].loaded == 0) return VFS_ERROR;
-    if (open_file_table[newfd].loaded == 1) {
-        open_file_table[newfd].loaded = 0;
+    struct file_descriptor_entry * old_file = GET_FILE(oldfd);
+    struct file_descriptor_entry * new_file = GET_FILE(newfd);
+    if (old_file->loaded == 0) return VFS_ERROR;
+    if (new_file->loaded == 1) {
+        new_file->loaded = 0;
     }
-    open_file_table[newfd].loaded = 1;
-    open_file_table[newfd].flags = open_file_table[oldfd].flags;
-    open_file_table[newfd].mode = open_file_table[oldfd].mode;
-    open_file_table[newfd].offset = open_file_table[oldfd].offset;
-    strncpy(open_file_table[newfd].name, open_file_table[oldfd].name, strlen(open_file_table[oldfd].name));
-    strncpy(open_file_table[newfd].mount, open_file_table[oldfd].mount, strlen(open_file_table[oldfd].mount));
+    new_file->loaded = 1;
+    new_file->flags = old_file->flags;
+    new_file->mode = old_file->mode;
+    new_file->offset = old_file->offset;
+    strncpy(new_file->name, old_file->name, strlen(old_file->name));
+    strncpy(new_file->mount, old_file->mount, strlen(old_file->mount));
     return newfd;
 }
 
@@ -89,16 +95,18 @@ int dup_fd(int oldfd, int newfd) {
     if (newfd != -1) return dup2_fd(oldfd, newfd);
     //else behave like dup and ignore newfd
     if (oldfd >= VFS_COMPAT_MAX_OPEN_FILES) return VFS_ERROR;
-    if (open_file_table[oldfd].loaded == 0) return VFS_ERROR;
+    struct file_descriptor_entry * old_file = GET_FILE(oldfd);
+    if (old_file->loaded == 0) return VFS_ERROR;
 
     for (int i = 0; i < VFS_COMPAT_MAX_OPEN_FILES; i++) {
-        if (open_file_table[i].loaded == 0) {
-            open_file_table[i].loaded = 1;
-            open_file_table[i].flags = open_file_table[oldfd].flags;
-            open_file_table[i].mode = open_file_table[oldfd].mode;
-            open_file_table[i].offset = open_file_table[oldfd].offset;
-            strncpy(open_file_table[i].name, open_file_table[oldfd].name, strlen(open_file_table[oldfd].name));
-            strncpy(open_file_table[i].mount, open_file_table[oldfd].mount, strlen(open_file_table[oldfd].mount));
+        struct file_descriptor_entry * entry = GET_FILE(i);
+        if (entry->loaded == 0) {
+            entry->loaded = 1;
+            entry->flags = old_file->flags;
+            entry->mode = old_file->mode;
+            entry->offset = old_file->offset;
+            strncpy(entry->name, old_file->name, strlen(old_file->name));
+            strncpy(entry->mount, old_file->mount, strlen(old_file->mount));
             return i;
         }
     }
@@ -107,15 +115,9 @@ int dup_fd(int oldfd, int newfd) {
 
 int is_open(const char* path) {
     for (int i = 0; i < VFS_COMPAT_MAX_OPEN_FILES; i++) {
-        if (open_file_table[i].loaded == 1) {
-            if (strcmp(open_file_table[i].name, path) == 0) {
-                return i;
-            }
-        }
-    }
-    for (int i = 0; i < VFS_COMPAT_MAX_OPEN_DIRECTORIES; i++) {
-        if (open_directory_table[i].fd.loaded == 1) {
-            if (strcmp(open_directory_table[i].fd.name, path) == 0) {
+        struct file_descriptor_entry * entry = GET_FILE(i);
+        if (entry->loaded == 1) {
+            if (strcmp(entry->name, path) == 0) {
                 return i;
             }
         }
@@ -126,17 +128,10 @@ int is_open(const char* path) {
 int force_release(const char * path) {
     int changes = 0;
     for (int i = 0; i < VFS_COMPAT_MAX_OPEN_FILES; i++) {
-        if (open_file_table[i].loaded == 1) {
-            if (strcmp(open_file_table[i].name, path) == 0) {
-                open_file_table[i].loaded = 0;
-                changes++;
-            }
-        }
-    }
-    for (int i = 0; i < VFS_COMPAT_MAX_OPEN_DIRECTORIES; i++) {
-        if (open_directory_table[i].fd.loaded == 1) {
-            if (strcmp(open_directory_table[i].fd.name, path) == 0) {
-                open_directory_table[i].fd.loaded = 0;
+        struct file_descriptor_entry * entry = GET_FILE(i);
+        if (entry->loaded == 1) {
+            if (strcmp(entry->name, path) == 0) {
+                entry->loaded = 0;
                 changes++;
             }
         }
@@ -146,17 +141,18 @@ int force_release(const char * path) {
 
 int release_fd(int fd) {
     if (fd >= VFS_COMPAT_MAX_OPEN_FILES) return VFS_ERROR;
-    open_file_table[fd].loaded = 0;
+    GET_FILE(fd)->loaded = 0;
     return 0;
 }
 
 int read_dirfd(int fd, char * name, uint32_t * name_len, uint32_t * type) {
-    if (fd >= VFS_COMPAT_MAX_OPEN_DIRECTORIES) return VFS_ERROR;
-    if (open_directory_table[fd].fd.loaded == 0) return VFS_ERROR;
-    if (open_directory_table[fd].index >= open_directory_table[fd].number) return 0;
+    if (fd >= VFS_COMPAT_MAX_OPEN_FILES) return VFS_ERROR;
+    dir_t * entry = GET_DIR(fd);
+    if (entry->fd.loaded == 0) return VFS_ERROR;
+    if (entry->index >= entry->number) return 0;
 
-    uint32_t index = open_directory_table[fd].index;
-    struct dentry * dentry = open_directory_table[fd].dentries;
+    uint32_t index = entry->index;
+    struct dentry * dentry = entry->dentries;
     if (dentry == 0 || dentry->next == 0) return 0;
     dentry = dentry->next; // Skip the first entry as it is empty
     for (uint32_t i = 0; i < index; i++) {
@@ -166,14 +162,15 @@ int read_dirfd(int fd, char * name, uint32_t * name_len, uint32_t * type) {
     strncpy(name, dentry->name, dentry->name_len);
     *name_len = dentry->name_len;
     *type = dentry->type;
-    open_directory_table[fd].index++;
+    entry->index++;
     return 1;
 }
 
 int release_dirfd(int fd) {
-    if (fd >= VFS_COMPAT_MAX_OPEN_DIRECTORIES) return VFS_ERROR;
-    open_directory_table[fd].fd.loaded = 0;
-    struct dentry * dentry_head = open_directory_table[fd].dentries;
+    if (fd >= VFS_COMPAT_MAX_OPEN_FILES) return VFS_ERROR;
+    dir_t * entry = GET_DIR(fd);
+    entry->fd.loaded = 0;
+    struct dentry * dentry_head = entry->dentries;
     struct dentry * dentry = dentry_head;
     while (dentry->next != 0) {
         dentry = dentry->next;
@@ -184,10 +181,11 @@ int release_dirfd(int fd) {
 
 uint8_t add_file_to_dirfd(int fd, const char* name, uint32_t inode, uint32_t type, uint32_t name_len) {
     //kprintf("add_file_to_dirfd: %d, %s, %d, %d, %d\n", fd, name, inode, type, name_len);
-    if (fd >= VFS_COMPAT_MAX_OPEN_DIRECTORIES) return 0;
+    if (fd >= VFS_COMPAT_MAX_OPEN_FILES) return 0;
     if (strlen(name) > VFS_FDE_NAME_MAX_LEN) return 0;
-    if (open_directory_table[fd].fd.loaded == 0) return 0;
-    struct dentry * dentry_head = open_directory_table[fd].dentries;
+    dir_t * entry = GET_DIR(fd);
+    if (entry->fd.loaded == 0) return 0;
+    struct dentry * dentry_head = entry->dentries;
     struct dentry * dentry = dentry_head;
     while (dentry->next != 0) {
         dentry = dentry->next;
@@ -199,7 +197,7 @@ uint8_t add_file_to_dirfd(int fd, const char* name, uint32_t inode, uint32_t typ
     dentry->type = type;
     dentry->name_len = name_len;
     strncpy(dentry->name, name, strlen(name));
-    open_directory_table[fd].number++;
+    entry->number++;
     //kprintf("added file to dirfd: %s new number\n", name, open_directory_table[fd].number);
     
     return 1;

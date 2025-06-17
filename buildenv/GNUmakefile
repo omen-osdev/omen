@@ -210,6 +210,7 @@ setup:
 	@echo add-symbol-file $(PROGSSYMDIR)/bash.sym >> $(ABSDIR)/$(GDBCFG)
 	@echo add-symbol-file $(PROGSSYMDIR)/ld.so.sym 0x4000058b >> $(ABSDIR)/$(GDBCFG)
 	@echo add-symbol-file $(PROGSSYMDIR)/libc.so.sym 0x41045a90 >> $(ABSDIR)/$(GDBCFG)
+	@echo add-symbol-file $(PROGSSYMDIR)/ls.sym >> $(ABSDIR)/$(GDBCFG)
 	@echo b $(KERNEL_ENTRY) >> $(ABSDIR)/$(GDBCFG)
 	@echo b main >> $(ABSDIR)/$(GDBCFG)
 	@echo b __breakpoint >> $(ABSDIR)/$(GDBCFG)

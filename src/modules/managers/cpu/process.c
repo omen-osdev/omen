@@ -583,18 +583,21 @@ int get_open_file(process_t * task, int fd) {
     return task->open_files[fd];
 }
 
-void add_open_file(process_t * task, int fd) {
+int add_open_file(process_t * task, int fd) {
     if (task->open_files_count >= MAX_OPEN_FILES) {
         panic("Too many open files\n");
     }
     if (fd < 0 || fd >= MAX_OPEN_FILES) {
         panic("Invalid file descriptor\n");
     }
-    if (task->open_files[fd] != -1) {
-        panic("File descriptor already in use\n");
+    for (int i = 0; i < MAX_OPEN_FILES; i++) {
+        if (task->open_files[i] == -1) {
+            task->open_files[i] = fd;
+            task->open_files_count++;
+            return i; // Return the index of the open file
+        }
     }
-    task->open_files[fd] = fd;
-    task->open_files_count++;
+    panic("No free file descriptor slots available\n");
 }
 
 void remove_open_file(process_t * task, int fd) {
@@ -604,6 +607,10 @@ void remove_open_file(process_t * task, int fd) {
     if (task->open_files[fd] == -1) {
         panic("File descriptor not in use\n");
     }
+    if (task->open_files_count <= 0) {
+        panic("No open files to remove\n");
+    }
+
     task->open_files[fd] = -1;
     task->open_files_count--;
 }

@@ -309,8 +309,7 @@ int64_t dir_open_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     if (fd < 0) {
         return SYSCALL_ERROR;
     }
-    add_open_file(thread->process, fd);
-    return fd;
+    return add_open_file(thread->process, fd);
 }
 
 int64_t open_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
@@ -329,8 +328,7 @@ int64_t open_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
         return SYSCALL_ERROR;
     }
 
-    add_open_file(thread->process, fd);
-    return fd;
+    return add_open_file(thread->process, fd);
 }
 
 int64_t getcwd_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
@@ -411,8 +409,7 @@ int64_t creat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
         return SYSCALL_ERROR;
     }
     
-    add_open_file(thread->process, fd);
-    return fd;
+    return add_open_file(thread->process, fd);
 }
 
 int64_t unlinkat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
@@ -1188,8 +1185,7 @@ int64_t dup_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     if (newfd < 0) {
         return SYSCALL_ERROR;
     }
-    add_open_file(thread->process, newfd);
-    return newfd;
+    return add_open_file(thread->process, newfd);
 }
 
 int64_t dup2_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
@@ -1209,8 +1205,7 @@ int64_t dup2_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     if (ret < 0) {
         return SYSCALL_ERROR;
     }
-    add_open_file(thread->process, ret);
-    return newfd;
+    return add_open_file(thread->process, ret);
 }
 
 int64_t disable_debugger_syscall_handler(thread_t*thread, cpu_context_t* ctx) {

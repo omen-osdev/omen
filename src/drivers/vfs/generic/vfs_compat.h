@@ -3,7 +3,6 @@
 #include <omen/libraries/std/stdint.h>
 #define VFS_COMPAT_FS_NAME_MAX_LEN 32
 #define VFS_COMPAT_MAX_OPEN_FILES 65536
-#define VFS_COMPAT_MAX_OPEN_DIRECTORIES 4096
 #define VFS_FDE_NAME_MAX_LEN 256
 
 #define VFS_POLLIN 0x1

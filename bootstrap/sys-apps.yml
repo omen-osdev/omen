@@ -77,7 +77,7 @@ packages:
         - '@THIS_SOURCE_DIR@/configure'
         - '--host=x86_64-omen'
         - '--prefix=/usr'
-        - 'CFLAGS=-DSLOW_BUT_NO_HACKS -Wno-error'
+        - 'CFLAGS=-DSLOW_BUT_NO_HACKS -g -Wno-error'
         - '--enable-install-program=hostname'
     build:
       - args: ['make', '-j@PARALLELISM@']
