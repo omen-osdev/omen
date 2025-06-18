@@ -495,6 +495,8 @@ int64_t close_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     return SYSCALL_SUCCESS;
 }
 
+
+
 int64_t sigreturn_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
     kprintf("[PID: %d | TID %d] SIGRETURN_SYSCALL()\n", thread->process->pid, thread->id);
@@ -544,6 +546,41 @@ int64_t stat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     kprintf("File size: %d\n", stat->st_size);
     kprintf("File mode: %d\n", stat->st_mode);
     return SYSCALL_SUCCESS;
+}
+
+int64_t statx_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
+    int dirfd = SYSCALL_ARG0(ctx);
+    char * pathname = (char *)SYSCALL_ARG1(ctx);
+    int flags = SYSCALL_ARG2(ctx);
+    unsigned int mask = SYSCALL_ARG3(ctx);
+    struct statx* statx = (struct statx*)SYSCALL_ARG4(ctx);
+    kprintf("[PID: %d | TID %d] STATX_SYSCALL()\n", thread->process->pid, thread->id);
+
+    if (statx == NULL) {
+        kprintf("Invalid statx pointer\n");
+        return SYSCALL_ERROR;
+    }
+
+    if (pathname == NULL) {
+        if (flags & AT_EMPTY_PATH) {
+            //Use dirfd
+        } else {
+            kprintf("Invalid pathname\n");
+            return SYSCALL_ERROR;
+        }
+    }
+
+    if (pathname[0] == '/') {
+        //Use absolute path
+        kprintf("Absolute path: %s\n", pathname);
+
+    } else {
+        if (dirfd == AT_FDCWD) {
+            //Use current working directory
+        } else {
+            //Use pathname relative to dirfd
+        }
+    }
 }
 
 int64_t sigprocmask_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
@@ -1296,7 +1333,10 @@ syscall_handler syscall_handlers[SYSCALL_HANDLER_COUNT] = {
     [264] = renameat_syscall_handler,
     [265 ... 269] = undefined_syscall_handler,
     [270] = pselect_syscall_handler,
-    [271 ... 334] = undefined_syscall_handler,
+    [271 ... 331] = undefined_syscall_handler,
+    [332] = statx_syscall_handler,
+    [333] = undefined_syscall_handler,
+    [334] = undefined_syscall_handler,
     [335] = disable_debugger_syscall_handler,
     [336] = thread_exit_syscall_handler,
     [337] = log_syscall_handler,

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <asm/prctl.h>
 #include <asm/ioctls.h>
 #include <omen/syscall.h>
@@ -193,6 +194,24 @@ namespace mlibc{
         }
 
         return 0;
+    }
+
+    static_assert(sizeof(struct statx) == 0x100); // Linux kernel requires it to be precisely 256 bytes.
+
+    int sys_statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *statxbuf) {
+        auto result = do_syscall(SYS_STATX, dirfd, path, flags, mask, statxbuf);
+        
+        if(result < 0){
+            return -result;
+        }
+
+        if(result != sizeof(struct statx)){
+            mlibc::infoLogger() << "mlibc: " << __func__ << " returned an unexpected size: " << result << frg::endlog;
+            return EIO; // This is not a valid error code, but we don't have a better one.
+        }
+
+        // The kernel returns 0 on success, but we return 1 to match the glibc behavior.
+        return 1;
     }
 
     int sys_sigprocmask(int how, const sigset_t *__restrict set, sigset_t *__restrict retrieve){

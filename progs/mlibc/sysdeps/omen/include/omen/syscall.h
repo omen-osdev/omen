@@ -48,6 +48,7 @@ using sc_word_t = long;
 #define SYS_UNLINKAT            263
 #define SYS_RENAMEAT            264
 #define SYS_PSELECT             270
+#define SYS_STATX               332
 #define SYS_THREAD_EXIT         336
 #define SYS_LOG                 337
 #define SYS_FUTEX_WAIT          338
