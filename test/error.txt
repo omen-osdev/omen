@@ -1,0 +1,248 @@
+opening file: partno: 0, path: /usr/bin/bash
+MD5: a19b345d8b6be57ad63eda121d84e6f8
+Valid elf header
+ELF Header:
+  Magic: 7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00
+  Class: ELF64
+  Data: 2's complement, little endian
+  Version: Current version
+  OS/ABI: UNIX System V
+  ABI Version: 0
+  Type: EXEC
+  Machine: AMD x86-64 architecture
+  Version: 0x1
+  Entry point address: 0x405d68
+  Start of program headers: 64 (bytes into file)
+  Start of section headers: 3841136 (bytes into file)
+  Flags: 0x0
+  Size of this header: 64 (bytes)
+  Size of program headers: 56 (bytes)
+  Number of program headers: 7
+  Size of section headers: 64 (bytes)
+  Number of section headers: 33
+  Section header string table index: 32
+Valid elf header
+Spawning process at 0x405d68
+Allocating on pml4: ffffb0010282e000, buffer: ffffa00102a2f000, base: 0
+Allocating on pml4: ffffb0010282e000, buffer: ffffa00102a2f000, base: 0
+Dynamic linker path: /usr/lib/ld.so
+Path /usr/lib/ld.so is not a symlink
+opening file: partno: 0, path: /usr/lib/ld.so
+Valid elf header
+Allocating on pml4: ffffb0010282e000, buffer: ffffa00102ef6000, base: 40000000
+Allocating on pml4: ffffb0010282e000, buffer: ffffa00102ef6000, base: 40000000
+Argc at address: FFFF900100625F90, value: 1
+Argc at address: FFFF900100625F90, value: 1
+Thread 0 created stack at 000040010301DE70 with size 65512
+Thread 0 created uctx at FFFFFFFFA22F1DF0
+Exec: Process 5 created
+Entering ld.so
+ldso: Own base address is: 0x40000000
+ldso: Own dynamic section is at: 0x4022f058
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000000000000,524288,3,34,-1,0)
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000000000000,524288,3,34,-1,0)
+AT_ENTRY: 0x405d68
+AT_PHDR: 0x400040
+AT_PHENT: 56
+AT_PHNUM: 7
+AT_BASE: 0x40000000
+AT_PAGESZ: 4096
+AT_SYSINFO_EHDR: 0xffffd0010006b000
+ldso: Executable PHDRs are at 0x400040
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000000000000,524288,3,34,-1,0)
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000000000000,524288,3,34,-1,0)
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000000000000,524288,3,34,-1,0)
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000000000000,524288,3,34,-1,0)
+rtld: Loading (executable)
+rtld: Executable is loaded at 0x0
+[PID: 5 | TID 0] OPEN_SYSCALL(/lib/libdl.so,0,0)
+Path /lib/libdl.so is not a symlink
+opening file: partno: 0, path: /lib/libdl.so
+[PID: 5 | TID 0] READ_SYSCALL(3,50433072,64)
+Read 64 bytes
+[PID: 5 | TID 0] SEEK_SYSCALL(3,64,0)
+[PID: 5 | TID 0] READ_SYSCALL(3,1308672,280)
+Read 280 bytes
+rtld: Loading libdl.so at 0x41000000
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000041000000,4096,7,50,-1,0)
+[PID: 5 | TID 0] SEEK_SYSCALL(3,0,0)
+[PID: 5 | TID 0] READ_SYSCALL(3,1090519040,536)
+Read 536 bytes
+[PID: 5 | TID 0] MPROTECT_SYSCALL(0000000041000000,4096,5)
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000041200000,4096,3,50,-1,0)
+[PID: 5 | TID 0] SEEK_SYSCALL(3,536,0)
+[PID: 5 | TID 0] READ_SYSCALL(3,1092616728,192)
+Read 192 bytes
+[PID: 5 | TID 0] CLOSE_SYSCALL(3)
+File descriptor 3 closed successfully
+[PID: 5 | TID 0] OPEN_SYSCALL(/lib/libc.so,0,0)
+Path /lib/libc.so is not a symlink
+opening file: partno: 0, path: /lib/libc.so
+[PID: 5 | TID 0] READ_SYSCALL(3,50433072,64)
+Read 64 bytes
+[PID: 5 | TID 0] SEEK_SYSCALL(3,64,0)
+[PID: 5 | TID 0] READ_SYSCALL(3,1307648,336)
+Read 336 bytes
+rtld: Loading libc.so at 0x41400000
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000041400000,1253376,7,50,-1,0)
+[PID: 5 | TID 0] SEEK_SYSCALL(3,0,0)
+[PID: 5 | TID 0] READ_SYSCALL(3,1094713344,1250780)
+Read 1250780 bytes
+[PID: 5 | TID 0] MPROTECT_SYSCALL(0000000041400000,1253376,5)
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000041731000,53248,3,50,-1,0)
+[PID: 5 | TID 0] SEEK_SYSCALL(3,1250784,0)
+[PID: 5 | TID 0] READ_SYSCALL(3,1098061280,19784)
+Read 19784 bytes
+[PID: 5 | TID 0] CLOSE_SYSCALL(3)
+File descriptor 3 closed successfully
+[PID: 5 | TID 0] OPEN_SYSCALL(/lib/libm.so,0,0)
+Path /lib/libm.so is not a symlink
+opening file: partno: 0, path: /lib/libm.so
+[PID: 5 | TID 0] READ_SYSCALL(3,50433072,64)
+Read 64 bytes
+[PID: 5 | TID 0] SEEK_SYSCALL(3,64,0)
+[PID: 5 | TID 0] READ_SYSCALL(3,1306624,280)
+Read 280 bytes
+rtld: Loading libm.so at 0x41800000
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000041800000,4096,7,50,-1,0)
+[PID: 5 | TID 0] SEEK_SYSCALL(3,0,0)
+[PID: 5 | TID 0] READ_SYSCALL(3,1098907648,528)
+Read 528 bytes
+[PID: 5 | TID 0] MPROTECT_SYSCALL(0000000041800000,4096,5)
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000041A00000,4096,3,50,-1,0)
+[PID: 5 | TID 0] SEEK_SYSCALL(3,528,0)
+[PID: 5 | TID 0] READ_SYSCALL(3,1101005328,192)
+Read 192 bytes
+[PID: 5 | TID 0] CLOSE_SYSCALL(3)
+File descriptor 3 closed successfully
+rtld: TLS of libc.so mapped to 0x-1a0, size: 416, alignment: 8
+rtld: Linking (executable)
+rtld: Linking libdl.so
+rtld: Linking libc.so
+rtld: Linking libm.so
+rtld: Linking ld.so
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000000000000,524288,3,34,-1,0)
+rtld: tcb allocated at 0x50000033fde0, size = 0x90
+rtld: tls allocated at 0x50000033fc00, size = 0x1e0
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000000000000,524288,3,34,-1,0)
+[PID: 5 | TID 0] PRCTL_SYSCALL(1002,50000033fde0)
+rtld: wrote tls image at 0x50000033fc40, size = 0x1a0
+rtld: Initialize libdl.so
+rtld: Running DT_INIT function
+rtld: Running DT_INIT_ARRAY functions
+rtld: Object initialization complete
+rtld: Initialize ld.so
+rtld: Running DT_INIT function
+rtld: Running DT_INIT_ARRAY functions
+rtld: Object initialization complete
+rtld: Initialize libc.so
+rtld: Running DT_INIT function
+rtld: Running DT_INIT_ARRAY functions
+Argc: 1
+Argv: 0x40010301de78
+Argv[0]: /usr/bin/bash
+Envp: 0x40010301de88
+Envp[0]: HOME=/usr
+Envp[1]: PWD=/usr
+Envp[2]: PATH=/usr/bin
+Envp[3]: PATHSTORE=/usr/store
+Envp[4]: USER=root
+Envp[5]: HOSTNAME=omen
+Envp[6]: TERM=gnome-256color
+Envp[7]: PS1=$USER@$HOSTNAME:
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000000000000,524288,3,34,-1,0)
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000000000000,524288,3,34,-1,0)
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000000000000,524288,3,34,-1,0)
+VDSO ADDRESS: 18446691301446823936
+[PID: 5 | TID 0] SIGACTION_SYSCALL(32,50435552,0)
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000000000000,524288,3,34,-1,0)
+rtld: Object initialization complete
+rtld: Initialize libm.so
+rtld: Running DT_INIT function
+rtld: Running DT_INIT_ARRAY functions
+rtld: Object initialization complete
+rtld: Initialize (executable)
+rtld: Running DT_INIT function
+rtld: Running DT_INIT_ARRAY functions
+rtld: Object initialization complete
+Leaving ld.so, jump to 0x405d68
+[PID: 5 | TID 0] OPEN_SYSCALL(/dev/tty,2050,0)
+[PID: 5 | TID 0] CLOSE_SYSCALL(3)
+File descriptor 3 closed successfully
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000000000000,524288,3,34,-1,0)
+mlibc: sys_getuid is a stub!
+mlibc: sys_getgid is a stub!
+mlibc: sys_geteuid is a stub!
+mlibc: sys_getegid is a stub!
+[PID: 5 | TID 0] CLOCK_GETTIME_SYSCALL(0,50453536)
+[PID: 5 | TID 0] IOCTL_SYSCALL(0,21523,50453544)
+IOCTL request: 21523
+[PID: 5 | TID 0] IOCTL_SYSCALL(2,21523,50453544)
+[PID: 5 | TID 0] IOCTL_SYSCALL(-1,21519,50453644)
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000000000000,524288,3,34,-1,0)
+[PID: 5 | TID 0] SIGACTION_SYSCALL(17,50453040,50453200)
+[PID: 5 | TID 0] SIGACTION_SYSCALL(17,50453040,50453200)
+[PID: 5 | TID 0] SIGACTION_SYSCALL(2,50453040,50453200)
+[PID: 5 | TID 0] SIGACTION_SYSCALL(2,50453040,50453200)
+[PID: 5 | TID 0] SIGACTION_SYSCALL(3,50453040,50453200)
+[PID: 5 | TID 0] SIGACTION_SYSCALL(3,50453040,50453200)
+[PID: 5 | TID 0] SIGACTION_SYSCALL(20,50452992,50453152)
+[PID: 5 | TID 0] SIGACTION_SYSCALL(20,50452992,50453152)
+[PID: 5 | TID 0] SIGACTION_SYSCALL(21,50452992,50453152)
+[PID: 5 | TID 0] SIGACTION_SYSCALL(21,50452992,50453152)
+[PID: 5 | TID 0] SIGACTION_SYSCALL(22,50452992,50453152)
+[PID: 5 | TID 0] SIGACTION_SYSCALL(22,50452992,50453152)
+[PID: 5 | TID 0] SIGPROCMASK_SYSCALL(0,0,7346208)
+[PID: 5 | TID 0] SIGACTION_SYSCALL(3,50453040,50453200)
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000000000000,524288,3,34,-1,0)
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000000000000,524288,3,34,-1,0)
+[PID: 5 | TID 0] STAT_SYSCALL(6553536,0)
+Flags not supported in stat syscall
+[PID: 5 | TID 0] GETCWD_SYSCALL(,4096)
+[PID: 5 | TID 0] GETPID_SYSCALL()
+[PID: 5 | TID 0] GETPPID_SYSCALL()
+[PID: 5 | TID 0] OPEN_SYSCALL(/etc/passwd,0,438)
+Path /etc/passwd is not a symlink
+opening file: partno: 0, path: /etc/passwd
+[PID: 5 | TID 0] IOCTL_SYSCALL(3,21523,50450856)
+[PID: 5 | TID 0] SEEK_SYSCALL(3,0,1)
+[PID: 5 | TID 0] READ_SYSCALL(3,7585800,4096)
+Read 39 bytes
+[PID: 5 | TID 0] SEEK_SYSCALL(3,0,1)
+[PID: 5 | TID 0] CLOSE_SYSCALL(3)
+File descriptor 3 closed successfully
+[PID: 5 | TID 0] CLOCK_GETTIME_SYSCALL(0,50452960)
+[PID: 5 | TID 0] GETPID_SYSCALL()
+[PID: 5 | TID 0] GETPPID_SYSCALL()
+[PID: 5 | TID 0] CLOCK_GETTIME_SYSCALL(0,50452960)
+[PID: 5 | TID 0] GETPID_SYSCALL()
+[PID: 5 | TID 0] GETPPID_SYSCALL()
+mlibc: sys_getpgid is a stub!
+[PID: 5 | TID 0] IOCTL_SYSCALL(2,21519,50453356)
+[PID: 5 | TID 0] SIGACTION_SYSCALL(17,50453024,50453184)
+[PID: 5 | TID 0] IOCTL_SYSCALL(2,21519,50453292)
+[31mmlibc: sysconf(_SC_CHILD_MAX) returns fallback value 25[39m
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000000000000,524288,3,34,-1,0)
+[PID: 5 | TID 0] MMAP_SYSCALL(0000000000000000,524288,3,34,-1,0)
+[PID: 5 | TID 0] FCNTL NOT IMPLEMENTED!!!
+[PID: 5 | TID 0] FSTAT_SYSCALL(0,50453472)
+[PID: 5 | TID 0] CLOSE_SYSCALL(0)
+File descriptor 0 closed successfully
+[PID: 5 | TID 0] SEEK_SYSCALL(1,0,1)
+[PID: 5 | TID 0] SEEK_SYSCALL(2,0,1)
+[PID: 5 | TID 0] SIGPROCMASK_SYSCALL(0,50453376,50453504)
+[PID: 5 | TID 0] SIGPROCMASK_SYSCALL(2,50453504,0)
+[PID: 5 | TID 0] SEEK_SYSCALL(0,0,1)
+[PID: 5 | TID 0] IOCTL_SYSCALL(0,21523,50451608)
+[PID: 5 | TID 0] SEEK_SYSCALL(0,0,1)
+[PID: 5 | TID 0] SEEK_SYSCALL(1,0,1)
+mlibc warning: Failed to flush file before exit()
+[PID: 5 | TID 0] SEEK_SYSCALL(2,0,1)
+mlibc warning: Failed to flush file before exit()
+[PID: 5 | TID 0] EXIT_SYSCALL(0)
+Waking up process 1 - thread 0 from condition 1
+Process changed during syscall!
+PID 1 THREAD 0 woke up from waitpid
+Waitpid ready to be handled [PID: 1 | TID: 0]
+[PID: 1 | TID 0] WRITE_SYSCALL(1,7069853,158)
+mlibc: fwrite() I/O errors are not handled

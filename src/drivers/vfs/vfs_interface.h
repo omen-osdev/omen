@@ -8,6 +8,7 @@ void vfs_lsdisk();
 
 int vfs_socket_open(int, int, int);
 
+int vfs_get_path_from_fd(int fd, char * path);
 int vfs_file_open(struct vfs_struct * cwd, char* path, int, int);
 int vfs_file_dup(int oldfd, int newfd);
 int vfs_file_search(struct vfs_struct * cwd, const char * name, char * path);
@@ -23,7 +24,7 @@ int vfs_link_creat(struct vfs_struct * cwd, char* path, char* target);
 char * vfs_read_symlink(struct vfs_struct * cwd, char * path);
 void vfs_file_flush(int);
 int vfs_file_event(int fd, int event_kind, int* event_result);
-int vfs_dir_open(struct vfs_struct * cwd, char*);
+void* vfs_dir_open(struct vfs_struct * cwd, char*);
 int vfs_dir_close(int);
 int vfs_dir_load(int);
 int vfs_mkdir(struct vfs_struct * cwd, char*, int);

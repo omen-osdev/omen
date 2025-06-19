@@ -27,6 +27,13 @@
 #define PAR_LBA				8
 #define PAR_SIZE			12
 
+#define O_NOFOLLOW   0400000
+
+#define AT_EMPTY_PATH       0x1000
+#define AT_NO_AUTOMOUNT     0x800
+#define AT_SYMLINK_NOFOLLOW 0x100
+#define AT_FDCWD           -100
+
 struct vfs_file_system_type {
 	char name[32];
     char majors[256];

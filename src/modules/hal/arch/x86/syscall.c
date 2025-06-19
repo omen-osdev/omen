@@ -15,6 +15,7 @@
 #include <errno.h>
 #include <asm/prctl.h>
 #include <omen/libraries/std/select.h>
+#include <omen/libraries/std/statx.h>
 /*
 
 
@@ -309,6 +310,7 @@ int64_t dir_open_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     if (fd < 0) {
         return SYSCALL_ERROR;
     }
+    vfs_dir_load(fd);
     return add_open_file(thread->process, fd);
 }
 
@@ -466,7 +468,13 @@ int64_t readdir_syscall_handler(thread_t * thread, cpu_context_t * ctx) {
     void * buffer = (char *)SYSCALL_ARG1(ctx);
     uint32_t * count = (uint32_t *)SYSCALL_ARG2(ctx);
 
-    int size_read = vfs_dir_read(handle, buffer, count);
+    int pfd = get_open_file(thread->process, handle);
+    if (pfd < 0) {
+        kprintf("Invalid file descriptor %d\n", handle);
+        return SYSCALL_ERROR;
+    }
+
+    int size_read = vfs_dir_read(pfd, buffer, count);
     if (size_read < 0) {
         return SYSCALL_ERROR;
     }
@@ -555,32 +563,81 @@ int64_t statx_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     unsigned int mask = SYSCALL_ARG3(ctx);
     struct statx* statx = (struct statx*)SYSCALL_ARG4(ctx);
     kprintf("[PID: %d | TID %d] STATX_SYSCALL()\n", thread->process->pid, thread->id);
-
+    int pfd;
+    (void)mask; //We ignore the mask for now
     if (statx == NULL) {
         kprintf("Invalid statx pointer\n");
         return SYSCALL_ERROR;
     }
 
+    if (flags & AT_NO_AUTOMOUNT || flags & AT_STATX_SYNC_AS_STAT || flags & AT_STATX_DONT_SYNC || flags & AT_STATX_FORCE_SYNC) {
+        kprintf("Flags not supported in statx syscall\n");
+        return SYSCALL_ERROR;
+    }
+
     if (pathname == NULL) {
         if (flags & AT_EMPTY_PATH) {
-            //Use dirfd
+            pfd = get_open_file(thread->process, dirfd);
         } else {
             kprintf("Invalid pathname\n");
             return SYSCALL_ERROR;
         }
     }
 
-    if (pathname[0] == '/') {
-        //Use absolute path
-        kprintf("Absolute path: %s\n", pathname);
+    int open_flags = O_RDONLY;
+    if (flags & AT_SYMLINK_NOFOLLOW) {
+        open_flags |= O_NOFOLLOW;
+    }
 
+    if (pathname[0] == '/') {
+        kprintf("Absolute path: %s\n", pathname);
+        struct vfs_struct vfs;
+        vfs.root = thread->process->fs->root;
+        vfs.pwd = thread->process->fs->root;
+        pfd = vfs_file_open(&vfs, pathname, open_flags, 0);
     } else {
         if (dirfd == AT_FDCWD) {
-            //Use current working directory
+            pfd = vfs_file_open(thread->process->fs, pathname, open_flags, 0);
         } else {
-            //Use pathname relative to dirfd
+            kprintf("Relative statx not implemented yet\n");
+            return SYSCALL_ERROR;
         }
     }
+
+    if (pfd < 0) {
+        kprintf("Could not open file descriptor %d\n", pfd);
+        return SYSCALL_ERROR;
+    }
+    stat_t stat;
+    int ret = vfs_file_stat(pfd, &stat);
+    if (ret < 0) {
+        kprintf("Could not get file stat\n");
+        vfs_file_close(pfd);
+        return SYSCALL_ERROR;
+    }
+    vfs_file_close(pfd);
+
+    memset(statx, 0, sizeof(struct statx));
+    statx->stx_mode = stat.st_mode;
+    statx->stx_ino = stat.st_ino;
+    statx->stx_uid = stat.st_uid;
+    statx->stx_gid = stat.st_gid;
+    statx->stx_atime.tv_sec = stat.st_atime;
+    statx->stx_atime.tv_nsec = 0;
+    statx->stx_mtime.tv_sec = stat.st_mtime;
+    statx->stx_mtime.tv_nsec = 0;
+    statx->stx_ctime.tv_sec = stat.st_ctime;
+    statx->stx_ctime.tv_nsec = 0;
+    statx->stx_size = stat.st_size;
+    statx->stx_nlink = stat.st_nlink;
+    statx->stx_blksize = 512; // Typical block size
+    statx->stx_blocks = (stat.st_size + statx->stx_blksize - 1) / statx->stx_blksize; // Calculate number of blocks
+
+    //Set the mask
+    statx->stx_mask = STATX_BASIC_STATS;
+
+    return SYSCALL_SUCCESS;
+
 }
 
 int64_t sigprocmask_syscall_handler(thread_t* thread, cpu_context_t* ctx) {

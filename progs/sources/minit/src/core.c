@@ -61,8 +61,8 @@ void sleep_wakeup_test() {
 
     if (pid == 0) {
         // Child process
-        printf("Child process with PID %d is sleeping for 5 seconds...\n", getpid());
-        sleep(5);
+        printf("Child process with PID %d is sleeping for 1 seconds...\n", getpid());
+        sleep(1);
         printf("Child process woke up and exiting...\n");
         exit(EXIT_SUCCESS);
     } else {

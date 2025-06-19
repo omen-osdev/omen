@@ -205,13 +205,7 @@ namespace mlibc{
             return -result;
         }
 
-        if(result != sizeof(struct statx)){
-            mlibc::infoLogger() << "mlibc: " << __func__ << " returned an unexpected size: " << result << frg::endlog;
-            return EIO; // This is not a valid error code, but we don't have a better one.
-        }
-
-        // The kernel returns 0 on success, but we return 1 to match the glibc behavior.
-        return 1;
+        return 0;
     }
 
     int sys_sigprocmask(int how, const sigset_t *__restrict set, sigset_t *__restrict retrieve){
