@@ -299,7 +299,14 @@ int64_t write_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
         return SYSCALL_ERROR;
     }
 
-    return vfs_file_write(pfd, (void*)buffer, size);
+    int64_t res = vfs_file_write(pfd, (void*)buffer, size);
+    if (res < 0) {
+        kprintf("Error writing to file descriptor %d\n", fd);
+        return SYSCALL_ERROR;
+    }
+    vfs_file_flush(pfd);
+
+    return res;
 }
 
 int64_t dir_open_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
@@ -682,7 +689,7 @@ int64_t pread_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
 
     int pfd = get_open_file(thread->process, fd);
 
-    uint64_t current_offset = vfs_file_tell(pfd);
+    int64_t current_offset = vfs_file_tell(pfd);
     vfs_file_seek(pfd, offset, 0x0);
     uint64_t result = read_syscall_handler(thread, ctx);
     vfs_file_seek(pfd, current_offset, 0x0);
@@ -989,10 +996,10 @@ int64_t log_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     //uint64_t length = SYSCALL_ARG1(ctx);
     //enable_debugger();
     //kprintf("[PID: %d | TID %d] LOG_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, message, length);
-    uint8_t dbg = is_debugger_enabled();
-    if (!dbg) enable_debugger();
+    //uint8_t dbg = is_debugger_enabled();
+    //if (!dbg) enable_debugger();
     kprintf("%s\n", message);
-    if (!dbg) disable_debugger();
+    //if (!dbg) disable_debugger();
     //disable_debugger();
     return SYSCALL_SUCCESS;
 }

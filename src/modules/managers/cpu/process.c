@@ -574,7 +574,7 @@ void open_stdfiles(process_t *task, char * tty) {
 }
 
 int get_open_file(process_t * task, int fd) {
-    if (fd < 0 || fd >= MAX_OPEN_FILES) {
+    if (fd < 0) {
         return -1;
     }
     if (task->open_files[fd] == -1) {
@@ -587,7 +587,7 @@ int add_open_file(process_t * task, int fd) {
     if (task->open_files_count >= MAX_OPEN_FILES) {
         panic("Too many open files\n");
     }
-    if (fd < 0 || fd >= MAX_OPEN_FILES) {
+    if (fd < 0) {
         panic("Invalid file descriptor\n");
     }
     for (int i = 0; i < MAX_OPEN_FILES; i++) {
@@ -601,7 +601,7 @@ int add_open_file(process_t * task, int fd) {
 }
 
 void remove_open_file(process_t * task, int fd) {
-    if (fd < 0 || fd >= MAX_OPEN_FILES) {
+    if (fd < 0) {
         panic("Invalid file descriptor\n");
     }
     if (task->open_files[fd] == -1) {
@@ -631,6 +631,31 @@ void remove_open_file(process_t * task, int fd) {
 //    setGsBase((uint64_t)ctx);
 //    setKernelGsBase((uint64_t)ctx);
 //}
+
+int duplicate_fds(thread_t * parent_thread, thread_t * child_thread) {
+    child_thread->process->open_files_count = 0;
+    memset(child_thread->process->open_files, -1, sizeof(int) * MAX_OPEN_FILES);
+    for (int i = 0; i < MAX_OPEN_FILES; i++) {
+        int pfd = parent_thread->process->open_files[i];
+        if (pfd == -1) continue;
+        int newfd = vfs_file_dup(pfd, -1); //-1 means get a new file descriptor automatically
+        if (newfd < 0) {
+            kprintf("Failed to duplicate file descriptor %d for thread %d\n", pfd, child_thread->id);
+            continue;
+        }
+        int fd = add_open_file(child_thread->process, newfd);
+        if (fd < 0) {
+            kprintf("Failed to add file descriptor %d for thread %d\n", newfd, child_thread->id);
+            vfs_file_close(newfd);
+            continue;
+        }
+    }
+    if (parent_thread->process->open_files_count != child_thread->process->open_files_count) {
+        kprintf("Open files count mismatch: parent %d, child %d\n", parent_thread->process->open_files_count, child_thread->process->open_files_count);
+        panic("Open files count mismatch after duplication\n");
+    }
+    return child_thread->process->open_files_count;
+}
 
 process_t * duplicate_process(thread_t * parent_thread) {
     process_t * parent = parent_thread->process;
@@ -680,8 +705,7 @@ process_t * duplicate_process(thread_t * parent_thread) {
     memcpy(main_thread->kernel_context->cpu_context->info, parent_thread->kernel_context->cpu_context->info, sizeof(struct cpu_context_info));
 
     duplicate_vmareas(parent, task, VMAREA_CLONE_WITH_COW);
-    memcpy(task->open_files, parent->open_files, sizeof(int)*MAX_OPEN_FILES);
-    task->open_files_count = parent->open_files_count;
+    duplicate_fds(parent_thread, main_thread);
     memcpy(main_thread->user_context->fxsave_region, parent_thread->user_context->fxsave_region, 512);
     memcpy(main_thread->kernel_context->fxsave_region, parent_thread->kernel_context->fxsave_region, 512);
 
@@ -790,7 +814,12 @@ int exec(process_t * task, char const *path, char const **argv, char const **env
     kfree(dynpath);
 
     vfs_file_seek(fd, 0, 0x2); //SEEK_END
-    uint64_t size = vfs_file_tell(fd);
+    int64_t size = vfs_file_tell(fd);
+    if (size < 0) {
+        kprintf("Could not get file size for %s\n", path);
+        vfs_file_close(fd);
+        return -1;
+    }
     vfs_file_seek(fd, 0, 0x0); //SEEK_SET
 
     uint8_t* buf = kmalloc(size);
@@ -1274,19 +1303,20 @@ void chdir(process_t * task, const char * path) {
     }
 
     char * root_path = get_root_path_from_struct(task->fs);
-    char * cwd_path = get_cwd_path_from_struct(task->fs);
+    //char * cwd_path = get_cwd_path_from_struct(task->fs);
     
     if (is_absolute_path(path)) {
         char * new_path = kmalloc(strlen(root_path) + strlen(path) + 1);
         strcpy(new_path, root_path);
-        strcat(new_path, path);
+        strcat(new_path, path+1); // +1 to skip the leading '/'
         struct vfs_struct * fs = get_struct_from_path(new_path);
         task->fs->pwd.path = fs->pwd.path;
         task->fs->pwd.mnt = fs->pwd.mnt;
         kfree(new_path);
     } else {
-        char * new_path = kmalloc(strlen(cwd_path) + strlen(path) + 1);
-        strcpy(new_path, cwd_path);
+        char * new_path = kmalloc(strlen(root_path) + strlen(path) + 2);
+        strcpy(new_path, root_path);
+        strcat(new_path, "/");
         strcat(new_path, path);
         struct vfs_struct * fs = get_struct_from_path(new_path);
         task->fs->pwd.path = fs->pwd.path;

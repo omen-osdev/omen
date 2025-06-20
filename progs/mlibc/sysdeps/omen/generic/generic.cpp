@@ -291,12 +291,10 @@ namespace mlibc{
     }
 
     int sys_tcgetattr(int fd, struct termios *attr) {
-        int result;
-        return sys_ioctl(fd, TCGETS, (void*)attr, &result);
+        return do_syscall(SYS_FILE_IOCTL, fd, TCGETS, attr);
     }
 
-    int sys_tcsetattr(int fd, int optional_action, const struct termios *attr) {
-        int ret;
+    int sys_tcsetattr(int fd, int optional_action, struct termios *attr) {
         switch (optional_action) {
             case TCSANOW:
                 optional_action = TCSETS; break;
@@ -308,7 +306,7 @@ namespace mlibc{
                 __ensure(!"Unsupported tcsetattr");
         }
 
-        return sys_ioctl(fd, optional_action, (void *)attr, &ret);
+        return do_syscall(SYS_FILE_IOCTL, fd, optional_action, attr);
     }
 
     int sys_access(const char* filename, int mode){

@@ -165,6 +165,10 @@ void boot_startup() {
     int fd = vfs_file_open(cwd, "/dev/tty", O_RDWR, 0);
     char test_prompt[] = "Hello from Omen\n";
     if (fd) vfs_file_write(fd, test_prompt, strlen(test_prompt));
+    else
+        panic("Cannot open tty...\n");
+    int enable_echo = 1;
+    vfs_file_ioctl(fd, TTY_MODE_ECHO, (void*)&enable_echo);
     vfs_file_close(fd);
 
     init_process("/export/minit.elf", "/export/idle.elf", "/dev/tty");

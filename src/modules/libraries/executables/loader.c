@@ -244,7 +244,13 @@ int elf_open_file(struct vfs_struct * cwd, char * filename, uint8_t ** buffer, u
     }
 
     vfs_file_seek(fd, 0, 0x2); //SEEK_END
-    *filesize = (uint64_t)vfs_file_tell(fd);
+    int64_t fsize = vfs_file_tell(fd);
+    if (fsize < 0) {
+        kprintf("Could not get file size for %s\n", filename);
+        vfs_file_close(fd);
+        return 0;
+    }
+    *filesize = (uint64_t)fsize;
     vfs_file_seek(fd, 0, 0x0); //SEEK_SET
 
     *buffer = kmalloc(*filesize);

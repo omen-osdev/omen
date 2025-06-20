@@ -145,6 +145,7 @@ int64_t vfs_file_write(int fd, void* buffer, uint64_t size) {
     vfs_print("vfs_file_write(%d, %p, %ld)\n", fd, buffer, size);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
+        kprintf("vfs_file_write: Invalid path for fd %d\n", fd);
         return VFS_ERROR;
     }
     char * native_path_buffer = kmalloc(strlen(path) + 1);
@@ -446,6 +447,45 @@ unsigned char get_dirent_type(void * dirent) {
     return type;
 }
 
+/*
+	__ensure(dir->__ent_next <= dir->__ent_limit);
+	if(dir->__ent_next == dir->__ent_limit) {
+		MLIBC_CHECK_OR_ENOSYS(mlibc::sys_read_entries, nullptr);
+		if(int e = mlibc::sys_read_entries(dir->__handle, dir->__ent_buffer, 2048, &dir->__ent_limit); e)
+			__ensure(!"mlibc::sys_read_entries() failed");
+		dir->__ent_next = 0;
+		if(!dir->__ent_limit)
+			return nullptr;
+	}
+
+	auto entp = reinterpret_cast<struct dirent *>(dir->__ent_buffer + dir->__ent_next);
+	// We only copy as many bytes as we need to avoid buffer-overflows.
+	memcpy(&dir->__current, entp, offsetof(struct dirent, d_name) + strlen(entp->d_name) + 1);
+	dir->__ent_next += entp->d_reclen;
+	return &dir->__current;
+*/
+void testdir(void* entry, uint32_t count) {
+    uint32_t found = 0;
+    uint64_t next_offset = 0;
+
+    while (1) {
+        struct dirent * dirent = (struct dirent *) ((char *) entry + next_offset);
+        //Print the directory entry
+        kprintf("DIR ENTRY: %s, %ld, %ld, %d, %d\n", dirent->d_name, dirent->d_ino, dirent->d_off, dirent->d_reclen, dirent->d_type);
+        if (dirent->d_reclen == 0) {
+            break; // End of directory entries
+        }
+        next_offset += dirent->d_reclen;
+        found++;
+    }
+
+    if (found != count) {
+        kprintf("Warning: Found %d entries, expected %d\n", found, count);
+    } else {
+        kprintf("Found %d entries as expected\n", found);
+    }
+}
+
 int vfs_dir_read(int fd, void * dirp, uint32_t count) {
     vfs_print("vfs_dir_read(%d)\n", fd);
 
@@ -469,29 +509,86 @@ int vfs_dir_read(int fd, void * dirp, uint32_t count) {
         return VFS_ERROR;
     }
 
+    uint32_t directory_items = 0;
     do {
+        if (written >= count) {
+            //kprintf("DIR READ: %d\n", written);
+            break; // We have written enough entries
+        }
         res = mount->fst->dir_read(mount->internal_index, fd, name, &name_len, &type);
         if (res > 0) {
+            uint64_t rlen = name_len + sizeof(long) + sizeof(long) + sizeof(unsigned short) + sizeof(unsigned char);
+            if (written + rlen > count) {
+                int current_entry = vfs_dir_tell(fd);
+                kprintf("Going back from entry %d\n", current_entry);
+                vfs_dir_seek(fd, current_entry-1, SEEK_SET);
+                current_entry = vfs_dir_tell(fd);
+                kprintf("Current entry is now %d\n", current_entry);
+                break; // We have written enough entries
+            }
             //kprintf("DIR ENTRY: %s, %d, %d\n", name, type, name_len);
-
+            if (name_len != strlen(name)) {
+                kprintf("ERROR: Name length mismatch: %d != %d\n", name_len, strlen(name));
+                kprintf("Name: %s strlen: %d reported: %d\n", name, strlen(name), name_len);
+                panic("Directory entry name length mismatch");
+            }
+            directory_items++;
             struct dirent dirent = {0};
             dirent.d_ino = 0;
             dirent.d_off = written;
-            dirent.d_reclen = name_len + sizeof(long) + sizeof(long) + sizeof(unsigned short) + sizeof(unsigned char);
+            dirent.d_reclen = rlen;
             dirent.d_type = type;
             memset(dirent.d_name, 0, 1024);
             strncpy(dirent.d_name, name, name_len);
-            //Ensure the name is null-terminated
-            dirent.d_name[name_len] = 0;
             memcpy((char *) dirp + written, &dirent, dirent.d_reclen);
             written += dirent.d_reclen;
         }
-    } while (res > 0 && written < count);
+    } while (res > 0);
     //kprintf("DIR READ: %d\n", written);
     kfree(name);
     kfree(native_path_buffer);
     kfree(path);
+
+    testdir(dirp, directory_items);
     return written;
+}
+
+int vfs_dir_seek(int fd, int offset, int whence) {
+    vfs_print("vfs_dir_seek(%d, %ld, %d)\n", fd, offset, whence);
+
+    char * path = get_full_path_from_dir(fd);
+    if (path == 0) {
+        return VFS_ERROR;
+    }
+    char * native_path_buffer = kmalloc(strlen(path) + 1);
+    struct vfs_mount* mount = get_mount_from_path(path, native_path_buffer);
+
+    int res = VFS_ERROR;
+    if (mount != 0) {
+        res = mount->fst->dir_seek(mount->internal_index, fd, offset, whence);
+    }
+    kfree(native_path_buffer);
+    kfree(path);
+    return res;
+}
+
+int vfs_dir_tell(int fd) {
+    vfs_print("vfs_dir_tell(%d)\n", fd);
+
+    char * path = get_full_path_from_dir(fd);
+    if (path == 0) {
+        return VFS_ERROR;
+    }
+    char * native_path_buffer = kmalloc(strlen(path) + 1);
+    struct vfs_mount* mount = get_mount_from_path(path, native_path_buffer);
+
+    int res = VFS_ERROR;
+    if (mount != 0) {
+        res = mount->fst->dir_tell(mount->internal_index, fd);
+    }
+    kfree(native_path_buffer);
+    kfree(path);
+    return res;
 }
 
 int vfs_mkdir(struct vfs_struct * cwd, char* cpath, int mode) {

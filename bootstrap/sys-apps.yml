@@ -23,6 +23,30 @@ packages:
         - '@THIS_SOURCE_DIR@/build/.'
         - '@THIS_SOURCE_DIR@/../../export/.'
 
+  - name: dbgswp
+    source:
+      subdir: 'progs/sources/'
+    tools_required:
+      - host-gcc
+    pkgs_required:
+      - mlibc
+    build:
+      - args: 
+        - 'make'
+        - '-C'
+        - '@THIS_SOURCE_DIR@/'
+        - 'all'
+        environ:
+          CC: "@OPTION:cc@"
+          CXX: "@OPTION:cxx@"
+          LD: "@OPTION:ld@"
+          ASMC: "@OPTION:asmc@"
+      - args: 
+        - 'cp'
+        - '-r'
+        - '@THIS_SOURCE_DIR@/build/.'
+        - '@THIS_SOURCE_DIR@/../../export/.'
+
   - name: bash
     source:
       git: 'https://github.com/bminor/bash'

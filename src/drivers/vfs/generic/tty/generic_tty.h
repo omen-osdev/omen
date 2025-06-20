@@ -84,15 +84,21 @@ int64_t tty_compat_file_read(int devno, int fd, void* buffer, uint64_t size) {
 }
 
 int64_t tty_compat_file_write(int devno, int fd, void* buffer, uint64_t size) {
-    if (devno < 0 || devno >= MAX_TTY_DEVICES) 
+    if (devno < 0 || devno >= MAX_TTY_DEVICES) {
+        kprintf("tty_compat_file_write: Invalid device number %d\n", devno);
         return VFS_ERROR;
-
+    }
     struct vfs_tty * device = tty_devices[devno];
-    if (device == 0)
+    if (device == 0) {
+        kprintf("tty_compat_file_write: Device not found for device number %d\n", devno);
         return VFS_ERROR;
+    }
 
     struct file_descriptor_entry * entry = vfs_compat_get_file_descriptor(fd);
-    if (entry == 0 || entry->loaded == 0) return VFS_ERROR;
+    if (entry == 0 || entry->loaded == 0) {
+        kprintf("tty_compat_file_write: Invalid file descriptor %d\n", fd);
+        return VFS_ERROR;
+    }
     return vfs_tty_write(device, buffer, size, entry->offset);
 }
 
@@ -212,12 +218,23 @@ int tty_compat_file_event(int devno, int events, int* event_result) {
 
 }
 
+int tty_compat_file_dup(int partno, int oldfd, int newfd) {
+    if (partno < 0 || partno >= MAX_EXT2_PARTITIONS) 
+        return VFS_ERROR;
+    struct ext2_partition * partition = ext2_partitions[partno];
+    if (partition == 0)
+        return VFS_ERROR;
+
+    struct file_descriptor_entry * entry = vfs_compat_get_file_descriptor(oldfd);
+    if (entry == 0 || entry->loaded == 0) return VFS_ERROR;
+    return dup_fd(oldfd, newfd);
+}
+
 int tty_compat_flush(int partno) {(void)partno; return VFS_ERROR;}
 int tty_compat_dir_open(int partno, const char* path) {(void)partno; (void)path; return VFS_ERROR;}
 int tty_compat_dir_close(int partno, int fd) {(void)partno; (void)fd; return VFS_ERROR;}
 int tty_compat_file_creat(int partno, const char* path, int mode) {(void)partno; (void)path; (void)mode; return VFS_ERROR;}
 int tty_compat_link_creat(int partno, const char* path, const char* target, int mode) {(void)partno; (void)path; (void)target; (void)mode; return VFS_ERROR;}
-int tty_compat_file_dup(int partno, int oldfd, int newfd) {(void)partno; (void)oldfd; (void)newfd; return VFS_ERROR;}
 int tty_compat_dir_creat(int partno, const char* path, int mode) {(void)partno; (void)path; (void)mode; return VFS_ERROR;}
 int tty_compat_dir_read(int partno, int fd, char* name, uint32_t * name_len, uint32_t * type) {(void)partno; (void)fd; (void)name_len; (void)type; return VFS_ERROR;}
 int tty_compat_dir_load(int partno, int fd) {(void)partno; (void)fd; return VFS_ERROR;}

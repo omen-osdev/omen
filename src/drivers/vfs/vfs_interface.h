@@ -27,6 +27,8 @@ int vfs_file_event(int fd, int event_kind, int* event_result);
 void* vfs_dir_open(struct vfs_struct * cwd, char*);
 int vfs_dir_close(int);
 int vfs_dir_load(int);
+int vfs_dir_seek(int, int, int);
+int vfs_dir_tell(int);
 int vfs_mkdir(struct vfs_struct * cwd, char*, int);
 int vfs_dir_read(int, void * dirp, uint32_t count);
 void vfs_dir_list(struct vfs_struct * cwd, char*);

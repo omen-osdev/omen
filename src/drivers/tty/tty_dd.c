@@ -58,7 +58,10 @@ uint64_t tty_dd_read_block(uint64_t port, uint64_t size, uint64_t skip, uint8_t*
 uint64_t tty_dd_write_block(uint64_t port, uint64_t size, uint64_t skip, uint8_t* buffer) {
     //kprintf("Writing to serial port %x (size: %d, skip: %d)\n", port, size, skip);
     struct tty* device = get_tty((int)port);
-    if (!is_valid_tty(device)) return 0;
+    if (!is_valid_tty(device)) {
+        kprintf("tty_dd_write_block: Invalid TTY device\n");
+        return 0;
+    }
 
     buffer += skip;
     if ((uint64_t)(int)size != size) {

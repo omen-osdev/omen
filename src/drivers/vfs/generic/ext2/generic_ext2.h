@@ -327,6 +327,26 @@ int ext2_compat_stat(int partno, int fd, stat_t* st) {
     return 0;
 }
 
+int ext2_compat_dir_seek(int partno, int fd, int offset, int whence) {
+    if (partno < 0 || partno >= MAX_EXT2_PARTITIONS) 
+        return VFS_ERROR;
+    struct ext2_partition * partition = ext2_partitions[partno];
+    if (partition == 0)
+        return VFS_ERROR;
+
+    return seek_dirfd(fd, offset, whence);
+}
+
+int ext2_compat_dir_tell(int partno, int fd) {
+    if (partno < 0 || partno >= MAX_EXT2_PARTITIONS) 
+        return VFS_ERROR;
+    struct ext2_partition * partition = ext2_partitions[partno];
+    if (partition == 0)
+        return VFS_ERROR;
+
+    return tell_dirfd(fd);
+}
+
 int ext2_compat_rename(int partno, const char* path, const char* newpath) {(void)partno;(void)path;(void)newpath; return VFS_ERROR;}
 
 int ext2_compat_prepare_remove(int partno, const char* path) {
@@ -404,6 +424,8 @@ struct vfs_compatible ext2_register = {
     .dir_creat = ext2_compat_dir_creat,
     .dir_read = ext2_compat_dir_read,
     .dir_load = ext2_compat_dir_load,
+    .dir_seek = ext2_compat_dir_seek,
+    .dir_tell = ext2_compat_dir_tell,
     .prepare_remove = ext2_compat_prepare_remove,
     .file_readlink = ext2_compat_file_readlink,
 };

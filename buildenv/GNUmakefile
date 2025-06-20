@@ -62,6 +62,7 @@ GDBFLAGS ?=  --nx --command=$(ABSDIR)/$(GDBCFG)
 GDBPORT ?= 1234
 
 ABSDIR := $(shell cd ..; pwd)
+CONFILESDIR := $(ABSDIR)/defaultfiles
 LMNDIR := $(shell pwd)/limine
 OVMFDIR := $(shell pwd)/OVMFbin
 SRCDIR := $(ABSDIR)/src
@@ -207,6 +208,7 @@ setup:
 	@echo target remote $(WSLHOSTIP):$(GDBPORT) >> $(ABSDIR)/$(GDBCFG)
 	@echo set disassembly-flavor intel >> $(ABSDIR)/$(GDBCFG)
 	@echo add-symbol-file $(PROGSSYMDIR)/minit.elf.sym >> $(ABSDIR)/$(GDBCFG)
+	@echo add-symbol-file $(PROGSSYMDIR)/dbgswp.elf.sym >> $(ABSDIR)/$(GDBCFG)
 	@echo add-symbol-file $(PROGSSYMDIR)/bash.sym >> $(ABSDIR)/$(GDBCFG)
 	@echo add-symbol-file $(PROGSSYMDIR)/ld.so.sym 0x4000058b >> $(ABSDIR)/$(GDBCFG)
 	@echo add-symbol-file $(PROGSSYMDIR)/libc.so.sym 0x41045a90 >> $(ABSDIR)/$(GDBCFG)
@@ -341,16 +343,15 @@ dummyfiles:
 	@echo "Creating $(SYSROOT)/etc/group..."
 	@echo "root:root:0:" > $(SYSROOT)/etc/group
 	@echo "Creating $(SYSROOT)/usr/.bashrc..."
-	@mkdir -p $(SYSROOT)/usr
-	@echo "export PS1='omen:~# '" > $(SYSROOT)/usr/.bashrc
+	@cp $(CONFILESDIR)/.bashrc $(SYSROOT)/usr/.bashrc
 	@echo "Creating $(SYSROOT)/usr/.bash_history..."
 	@echo "" > $(SYSROOT)/usr/.bash_history
 	@echo "Creating $(SYSROOT)/etc/termcap..."
-	@echo "dumb|Minimal dumb terminal::" > $(SYSROOT)/etc/termcap
+	@cp $(CONFILESDIR)/termcap $(SYSROOT)/etc/termcap
 	@echo "Creating $(SYSROOT)/usr/.inputrc..."
-	@echo "set editing-mode vi" > $(SYSROOT)/usr/.inputrc
+	@cp $(CONFILESDIR)/.inputrc $(SYSROOT)/usr/.inputrc
 	@echo "Creating $(SYSROOT)/etc/inputrc..."
-	@echo "set editing-mode vi" > $(SYSROOT)/etc/inputrc
+	@cp $(CONFILESDIR)/inputrc $(SYSROOT)/etc/inputrc
 
 symbols:
 	@echo "Copying symbols..."

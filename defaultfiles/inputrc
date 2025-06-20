@@ -1,0 +1,41 @@
+# Inicio de /etc/inputrc
+# Modificado por Chris Lynn <roryo@roryo.dynup.net>
+
+# Se asegura de no mostrar todo en la primera línea
+set horizontal-scroll-mode Off
+
+# Activa la entrada de 8 bits
+set meta-flag On 
+set input-meta On
+
+# Desactiva la supresión del bit 8
+set convert-meta Off
+
+# Mantiene el bit 8 para ser mostrado
+set output-meta On
+
+# none, visible o audible
+set bell-style none
+
+# Todo lo siguiente mapea la secuencia de escape
+# del valor contenido en el primer argumento a las
+# funciones específicas de readline
+
+"\eOd": backward-word
+"\eOc": forward-word
+
+# Para la consola linux
+"\e[1~": beginning-of-line
+"\e[4~": end-of-line
+"\e[5~": beginning-of-history
+"\e[6~": end-of-history
+"\e[3~": delete-char
+"\e[2~": quoted-insert
+
+# Para xterm
+"\eOH": beginning-of-line
+"\eOF": end-of-line
+
+# Para Konsole
+"\e[H": beginning-of-line
+"\e[F": end-of-line

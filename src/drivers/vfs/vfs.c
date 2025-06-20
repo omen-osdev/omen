@@ -106,6 +106,8 @@ void register_filesystem(struct vfs_compatible * registrar) {
     fst->dir_read = registrar->dir_read;
     fst->dir_load = registrar->dir_load;
     fst->dir_creat = registrar->dir_creat;
+    fst->dir_seek = registrar->dir_seek;
+    fst->dir_tell = registrar->dir_tell;
     fst->prepare_remove = registrar->prepare_remove;
     fst->file_readlink = registrar->file_readlink;
     fst->rename = registrar->rename;
@@ -307,8 +309,6 @@ struct vfs_mount* get_mount_from_path(const char* cpath, char* native_path) {
                 //Native path = {'/', '\0};
                 if (native_path[0] != '/') {
                     native_path[0] = '/';
-                    native_path[1] = '\0';
-                } else {
                     native_path[1] = '\0';
                 }
                 return mount;

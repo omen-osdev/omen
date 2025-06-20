@@ -98,8 +98,8 @@ struct dentry {
 struct dir {
     struct file_descriptor_entry fd;
     struct dentry *dentries;
-    uint32_t number;
-    uint32_t index;
+    int number;
+    int index;
 };
 
 typedef struct dir dir_t;
@@ -132,6 +132,8 @@ struct vfs_compatible {
     int (*dir_load)(int, int);
     int (*dir_read)(int, int, char*, uint32_t *, uint32_t *);
     int (*dir_creat)(int, const char*, int);
+    int (*dir_seek)(int, int, int, int);
+    int (*dir_tell)(int, int);
     
     int (*prepare_remove)(int partno, const char* path);
     
@@ -162,4 +164,6 @@ int force_release(const char * path);
 int is_open(const char* path);
 int is_empty(const char* path);
 int read_dirfd(int fd, char * name, uint32_t * name_len, uint32_t * type); 
+int seek_dirfd(int fd, int offset, int whence);
+int tell_dirfd(int fd);
 #endif

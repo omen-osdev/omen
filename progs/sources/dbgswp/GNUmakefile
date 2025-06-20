@@ -1,0 +1,54 @@
+cyan = /bin/echo -e "\x1b[36m\#\# $1\x1b[0m"
+
+# Project Root
+override HOME = .
+
+# Project Resources
+SYSROOT = $(HOME)/../../../sysroot
+INCLUDE = $(SYSROOT)/usr/include
+SOURCE = $(HOME)/src
+SYMDIR := $(HOME)/../../sym
+BIN = build
+LIB = lib
+
+# Tools Config
+CFLAGS = -O2 -g -Wall -Wextra -Wpedantic -std=c11
+NASMFLAGS = -F dwarf -g
+
+LDFLAGS = -Wall \
+		  -lc
+
+# Recursive Wild Card
+rwildcard = $(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
+
+# Source Files
+C_SRC = $(call rwildcard,$(SOURCE),*.c)
+
+OBJS = $(patsubst $(SOURCE)/%.c,$(LIB)/%_c.o,$(C_SRC))
+
+# Target
+$(LIB)/%_c.o: $(SOURCE)/%.c
+	@ mkdir -m 777 -p $(@D)
+	@ $(call cyan,"$(subst ../,,$^)")
+	@ $(CC) $(CFLAGS) -c $^ -o $@
+
+link:
+	@ mkdir -m 777 -p $(BIN)
+	@ $(CC) $(LDFLAGS) -o $(BIN)/dbgswp.elf $(OBJS)
+
+build: $(OBJS) link
+
+clean:
+	@ $(call cyan,"Cleaning up...")
+	@ rm -rf $(BIN) $(LIB)
+	@ mkdir -m 777 -p $(BIN) $(LIB)
+	@ $(call cyan,"Done.")
+
+all:
+	@ $(call cyan,"Building program...")
+	@ $(call cyan,"Absdir: $(HOME)")
+	@ make build
+	@ $(call cyan,"Generating symbol table...")
+	@ mkdir -m 777 -p $(SYMDIR)
+	@ objcopy --only-keep-debug $(BIN)/dbgswp.elf $(SYMDIR)/dbgswp.elf.sym
+	@ $(call cyan,"Done.")

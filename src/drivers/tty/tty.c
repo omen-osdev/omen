@@ -262,7 +262,7 @@ int tty_init(char* indev, char* outdev, int mode, int inbs, int outbs) {
     tty->termios.c_iflag = 0;
     tty->termios.c_oflag = 0;
     tty->termios.c_cflag = 0;
-    tty->termios.c_lflag = 0;
+    tty->termios.c_lflag = ECHO | ICANON;
     tty->termios.c_line = LD_DEFAULT_TABLE;
     tty->termios.c_cc[VINTR] = 0x03;
     tty->termios.c_cc[VQUIT] = 0x1C;
@@ -355,7 +355,7 @@ int tty_init(char* indev, char* outdev, int mode, int inbs, int outbs) {
 }
 
 void _tty_write(struct tty* tty, char* buffer, int size) {
-    if (tty == 0 || !tty->valid) return;
+    if (tty == 0 || !tty->valid) {kprintf("_tty_write: Invalid tty\n"); return;}
     if (tty->line_discipline[tty->termios.c_line] == 0) return;
 
     for (int i = 0; i < size; i++) {

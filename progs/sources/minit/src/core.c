@@ -124,7 +124,6 @@ void test_exec() {
     } else {
         printf("Child process did not exit normally\n");
     }
-
 }
 
 int main(int argc, char* argv[]){
@@ -139,7 +138,7 @@ int main(int argc, char* argv[]){
     chdir(getenv("HOME"));
     setenv("PS1", "$USER@$HOSTNAME: ", 1); // '#' is used to indicate root user session
 
-    tty_test();
+    //tty_test();
 
     //Fork, one process busy loops and the other execs bash
     pid_t pid = fork();
@@ -155,8 +154,8 @@ int main(int argc, char* argv[]){
     }
     printf("Init process with pid %d\n", getpid());
 
-    sleep_wakeup_test();
-    test_exec();
+    //sleep_wakeup_test();
+    //test_exec();
 
     // INIT PROCESS PID = 1
     char* exe_argv[2] = {"/usr/bin/bash", NULL};
@@ -184,7 +183,7 @@ int main(int argc, char* argv[]){
 
     // Child process executes bash
     printf("Bash process with pid %d is starting...\n", getpid());
-    //disable_debugger();
+    disable_debugger();
     execvp("/usr/bin/bash", exe_argv);
 
     perror("init: /usr/bin/bash not found");

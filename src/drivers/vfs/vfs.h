@@ -62,6 +62,8 @@ struct vfs_file_system_type {
     int (*dir_close)(int, int);
     int (*dir_load)(int, int);
     int (*dir_creat)(int, const char*, int);
+    int (*dir_seek)(int, int, int, int);
+    int (*dir_tell)(int, int);
     int (*prepare_remove)(int partno, const char* path);
     
     char* (*file_readlink)(int, const char*);

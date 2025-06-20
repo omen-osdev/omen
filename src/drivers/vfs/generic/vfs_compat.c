@@ -166,6 +166,37 @@ int read_dirfd(int fd, char * name, uint32_t * name_len, uint32_t * type) {
     return 1;
 }
 
+int seek_dirfd(int fd, int offset, int whence) {
+    if (fd >= VFS_COMPAT_MAX_OPEN_FILES) return VFS_ERROR;
+    dir_t * entry = GET_DIR(fd);
+    if (entry->fd.loaded == 0) return VFS_ERROR;
+    if (whence == SEEK_SET) {
+        if (offset < 0 || offset >= entry->number) return VFS_ERROR;
+        entry->index = offset;
+    } else if (whence == SEEK_CUR) {
+        if (offset < 0 && entry->index + offset < 0) return VFS_ERROR;
+        if (offset > 0 && entry->index + offset >= entry->number) return VFS_ERROR;
+        entry->index += offset;
+    } else if (whence == SEEK_END) {
+        if (offset > 0 || entry->number + offset < 0) return VFS_ERROR;
+        entry->index = entry->number + offset;
+    } else {
+        return VFS_ERROR; // Invalid whence
+    }
+    if (entry->index < 0) entry->index = 0;
+    if (entry->index >= entry->number) entry->index = entry->number - 1;
+    //kprintf("seek_dirfd: %d, %d, %d\n", fd, offset, whence);
+    //kprintf("New index: %d\n", entry->index);
+    return 1;
+}
+
+int tell_dirfd(int fd) {
+    if (fd >= VFS_COMPAT_MAX_OPEN_FILES) return VFS_ERROR;
+    dir_t * entry = GET_DIR(fd);
+    if (entry->fd.loaded == 0) return VFS_ERROR;
+    return entry->index;
+}
+
 int release_dirfd(int fd) {
     if (fd >= VFS_COMPAT_MAX_OPEN_FILES) return VFS_ERROR;
     dir_t * entry = GET_DIR(fd);
