@@ -19,20 +19,20 @@ struct command {
 
 void test(int argc, char* argv[]) {
     if (argc < 1) {
-        kprintf("Prints all the parameters\n");
-        kprintf("Usage: test <param1> ...\n");
+        DBG_INFO("Prints all the parameters\n");
+        DBG_INFO("Usage: test <param1> ...\n");
         return;
     }
 
     for (int i = 1; i < argc; i++) {
-        kprintf("%s\n", argv[i]);
+        DBG_INFO("%s\n", argv[i]);
     }
 }
 
 void spawn(int argc, char* argv[]) {
     panic("Not implemented\n");
     //process_t * new = create_user_process(dummy_main);
-    //kprintf("New process created with pid %d\n", new->pid);
+    //DBG_INFO("New process created with pid %d\n", new->pid);
 }
 
 struct command cmdlist[] = {
@@ -52,21 +52,21 @@ struct command cmdlist[] = {
 
 void help(int argc, char* argv[]) {
     if (argc < 2) {
-        kprintf("Available commands:\n");
+        DBG_INFO("Available commands:\n");
         for (long unsigned int i = 0; i < sizeof(cmdlist) / sizeof(struct command); i++) {
-            kprintf("%s ", cmdlist[i].keyword);
+            DBG_INFO("%s ", cmdlist[i].keyword);
             if (i > 1 && i % 5 == 0) {
-                kprintf("\n");
+                DBG_INFO("\n");
             }
         }
-        kprintf("\n");
+        DBG_INFO("\n");
     } else {
         //Search for command, print all matches, even if partial
         for (long unsigned int i = 0; i < sizeof(cmdlist) / sizeof(struct command); i++) {
             if (strstr(cmdlist[i].keyword, argv[1]) != 0) {
-                kprintf("%s\n", cmdlist[i].keyword);
+                DBG_INFO("%s\n", cmdlist[i].keyword);
                 if (i > 1 && i % 5 == 0) {
-                    kprintf("\n");
+                    DBG_INFO("\n");
                 }
             }
         }
@@ -74,7 +74,7 @@ void help(int argc, char* argv[]) {
 }
 
 void print_prompt() {
-    kprintf("dev@omen:~$ ");
+    DBG_INFO("dev@omen:~$ ");
 }
 
 void ex_dbgshell(const char * command) {
@@ -102,7 +102,7 @@ void ex_dbgshell(const char * command) {
 void dshell_cb(void* data, char c, int ignore) {
     (void)data;
     (void)ignore;
-    //kprintf("%x", c);
+    //DBG_INFO("%x", c);
     switch (c) {
         case 0x0:
             break;
@@ -111,12 +111,12 @@ void dshell_cb(void* data, char c, int ignore) {
                 current_command[strlen(current_command)] = c;
             }
             #ifdef DSHELL_ECHO
-                kprintf(" ");
+                DBG_INFO(" ");
             #endif
             break;
         case 0xd:
             #ifdef DSHELL_ECHO
-                kprintf("\n");
+                DBG_INFO("\n");
             #endif
             if (strlen(current_command) > 0) {
                 ex_dbgshell(current_command);
@@ -128,7 +128,7 @@ void dshell_cb(void* data, char c, int ignore) {
                 current_command[strlen(current_command) - 1] = 0;
             }
             #ifdef DSHELL_ECHO
-                kprintf("\b \b");
+                DBG_INFO("\b \b");
             #endif
             break;
         default:
@@ -136,7 +136,7 @@ void dshell_cb(void* data, char c, int ignore) {
                 current_command[strlen(current_command)] = c;
             }
             #ifdef DSHELL_ECHO
-                kprintf("%c", c);
+                DBG_INFO("%c", c);
             #endif
             break;
     }
@@ -148,7 +148,7 @@ void init_dshell() {
         .handler = dshell_cb
     };
     ps2_subscribe((void*)&subscriptor, PS2_DEVICE_KEYBOARD, PS2_DEVICE_GENERIC_EVENT);
-    kprintf("Debug shell initialized\n");
+    DBG_INFO("Debug shell initialized\n");
     help(0, 0);
     print_prompt();
 }

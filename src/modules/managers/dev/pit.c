@@ -26,7 +26,7 @@ void timer_phase(int hz) {
 }
 
 void init_pit(int hertz) {
-    kprintf("### PIT STARTUP ###\n");
+    DBG_INFO("### PIT STARTUP ###\n");
 
     pit.boot_epoch = get_boot_time();
     pit.timer_ticks = 0;
@@ -35,7 +35,7 @@ void init_pit(int hertz) {
     pit.hertz = hertz;
     pit.alarms = 0x0;
 
-    kprintf("Hertz: %d\n", hertz);
+    DBG_INFO("Hertz: %d\n", hertz);
     
     timer_phase(hertz);
 }
@@ -86,7 +86,7 @@ int add_alarm(int64_t ticks, int rearm, void (*callback)(int, uint64_t, int64_t)
     }
     struct pit_alarm * alarm = (struct pit_alarm *)kmalloc(sizeof(struct pit_alarm));
     if (alarm == 0x0) {
-        kprintf("Failed to allocate memory for alarm\n");
+        DBG_ERROR("Failed to allocate memory for alarm\n");
         return -1;
     }
     alarm->alarm_id = find_free_alarm_id();
@@ -96,7 +96,7 @@ int add_alarm(int64_t ticks, int rearm, void (*callback)(int, uint64_t, int64_t)
     alarm->next = pit.alarms;
     pit.alarms = alarm;
 
-    //kprintf("Alarm %d added with %ld ticks\n", alarm->alarm_id, ticks);
+    //DBG_DEBUG("Alarm %d added with %ld ticks\n", alarm->alarm_id, ticks);
 
     return alarm->alarm_id;
 }
@@ -150,7 +150,7 @@ uint64_t ticks_to_ms(uint64_t ticks) {
 }
 
 uint64_t ms_to_ticks(uint64_t ms) {
-    //kprintf("MS: %d PITH: %ld\n", ms, pit.hertz);
+    //DBG_DEBUG("MS: %d PITH: %ld\n", ms, pit.hertz);
     uint64_t cuak = ms * pit.hertz;
     if (cuak < 1000) return 1;
     return cuak / 1000; 

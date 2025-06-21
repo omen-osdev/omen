@@ -33,16 +33,16 @@ void ioapic_write_register(void* apic_ptr, uint8_t offset, uint32_t value) {
 }
 
 void debug_redirection_entry(struct ioapic_redirection_entry entry) {
-    kprintf("Redirection Entry:\n");
-    kprintf("Vector: %d\n", entry.vector);
-    kprintf("Delivery Mode: %d\n", entry.delivery_mode);
-    kprintf("Destination Mode: %d\n", entry.destination_mode);
-    kprintf("Delivery Status: %d\n", entry.delivery_status);
-    kprintf("Pin Polarity: %d\n", entry.pin_polarity);
-    kprintf("Remote IRR: %d\n", entry.remote_irr);
-    kprintf("Trigger Mode: %d\n", entry.trigger_mode);
-    kprintf("Mask: %d\n", entry.mask);
-    kprintf("Destination: %d\n", entry.destination);
+    DBG_DEBUG("Redirection Entry:\n");
+    DBG_DEBUG("Vector: %d\n", entry.vector);
+    DBG_DEBUG("Delivery Mode: %d\n", entry.delivery_mode);
+    DBG_DEBUG("Destination Mode: %d\n", entry.destination_mode);
+    DBG_DEBUG("Delivery Status: %d\n", entry.delivery_status);
+    DBG_DEBUG("Pin Polarity: %d\n", entry.pin_polarity);
+    DBG_DEBUG("Remote IRR: %d\n", entry.remote_irr);
+    DBG_DEBUG("Trigger Mode: %d\n", entry.trigger_mode);
+    DBG_DEBUG("Mask: %d\n", entry.mask);
+    DBG_DEBUG("Destination: %d\n", entry.destination);
 }
 
 void ioapic_set_redirection_entry(void* apic_ptr, uint64_t index, struct ioapic_redirection_entry entry) {
@@ -61,7 +61,7 @@ void ioapic_set_redirection_entry(void* apic_ptr, uint64_t index, struct ioapic_
         (entry.destination << IOAPIC_REDIRECTION_BITS_DESTINATION)
     );
 
-    //kprintf("Setting up redirection entry %d\n", index);
+    //DBG_DEBUG("Setting up redirection entry %d\n", index);
     //debug_redirection_entry(entry);
 
     ioapic_write_register(apic_ptr, IOAPIC_REDIRECTION_TABLE + (index * 2), low);
@@ -140,7 +140,7 @@ uint8_t parse_apic_entry(uint64_t* entry) {
 
 void* get_lapic_address() {
     uint8_t apic_id = getApicId();
-    kprintf("APIC ID: %d\n", apic_id);
+    DBG_DEBUG("APIC ID: %d\n", apic_id);
     return actx.lapic_address[apic_id]->virtual_address;
 }
 
@@ -174,7 +174,7 @@ void ioapic_init(uint64_t ioapic_id) {
     outb(PIC1_DATA, 0xff);
     outb(PIC2_DATA, 0xff);
     uint8_t apic_id = getApicId();
-    kprintf("APIC ID: %d\n", apic_id);
+    DBG_DEBUG("APIC ID: %d\n", apic_id);
     enable_apic(apic_id);
 
     struct ioapic* ioapic = actx.ioapics[ioapic_id];
@@ -187,14 +187,14 @@ void ioapic_init(uint64_t ioapic_id) {
     uint8_t max_interrupts = ((ioapic_version >> 16) & 0xff) + 1;
     ioapic->max_interrupts = max_interrupts;
 
-    kprintf("IOAPIC: %x\n", ioapic_address);
-    kprintf("IOAPIC Version: %x\n", (uint8_t)ioapic_version);
-    kprintf("IOAPIC Max Interrupts: %d\n", max_interrupts);
+    DBG_DEBUG("IOAPIC: %x\n", ioapic_address);
+    DBG_DEBUG("IOAPIC Version: %x\n", (uint8_t)ioapic_version);
+    DBG_DEBUG("IOAPIC Max Interrupts: %d\n", max_interrupts);
 
     uint32_t base = ioapic->gsi_base;
     
     for (uint64_t i = 0; i < max_interrupts; i++) {
-        //kprintf("Setting up redirection entry %d\n", i);
+        //DBG_DEBUG("Setting up redirection entry %d\n", i);
         struct ioapic_redirection_entry entry = {
             .vector = IRQ_START + i,
             .delivery_mode = IOAPIC_REDIRECTION_DELIVERY_MODE_FIXED,
@@ -237,9 +237,9 @@ void register_apic(struct madt_header * madt, char* (*cb)(void*, uint8_t, uint64
     actx.ioapic_iso_count = 0;
     actx.max_apic_id = 0;
 
-    //kprintf("APIC: %x\n", madt->local_apic_address);
-    //kprintf("flags: %x\n", madt->flags);
-    //kprintf("length: %x\n", madt->header.length);
+    //DBG_DEBUG("APIC: %x\n", madt->local_apic_address);
+    //DBG_DEBUG("flags: %x\n", madt->flags);
+    //DBG_DEBUG("length: %x\n", madt->header.length);
 
     uint64_t entry = (((uint64_t)madt)+sizeof(struct madt_header));
     uint64_t end = ((uint64_t)madt)+madt->header.length;

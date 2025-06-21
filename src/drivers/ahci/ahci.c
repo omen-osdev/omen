@@ -24,7 +24,7 @@ int8_t find_cmd_slot(struct ahci_port* port) {
         slots >>= 1;
     }
 
-    kprintf("Cannot find free command list entry\n");
+    DBG_ERROR("Cannot find free command list entry\n");
     return -1;
 }
 
@@ -36,7 +36,7 @@ uint8_t identify(uint8_t port_no) {
     int spin = 0;
     int slot = (int)find_cmd_slot(port);
     if (slot == -1) {
-        kprintf("No free command slots\n");
+        DBG_WARN("No free command slots\n");
         return 0;
     }
 
@@ -67,7 +67,7 @@ uint8_t identify(uint8_t port_no) {
         spin++;
     };
     if (spin == 1000000) {
-        kprintf("Port is hung\n");
+        DBG_WARN("Port is hung\n");
         return 0;
     }
 
@@ -95,7 +95,7 @@ uint8_t write_atapi_port(uint8_t port_no, uint64_t sector, uint32_t sector_count
 }
 
 uint8_t read_atapi_port(uint8_t port_no, uint64_t sector, uint32_t sector_count) {
-    //kprintf("Atapi read issued (port %d, sector %d, sector_count %d)\n", port_no, sector, sector_count);
+    //DBG_DEBUG("Atapi read issued (port %d, sector %d, sector_count %d)\n", port_no, sector, sector_count);
     if ((uint64_t)abar == 0) return 0;
 
     struct ahci_port* port = &ahci_ports[port_no];
@@ -105,7 +105,7 @@ uint8_t read_atapi_port(uint8_t port_no, uint64_t sector, uint32_t sector_count)
     int spin = 0;
     int slot = (int)find_cmd_slot(port);
     if (slot == -1) {
-        kprintf("No free command slots\n");
+        DBG_WARN("No free command slots\n");
         return 0;
     }
 
@@ -154,7 +154,7 @@ uint8_t read_atapi_port(uint8_t port_no, uint64_t sector, uint32_t sector_count)
         spin++;
     };
     if (spin == 1000000) {
-        kprintf("Port is hung\n");
+        DBG_WARN("Port is hung\n");
         return 0;
     }
 
@@ -186,7 +186,7 @@ uint8_t read_port(uint8_t port_no, uint64_t sector, uint32_t sector_count) {
     int spin = 0;
     int slot = (int)find_cmd_slot(port);
     if (slot == -1) {
-        kprintf("No free command slots\n");
+        DBG_WARN("No free command slots\n");
         return 0;
     }
 
@@ -237,7 +237,7 @@ uint8_t read_port(uint8_t port_no, uint64_t sector, uint32_t sector_count) {
         spin++;
     };
     if (spin == 1000000) {
-        kprintf("Port is hung\n");
+        DBG_WARN("Port is hung\n");
         return 0;
     }
 
@@ -269,7 +269,7 @@ uint8_t write_port(uint8_t port_no, uint64_t sector, uint32_t sector_count) {
     int spin = 0;
     int slot = (int)find_cmd_slot(port);
     if (slot == -1) {
-        kprintf("No free command slots\n");
+        DBG_WARN("No free command slots\n");
         return 0;
     }
 
@@ -320,7 +320,7 @@ uint8_t write_port(uint8_t port_no, uint64_t sector, uint32_t sector_count) {
         spin++;
     };
     if (spin == 1000000) {
-        kprintf("Port is hung\n");
+        DBG_WARN("Port is hung\n");
         return 0;
     }
 
@@ -411,7 +411,7 @@ enum port_type check_port_type(struct hba_port* port) {
         case SATA_SIG_ATA:
             return PORT_TYPE_SATA;
         default:
-            kprintf("Unknown port type: 0x%x\n", port->signature);
+            DBG_WARN("Unknown port type: 0x%x\n", port->signature);
             return PORT_TYPE_NONE;
     }
 }

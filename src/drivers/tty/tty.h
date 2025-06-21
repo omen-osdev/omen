@@ -10,6 +10,8 @@
 #define TTY_EVENT_FLUSH_INB 2
 #define TTY_EVENT_FLUSH_OUTB 3
 
+#define TTY_EOF 0x4
+
 #define MAX_LD 16
 
 #define TTY_DEFAULT_COLS 80

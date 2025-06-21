@@ -23,16 +23,16 @@ void _tty_check_termios_support(struct termios* termios) {
 
     //Check if the termios structure is supported
     if (termios->c_iflag & ~(IGNBRK | BRKINT | IGNPAR | PARMRK | INPCK | ISTRIP | INLCR | IGNCR | ICRNL | IXON | IXANY | IXOFF | IMAXBEL | IUTF8)) { 
-        kprintf("Unsupported termios input flag\n");
+        DBG_WARN("Unsupported termios input flag\n");
     }
     if (termios->c_oflag & ~(OPOST | OLCUC | ONLCR | OCRNL | ONOCR | ONLRET | OFILL | OFDEL | NLDLY | NL0 | NL1 | CRDLY | CR0 | CR1 | CR2 | CR3 | TABDLY | TAB0 | TAB1 | TAB2 | TAB3 | BSDLY | BS0 | BS1 | FFDLY | FF0 | FF1 | VTDLY | VT0 | VT1)) {
-        kprintf("Unsupported termios output flag\n");
+        DBG_WARN("Unsupported termios output flag\n");
     }
     if (termios->c_cflag & ~(CSIZE | CS5 | CS6 | CS7 | CS8 | CSTOPB | CREAD | PARENB | PARODD | HUPCL | CLOCAL)) {
-        kprintf("Unsupported termios control flag\n");
+        DBG_WARN("Unsupported termios control flag\n");
     }
     if (termios->c_lflag & ~(ISIG | ICANON | ECHO | ECHOE | ECHOK | ECHONL | NOFLSH | TOSTOP | IEXTEN | EXTA | EXTB | CBAUD | CBAUDEX | CIBAUD | CMSPAR | CRTSCTS | XCASE | ECHOCTL | ECHOPRT | ECHOKE | FLUSHO | PENDIN | EXTPROC | XTABS)) {
-        kprintf("Unsupported termios local flag\n");
+        DBG_WARN("Unsupported termios local flag\n");
     }
 
     if (termios->c_line != LD_DEFAULT_TABLE) {
@@ -174,7 +174,6 @@ void tty_read_cb(void* ttyb, char c, int port) {
     struct tty* tty = (struct tty*)ttyb;
     if (!is_valid_tty(tty)) return;
     line_discipline_read(tty->line_discipline[tty->termios.c_line], c);
-    wakeup(TTY_IO_SLINE);
 }
 
 //TODO: Maybe it is best for the line discipline to send itself and contain a field with the tty! idk...
@@ -184,6 +183,7 @@ void flush_cb(void* ttyb, char* buffer, int size) {
         tty_write_inb(tty, buffer[i]);
     }
     tty_run_subscribers(tty, TTY_EVENT_INB);
+    wakeup(TTY_IO_SLINE);
 }
 
 void echo_cb(void* ttyb, char c) {
@@ -350,12 +350,12 @@ int tty_init(char* indev, char* outdev, int mode, int inbs, int outbs) {
     }
 
     tty->valid = 1;
-    kprintf("tty_init(index: %d, in:%s, out:%s, %d, %d, %d)\n", index, indev, outdev, mode, inbs, outbs);
+    DBG_INFO("tty_init(index: %d, in:%s, out:%s, %d, %d, %d)\n", index, indev, outdev, mode, inbs, outbs);
     return index;
 }
 
 void _tty_write(struct tty* tty, char* buffer, int size) {
-    if (tty == 0 || !tty->valid) {kprintf("_tty_write: Invalid tty\n"); return;}
+    if (tty == 0 || !tty->valid) {DBG_ERROR("_tty_write: Invalid tty\n"); return;}
     if (tty->line_discipline[tty->termios.c_line] == 0) return;
 
     for (int i = 0; i < size; i++) {

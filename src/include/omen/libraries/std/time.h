@@ -1,5 +1,6 @@
 #ifndef _TIME_H_
 #define _TIME_H_
+#include <omen/libraries/std/stdint.h>
 
 #define CLOCK_MONOTONIC 0
 
@@ -64,4 +65,5 @@ struct itimerspec {
 struct timeval * timeval_now(struct timeval *tv);
 struct timespec * timespec_now(struct timespec *ts);
 struct timespec * clock_res(struct timespec *ts);
+struct timespec epoch_to_timespec(uint32_t epoch);
 #endif

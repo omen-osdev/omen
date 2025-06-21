@@ -36,7 +36,7 @@ uint8_t ext2_has_errors(uint8_t min_level);
 void ext2_print_errors(uint8_t min_level);
 void ext2_clear_errors();
 uint64_t ext2_get_error_deletion_counter();
-void ext2_integrity_inhibit_errors(uint8_t true);
+void ext2_integrity_inhibit_errors(uint8_t inhibit);
 
 void ext2_flush_required(struct ext2_partition * partition);
 void ext2_flush_partition(struct ext2_partition * partition);

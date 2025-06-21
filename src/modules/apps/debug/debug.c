@@ -10,6 +10,7 @@
 #include <omen/managers/dev/devices.h>
 
 struct device * writer = NULL;
+uint8_t debug_level = 0;
 char debug_buffer[DEBUG_MESSAGE_BUFFER];
 
 bool debug_enabled = false;
@@ -34,6 +35,91 @@ void init_debugger(const char * device_name) {
     debug_enabled = true;
 }
 
+void kprintf_error(const char * str, ...) {
+    if (writer == NULL || !debug_enabled) {
+        return;
+    }
+
+    if (debug_level < DEBUG_LEVEL_ERROR) {
+        return;
+    }
+    
+    va_list args;
+    va_start(args, str);
+    memset(debug_buffer, 0, DEBUG_MESSAGE_BUFFER);
+    vsnprintf(debug_buffer, DEBUG_MESSAGE_BUFFER, str, args);
+    device_write(writer->name, strlen(debug_buffer), 0, (uint8_t*)debug_buffer);
+    va_end(args);
+}
+
+void kprintf_warning(const char * str, ...) {
+    if (writer == NULL || !debug_enabled) {
+        return;
+    }
+
+    if (debug_level < DEBUG_LEVEL_WARN) {
+        return;
+    }
+    
+    va_list args;
+    va_start(args, str);
+    memset(debug_buffer, 0, DEBUG_MESSAGE_BUFFER);
+    vsnprintf(debug_buffer, DEBUG_MESSAGE_BUFFER, str, args);
+    device_write(writer->name, strlen(debug_buffer), 0, (uint8_t*)debug_buffer);
+    va_end(args);
+}
+
+void kprintf_strace(const char * str, ...) {
+    if (writer == NULL || !debug_enabled) {
+        return;
+    }
+
+    if (debug_level < DEBUG_LEVEL_STRACE) {
+        return;
+    }
+    
+    va_list args;
+    va_start(args, str);
+    memset(debug_buffer, 0, DEBUG_MESSAGE_BUFFER);
+    vsnprintf(debug_buffer, DEBUG_MESSAGE_BUFFER, str, args);
+    device_write(writer->name, strlen(debug_buffer), 0, (uint8_t*)debug_buffer);
+    va_end(args);
+}
+
+void kprintf_info(const char * str, ...) {
+    if (writer == NULL || !debug_enabled) {
+        return;
+    }
+
+    if (debug_level < DEBUG_LEVEL_INFO) {
+        return;
+    }
+    
+    va_list args;
+    va_start(args, str);
+    memset(debug_buffer, 0, DEBUG_MESSAGE_BUFFER);
+    vsnprintf(debug_buffer, DEBUG_MESSAGE_BUFFER, str, args);
+    device_write(writer->name, strlen(debug_buffer), 0, (uint8_t*)debug_buffer);
+    va_end(args);
+}
+
+void kprintf_debug(const char * str, ...) {
+    if (writer == NULL || !debug_enabled) {
+        return;
+    }
+
+    if (debug_level < DEBUG_LEVEL_DEBUG) {
+        return;
+    }
+    
+    va_list args;
+    va_start(args, str);
+    memset(debug_buffer, 0, DEBUG_MESSAGE_BUFFER);
+    vsnprintf(debug_buffer, DEBUG_MESSAGE_BUFFER, str, args);
+    device_write(writer->name, strlen(debug_buffer), 0, (uint8_t*)debug_buffer);
+    va_end(args);
+}
+
 void kprintf(const char * str, ...) {
     if (writer == NULL || !debug_enabled) {
         return;
@@ -53,6 +139,19 @@ void disable_debugger() {
 
 void enable_debugger() {
     debug_enabled = true;
+}
+
+void set_debug_level(uint8_t level) {
+    if (writer == NULL) {
+        return;
+    }
+
+    if (level > 5) {
+        DBG_ERROR("Invalid debug level: %d. Must be between 0 and 5.\n", level);
+        return;
+    }
+    debug_level = level;
+    kprintf("[DEBUG] Debug level set to %d\n", debug_level);
 }
 
 uint8_t is_debugger_enabled() {
@@ -109,16 +208,4 @@ int64_t atoi(const char * str) {
 
     // return result.
     return res;
-}
-
-void kdebug(const char * str, ...) {
-    if (writer == NULL || !debug_enabled) {
-        return;
-    }
-
-    //call kprintf internally
-    va_list args;
-    va_start(args, str);
-    kprintf(str, args);
-    va_end(args);
 }

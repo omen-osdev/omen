@@ -48,37 +48,37 @@ tss_entry_t gdt_tss_entry(uintptr_t tss_address) {
 }
 
 void dump_gdt_entry(gdt_entry_t* entry) {
-    kprintf("  GDT Entry: 0x%08x\n", *(uint32_t*) entry);
-    kprintf("  Base: 0x%08x\n", entry->base_low | (entry->base_middle << 16) | (entry->base_high << 24));
-    kprintf("  Limit: 0x%08x\n", entry->limit_low | (entry->limit_middle << 16));
-    kprintf("  Flags: 0x%02x\n", entry->flags);
-    kprintf("  Granularity: 0x%02x\n", entry->granularity);
+    DBG_DEBUG("  GDT Entry: 0x%08x\n", *(uint32_t*) entry);
+    DBG_DEBUG("  Base: 0x%08x\n", entry->base_low | (entry->base_middle << 16) | (entry->base_high << 24));
+    DBG_DEBUG("  Limit: 0x%08x\n", entry->limit_low | (entry->limit_middle << 16));
+    DBG_DEBUG("  Flags: 0x%02x\n", entry->flags);
+    DBG_DEBUG("  Granularity: 0x%02x\n", entry->granularity);
 }
 
 void dump_tss_entry(tss_entry_t* entry) {
-    kprintf("  TSS Entry: 0x%08x\n", *(uint32_t*) entry);
-    kprintf("  Base: 0x%08x\n", entry->base_low | (entry->base_middle << 16) | (entry->base_high << 24));
-    kprintf("  Limit: 0x%08x\n", entry->length);
-    kprintf("  Flags1: 0x%02x\n", entry->flags1);
-    kprintf("  Flags2: 0x%02x\n", entry->flags2);
-    kprintf("  Base Upper: 0x%08x\n", entry->base_upper);
-    kprintf("  Reserved: 0x%08x\n", entry->reserved);
+    DBG_DEBUG("  TSS Entry: 0x%08x\n", *(uint32_t*) entry);
+    DBG_DEBUG("  Base: 0x%08x\n", entry->base_low | (entry->base_middle << 16) | (entry->base_high << 24));
+    DBG_DEBUG("  Limit: 0x%08x\n", entry->length);
+    DBG_DEBUG("  Flags1: 0x%02x\n", entry->flags1);
+    DBG_DEBUG("  Flags2: 0x%02x\n", entry->flags2);
+    DBG_DEBUG("  Base Upper: 0x%08x\n", entry->base_upper);
+    DBG_DEBUG("  Reserved: 0x%08x\n", entry->reserved);
 }
 
 void dump_gdt(gdt_t* gdt) {
-    kprintf("Null Entry:\n");
+    DBG_DEBUG("Null Entry:\n");
     dump_gdt_entry(&gdt->entries[GDT_NULL_ENTRY]);
-    kprintf("Kernel Code Entry:\n");
+    DBG_DEBUG("Kernel Code Entry:\n");
     dump_gdt_entry(&gdt->entries[GDT_KERNEL_CODE_ENTRY]);
-    kprintf("Kernel Data Entry:\n");
+    DBG_DEBUG("Kernel Data Entry:\n");
     dump_gdt_entry(&gdt->entries[GDT_KERNEL_DATA_ENTRY]);
-    kprintf("Null Entry 2:\n");
+    DBG_DEBUG("Null Entry 2:\n");
     dump_gdt_entry(&gdt->entries[GDT_NULL_ENTRY_2]);
-    kprintf("User Data Entry:\n");
+    DBG_DEBUG("User Data Entry:\n");
     dump_gdt_entry(&gdt->entries[GDT_USER_DATA_ENTRY]);
-    kprintf("User Code Entry:\n");
+    DBG_DEBUG("User Code Entry:\n");
     dump_gdt_entry(&gdt->entries[GDT_USER_CODE_ENTRY]);
-    kprintf("TSS Entry:\n");
+    DBG_DEBUG("TSS Entry:\n");
     dump_tss_entry(&gdt->tss);
 }
 
@@ -99,7 +99,7 @@ void create_gdt() {
         cgdt->tss = gdt_tss_entry((uintptr_t) &_tss); //48
     }
 
-    kprintf("Dumping GDT for CPU 0\n");
+    DBG_DEBUG("Dumping GDT for CPU 0\n");
     //dump_gdt(&gdt[0]);
 }
 

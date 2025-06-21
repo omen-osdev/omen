@@ -45,15 +45,15 @@ void ext2_dump_all_bgs(struct ext2_partition* partition) {
 int64_t ext2_dump_bg(struct ext2_partition* partition, struct ext2_block_group_descriptor * bg, uint32_t id) {
     uint32_t block_size = 1024 << ((struct ext2_superblock*)(partition->sb))->s_log_block_size;
 
-    kprintf("Block group %d:\n", id);
-    kprintf("  Block bitmap: %d\n", bg->bg_block_bitmap);
-    kprintf("  Inode bitmap: %d\n", bg->bg_inode_bitmap);
-    kprintf("  Inode table: %d\n", bg->bg_inode_table);
-    kprintf("  Free blocks: %d\n", bg->bg_free_blocks_count);
-    kprintf("  Free inodes: %d\n", bg->bg_free_inodes_count);
-    kprintf("  Directories entries: %d\n", bg->bg_used_dirs_count);
+    DBG_DEBUG("Block group %d:\n", id);
+    DBG_DEBUG("  Block bitmap: %d\n", bg->bg_block_bitmap);
+    DBG_DEBUG("  Inode bitmap: %d\n", bg->bg_inode_bitmap);
+    DBG_DEBUG("  Inode table: %d\n", bg->bg_inode_table);
+    DBG_DEBUG("  Free blocks: %d\n", bg->bg_free_blocks_count);
+    DBG_DEBUG("  Free inodes: %d\n", bg->bg_free_inodes_count);
+    DBG_DEBUG("  Directories entries: %d\n", bg->bg_used_dirs_count);
 
-    kprintf("Dumping block bitmap:\n");
+    DBG_DEBUG("Dumping block bitmap:\n");
     uint8_t * block_bitmap = kmalloc(block_size);
     if (block_bitmap == 0) {
         EXT2_ERROR("Failed to allocate block bitmap");
@@ -66,11 +66,11 @@ int64_t ext2_dump_bg(struct ext2_partition* partition, struct ext2_block_group_d
     }
     
     for (uint32_t i = 0; i < block_size; i++) {
-        kprintf("%02x ", block_bitmap[i]);
+        DBG_DEBUG("%02x ", block_bitmap[i]);
     }
-    kprintf("\n");
+    DBG_DEBUG("\n");
 
-    kprintf("Dumping inode bitmap:\n");
+    DBG_DEBUG("Dumping inode bitmap:\n");
     uint8_t * inode_bitmap = kmalloc(block_size);
     if (inode_bitmap == 0) {
         EXT2_ERROR("Failed to allocate inode bitmap");
@@ -83,9 +83,9 @@ int64_t ext2_dump_bg(struct ext2_partition* partition, struct ext2_block_group_d
     }
     
     for (uint32_t i = 0; i < block_size; i++) {
-        kprintf("%02x ", inode_bitmap[i]);
+        DBG_DEBUG("%02x ", inode_bitmap[i]);
     }
-    kprintf("\n");
+    DBG_DEBUG("\n");
 
     kfree(block_bitmap);
     kfree(inode_bitmap);

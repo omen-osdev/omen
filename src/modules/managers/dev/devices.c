@@ -40,7 +40,7 @@ status_t register_char(const uint8_t major, const char* name, struct file_operat
     char_device_drivers[major_id].registered = true;
     char_device_drivers[major_id].nops = NULL;
 
-    kprintf("Registered char device %s with major number %d\n", name, major_id);
+    DBG_INFO("Registered char device %s with major number %d\n", name, major_id);
 
     return SUCCESS;
 }
@@ -64,7 +64,7 @@ status_t register_block(const uint8_t major, const char* name, struct file_opera
     block_device_drivers[major].registered = true;
     block_device_drivers[major].nops = NULL;
 
-    kprintf("Registered block device %s with major number %d\n", name, major);
+    DBG_INFO("Registered block device %s with major number %d\n", name, major);
 
     return SUCCESS;
 }
@@ -87,7 +87,7 @@ status_t register_network(const uint8_t major, const char * name, struct network
     net_device_drivers[major].registered = true;
     net_device_drivers[major].fops = NULL;
 
-    kprintf("Registered network device %s with major number %d\n", name, major);
+    DBG_INFO("Registered network device %s with major number %d\n", name, major);
 
     return SUCCESS;
 }
@@ -104,7 +104,7 @@ status_t unregister_char(const uint8_t major) {
 
     char_device_drivers[major_id].registered = false;
 
-    kprintf("Unregistered char device with major number %d\n", major_id);
+    DBG_INFO("Unregistered char device with major number %d\n", major_id);
 
     return SUCCESS;
 }
@@ -117,7 +117,7 @@ status_t unregister_block(const uint8_t major) {
 
     block_device_drivers[major].registered = false;
 
-    kprintf("Unregistered block device with major number %d\n", major);
+    DBG_INFO("Unregistered block device with major number %d\n", major);
 
     return SUCCESS;
 }
@@ -130,7 +130,7 @@ status_t unregister_network(const uint8_t major) {
 
     net_device_drivers[major].registered = false;
 
-    kprintf("Unregistered network device with major number %d\n", major);
+    DBG_INFO("Unregistered network device with major number %d\n", major);
 
     return SUCCESS;
 }
@@ -179,7 +179,7 @@ status_t device_destroy(const char * name) {
 }
 status_t device_list() {
     for (uint32_t i = 0; i < device_count; i++) {
-        kprintf("Device %s with major number %d and minor number %d\n", devices[i].name, devices[i].major, devices[i].minor);
+        DBG_INFO("Device %s with major number %d and minor number %d\n", devices[i].name, devices[i].major, devices[i].minor);
     }
 }
 
@@ -316,6 +316,6 @@ void init_devices() {
     char_device_count = 0;
     block_device_count = 0;
 
-    kprintf("Initialized device subsystem\n");
+    DBG_INFO("Initialized device subsystem\n");
     
 }

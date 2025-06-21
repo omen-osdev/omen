@@ -98,6 +98,93 @@ uint8_t ext2_delete_dentry(struct ext2_partition* partition, const char * path) 
 
 }
 
+/*
+uint8_t ext2_dentry_get_dentry(struct ext2_partition* partition, const char* parent_path, const char* name, struct ext2_directory_entry* target_entry) {
+    uint32_t inode_number = ext2_path_to_inode(partition, parent_path);
+    if (inode_number == EXT2_INO_PTI_ERROR) {
+        EXT2_ERROR("Directory %s does not exist", parent_path);
+        return 1;
+    }
+
+    uint32_t block_size = 1024 << (((struct ext2_superblock*)partition->sb)->s_log_block_size);
+    struct ext2_inode_descriptor_generic * root_inode = (struct ext2_inode_descriptor_generic *)ext2_read_inode(partition, inode_number);
+    if (root_inode == 0) {
+        EXT2_ERROR("Failed to read directory %s", parent_path);
+        return 1;
+    }
+
+    if (root_inode->i_mode & INODE_TYPE_DIR) {
+        uint8_t *block_buffer[1024];
+        uint16_t block_buffer_index = 0;
+
+        block_buffer[block_buffer_index] = kmalloc(block_size);
+
+        uint32_t read_bytes = 0;
+        uint32_t parsed_bytes = 0;
+        uint32_t entry_count = 0;
+
+        do {
+            if (ext2_read_inode_bytes(partition, inode_number, block_buffer[block_buffer_index], 1024, read_bytes) == EXT2_READ_FAILED) {
+                EXT2_ERROR("Failed to read directory %s", parent_path);
+                return 1;
+            }
+
+            parsed_bytes = 0;
+            struct ext2_directory_entry *entry = 0;
+            do {
+                entry = (struct ext2_directory_entry *) (block_buffer[block_buffer_index] + parsed_bytes);
+                if (entry->inode == 0) {
+                    // No more entries in this block
+                    break;
+                }
+                if (entry->rec_len == 0) {
+                    EXT2_ERROR("Invalid entry in directory %s", parent_path);
+                    kfree(block_buffer[block_buffer_index]);
+                    return 1;
+                }
+
+                char buffer[EXT2_NAME_LEN + 1] = {0};
+                strncpy(buffer, entry->name, entry->name_len);
+                buffer[entry->name_len] = '\0';
+                EXT2_DEBUG("Checking entry: %s", buffer);
+                if (strncmp(buffer, name, strlen(name)) == 0) {
+                    EXT2_DEBUG("Found entry: %s", buffer);
+                    memcpy(target_entry, entry, sizeof(struct ext2_directory_entry));
+                    for (uint16_t i = 0; i < block_buffer_index; i++) {
+                        kfree(block_buffer[i]);
+                    }
+                    return 0;
+                }
+
+                entry_count++;
+                parsed_bytes += entry->rec_len;
+                read_bytes += entry->rec_len;
+            } while (parsed_bytes + entry->rec_len < block_size);
+            block_buffer_index++;
+            if (block_buffer_index >= 1024) {
+                EXT2_ERROR("Too many blocks read for directory %s", parent_path);
+                for (uint16_t i = 0; i < block_buffer_index; i++) {
+                    kfree(block_buffer[i]);
+                }
+                return 1;
+            }
+        } while (1);
+
+        EXT2_WARN("Entry %s not found in directory %s", name, parent_path);
+        memset(target_entry, 0, sizeof(struct ext2_directory_entry));
+        target_entry->inode = EXT2_INO_PTI_ERROR; // Indicate not found
+        target_entry->rec_len = 0;
+        target_entry->name_len = 0;
+        target_entry->file_type = 0;
+        target_entry->name[0] = '\0'; // Clear name
+        EXT2_ERROR("[EXT2] Entry %s not found in directory %s\n", name, parent_path);
+        for (uint16_t i = 0; i < block_buffer_index; i++) {
+            kfree(block_buffer[i]);
+        }
+        return 1;
+    }
+}
+*/
 uint8_t ext2_dentry_get_dentry(struct ext2_partition* partition, const char* parent_path, const char* name, struct ext2_directory_entry* entry) {
     uint32_t inode_number = ext2_path_to_inode(partition, parent_path);
     if (inode_number == EXT2_INO_PTI_ERROR) {
@@ -126,8 +213,9 @@ uint8_t ext2_dentry_get_dentry(struct ext2_partition* partition, const char* par
 
         uint32_t parsed_bytes = 0;
         uint32_t list_count = 0;
-        while (parsed_bytes < root_inode->i_size && list_count < LIST_MAX) {
+        while (list_count < LIST_MAX) {
             struct ext2_directory_entry *centry = (struct ext2_directory_entry *) (block_buffer + parsed_bytes);
+            if (centry->rec_len == 0 || centry->inode == 0) break;
             if (centry->inode != 0) {
                 char buffer[EXT2_NAME_LEN + 1] = {0};
                 strncpy(buffer, centry->name, centry->name_len);
@@ -143,7 +231,14 @@ uint8_t ext2_dentry_get_dentry(struct ext2_partition* partition, const char* par
             parsed_bytes += centry->rec_len;
             list_count++;
         }
-       
+        EXT2_WARN("Entry %s not found in directory %s", name, parent_path);
+        memset(entry, 0, sizeof(struct ext2_directory_entry));
+        entry->inode = EXT2_INO_PTI_ERROR; // Indicate not found
+        entry->rec_len = 0;
+        entry->name_len = 0;
+        entry->file_type = 0;
+        entry->name[0] = '\0'; // Clear name
+        EXT2_ERROR("[EXT2] Entry %s not found in directory %s\n", name, parent_path);
         kfree(block_buffer);
     }
 
@@ -178,10 +273,10 @@ void ext2_list_dentry(struct ext2_partition* partition, const char * path) {
 
         uint32_t parsed_bytes = 0;
         uint32_t list_count = 0;
-        kprintf("[EXT2] Directory listing for %s\n", path);
+        DBG_INFO("[EXT2] Directory listing for %s\n", path);
         while (parsed_bytes < root_inode->i_size && list_count < LIST_MAX) {
             struct ext2_directory_entry *entry = (struct ext2_directory_entry *) (block_buffer + parsed_bytes);
-            kprintf("[EXT2] ino: %d rec_len: %d name_len: %d file_type: %d name: %s\n", entry->inode, entry->rec_len, entry->name_len, entry->file_type, entry->name);
+            DBG_INFO("[EXT2] ino: %d rec_len: %d name_len: %d file_type: %d name: %s\n", entry->inode, entry->rec_len, entry->name_len, entry->file_type, entry->name);
             parsed_bytes += entry->rec_len;
             list_count++;
         }
@@ -189,6 +284,76 @@ void ext2_list_dentry(struct ext2_partition* partition, const char * path) {
         kfree(block_buffer);
     }
 }
+
+/*
+uint32_t ext2_get_all_dirs(struct ext2_partition* partition, const char* parent_path, struct ext2_directory_entry** entries) {
+    uint32_t inode_number = ext2_path_to_inode(partition, parent_path);
+    if (inode_number == EXT2_INO_PTI_ERROR) {
+        EXT2_ERROR("Directory %s does not exist", parent_path);
+        return 0;
+    }
+
+    uint32_t block_size = 1024 << (((struct ext2_superblock*)partition->sb)->s_log_block_size);
+    struct ext2_inode_descriptor_generic * root_inode = (struct ext2_inode_descriptor_generic *)ext2_read_inode(partition, inode_number);
+    if (root_inode == 0) {
+        EXT2_ERROR("Failed to read directory %s", parent_path);
+        return 0;
+    }
+
+    if (root_inode->i_mode & INODE_TYPE_DIR) {
+        uint8_t * block_buffer[1024];
+        uint16_t block_buffer_index = 0;
+        
+        block_buffer[block_buffer_index] = kmalloc(block_size);
+
+        uint32_t read_bytes = 0;
+        uint32_t parsed_bytes = 0;
+        uint32_t entry_count = 0;
+
+        do {
+            if (ext2_read_inode_bytes(partition, inode_number, block_buffer[block_buffer_index], block_size, read_bytes) == EXT2_READ_FAILED) {
+                EXT2_ERROR("Failed to read directory %s", parent_path);
+                return 0;
+            }
+
+            parsed_bytes = 0;
+            struct ext2_directory_entry *entry = 0;
+            do {
+
+                entry = (struct ext2_directory_entry *) (block_buffer[block_buffer_index] + parsed_bytes);
+                if (entry->inode == 0) {
+                    // No more entries in this block
+                    break;
+                }
+                if (entry->rec_len == 0) {
+                    EXT2_ERROR("Invalid entry in directory %s", parent_path);
+                    kfree(block_buffer[block_buffer_index]);
+                    return 0;
+                }
+
+                (*entries)[entry_count] = *entry;
+
+                entry_count++;
+                parsed_bytes += entry->rec_len;
+                read_bytes += entry->rec_len;
+            } while (parsed_bytes + entry->rec_len < block_size);
+            block_buffer_index++;
+            if (block_buffer_index >= 1024) {
+                EXT2_ERROR("Too many blocks in directory %s", parent_path);
+                for (uint16_t i = 0; i < block_buffer_index; i++) {
+                    kfree(block_buffer[i]);
+                }
+                return 0;
+            }
+        } while (1);
+
+        return entry_count;
+    }
+
+    EXT2_ERROR("Inode %d is not a directory", inode_number);
+    return 0;
+}
+*/
 
 uint32_t ext2_get_all_dirs(struct ext2_partition* partition, const char* parent_path, struct ext2_directory_entry** entries) {
     uint32_t inode_number = ext2_path_to_inode(partition, parent_path);

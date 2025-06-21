@@ -29,6 +29,7 @@ typedef struct vdso {
 } __attribute__((packed)) vdso_t;
 
 vdso_t* vdso_init();
+void vdso_free(vdso_t* vdso);
 int vdso_set_data(vdso_t* vdso, uint8_t id, void* info, int64_t size);
 int vdso_get_data(vdso_t* vdso, uint8_t id, void** info, int64_t* size);
 void * vdso_allocate_region(vdso_t* vdso, uint64_t size);

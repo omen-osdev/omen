@@ -20,7 +20,7 @@ struct vm_area* is_in_vmarea(process_t* process, void * address) {
 void dump_vmareas(process_t* process) {
     struct vm_area * current = process->vm_areas;
     while (current) {
-        kprintf("[PID: %d | AT: %p | NEXT: %p] VM Area: %p - %p, flags: %x, extended_flags: %x, page_size: %llu, fd: %d, offset: %lld\n", process->pid, current, current->next, current->start, current->end, current->flags, current->extended_flags, current->page_size, current->fd, current->offset);
+        DBG_INFO("[PID: %d | AT: %p | NEXT: %p] VM Area: %p - %p, flags: %x, extended_flags: %x, page_size: %llu, fd: %d, offset: %lld\n", process->pid, current, current->next, current->start, current->end, current->flags, current->extended_flags, current->page_size, current->fd, current->offset);
         current = current->next;
     }
 }
@@ -36,7 +36,7 @@ void create_vmarea(process_t* process, void * start, void * end, uint8_t flags, 
     new_area->fd = fd;
     new_area->offset = offset;
     process->vm_areas = new_area;
-    //kprintf("Created VM Area: %p - %p, flags: %x, extended_flags: %x, page_size: %llu, fd: %d, offset: %lld\n", start, end, flags, extended_flags, page_size, fd, offset);
+    //DBG_DEBUG("Created VM Area: %p - %p, flags: %x, extended_flags: %x, page_size: %llu, fd: %d, offset: %lld\n", start, end, flags, extended_flags, page_size, fd, offset);
     //dump_vmareas(process);
 }
 
@@ -72,23 +72,23 @@ void duplicate_vmareas(process_t * old, process_t * new, uint8_t cow) {
         create_vmarea(new, current->start, current->end, current->flags, current->extended_flags, current->page_size, current->fd, current->offset);
         current = current->next;
     }
-    kprintf("Duplicated VM Areas from process %d to process %d\n", old->pid, new->pid);
+    DBG_DEBUG("Duplicated VM Areas from process %d to process %d\n", old->pid, new->pid);
     //dump_vmareas(new);
 }
 
 void engrave_vmareas(process_t * child, process_t * parent) {
-    kprintf("Engraving VM Areas from parent process %d to child process %d\n", parent->pid, child->pid);
+    DBG_DEBUG("Engraving VM Areas from parent process %d to child process %d\n", parent->pid, child->pid);
     struct vm_area * current = child->vm_areas;
     while (current) {
-        //kprintf("NEW VMAREA: %p - %p, flags: %x, extended_flags: %x, page_size: %llu, fd: %d, offset: %lld\n", current->start, current->end, current->flags, current->extended_flags, current->page_size, current->fd, current->offset);
+        //DBG_DEBUG("NEW VMAREA: %p - %p, flags: %x, extended_flags: %x, page_size: %llu, fd: %d, offset: %lld\n", current->start, current->end, current->flags, current->extended_flags, current->page_size, current->fd, current->offset);
         if (current->extended_flags & VMAREA_EXT_SHARED) {
-           // kprintf("Sharing vma...\n");
+           // DBG_DEBUG("Sharing vma...\n");
             //Map the area in the child process to the same address as the parent
             void * parent_physical = get_physical_address(parent->vmm, current->start);
             map_range(child->vmm, current->start, parent_physical, current->page_size, current->end - current->start, current->flags);
         }
         if ((current->extended_flags & VMAREA_EXT_COW) && !(current->extended_flags & VMAREA_EXT_STACK_GUARD)) {
-            //kprintf("COW vma...\n");
+            //DBG_DEBUG("COW vma...\n");
             uint8_t flags = current->flags;
             if (flags & VMM_WRITE_BIT) {
                 flags &= ~VMM_WRITE_BIT;
@@ -174,4 +174,14 @@ void vmarea_sync_all_files(process_t *task) {
         }
         current = current->next;
     }    
+}
+
+void remove_all_vmareas(process_t * task) {
+    struct vm_area * current = task->vm_areas;
+    while (current) {
+        struct vm_area * next = current->next;
+        kfree(current);
+        current = next;
+    }
+    task->vm_areas = 0;
 }

@@ -58,7 +58,7 @@ char * enable_tty_over_serial(uint8_t reserved) {
         int index = tty_init(name, name, TTY_MODE_SERIAL, 1024, 1024);
         struct tty * tty = get_tty(index);
         if (is_valid_tty(tty)) {
-            kprintf("TTY with index: %d and name %s\n", index, device_create((void*)tty, DEVICE_TTY, index));
+            DBG_INFO("TTY with index: %d and name %s\n", index, device_create((void*)tty, DEVICE_TTY, index));
             serial_write_now(name, "serial> ", 0, 8);
         }
     }
@@ -75,7 +75,7 @@ char * enable_tty_over_serial(uint8_t reserved) {
         while (current != 0) {
             if ((current->bc == 0) && (current->major == DEVICE_TTY)) {
                 if (index++ >= reserved) {
-                    kprintf("Enabling debugger on %s\n", current->name);
+                    DBG_INFO("Enabling debugger on %s\n", current->name);
                     tty_write_now(current->name, prompt, 0, strlen(prompt));
                     return current->name;
                 }
@@ -98,7 +98,7 @@ void boot_startup() {
         DBG_ERROR("Failed to initialize DCON device\n");
     }
     init_debugger(dcon);
-    kprintf("Early startup complete...\n");
+    DBG_INFO("Early startup complete...\n");
 
     if (get_maxphyaddr() != MAXPHYADDR) {
         panic("Invalid MAXPHYADDR\n");
@@ -116,7 +116,7 @@ void boot_startup() {
     if (madt != 0) {
         register_apic(madt, 0x0);
     }
-    kprintf("Secondary startup complete... starting drivers and devices\n");
+    DBG_INFO("Secondary startup complete... starting drivers and devices\n");
     init_drive();
     init_fifo_dd();
     init_serial_dd();
@@ -124,26 +124,27 @@ void boot_startup() {
     init_ps2_dd(fb_get_width(), fb_get_height());
     init_pci();
 
-    kprintf("Create dummy fifo device\n");
+    DBG_INFO("Create dummy fifo device\n");
     char * fifo = create_fifo(1024);
     if (fifo == NULL) {
         panic("Failed to create FIFO device\n");
     }
-    kprintf("FIFO device created: %s\n", fifo);
-    kprintf("Detecting main tty over serial...\n");
+    DBG_INFO("FIFO device created: %s\n", fifo);
+    DBG_INFO("Detecting main tty over serial...\n");
     char * tty = enable_tty_over_serial(0);
     if (tty == NULL) {
         panic("Failed to enable debugger\n");
     }
     init_debugger(tty);
-    kprintf("Device startup complete...\n");
+    set_debug_level(DEBUG_LEVEL_STRACE);
+    DBG_INFO("Device startup complete...\n");
     device_list();
-    kprintf("Starting VFS...\n");
+    DBG_INFO("Starting VFS...\n");
     register_filesystem(fifo_registrar);
     register_filesystem(ext2_registrar);
     register_filesystem(tty_registrar);
     probe_fs();
-    kprintf("VFS startup complete...\n");
+    DBG_INFO("VFS startup complete...\n");
     vfs_lsdisk();
     ext2_inhibit_errors(1);
     set_main_mount("hdap2");
@@ -152,16 +153,16 @@ void boot_startup() {
     //Careful, somehow this shit crashes when you rewrite an string 
     //Map ffffffff80000000 - ffffffff803a000 is read only! diagnose this
 
-    kprintf("Booting from %s %s...\n", get_bootloader_name(), get_bootloader_version());
-    kprintf("Booting kernel...\n");
-    kprintf("Active subsystems: APIC, ACPI, VMM, PMM, HEAP, SERIAL, TTY, FIFO, EXT2, VFS\n");
-    kprintf("Enabling interrupts...\n");
+    DBG_INFO("Booting from %s %s...\n", get_bootloader_name(), get_bootloader_version());
+    DBG_INFO("Booting kernel...\n");
+    DBG_INFO("Active subsystems: APIC, ACPI, VMM, PMM, HEAP, SERIAL, TTY, FIFO, EXT2, VFS\n");
+    DBG_INFO("Enabling interrupts...\n");
     __asm__("cli");
     unmask_interrupt(PIT_IRQ);
     struct vfs_struct * cwd = get_struct_from_path("/");
     vfs_mkdir(cwd, "/dev", 0);
     vfs_link_creat(cwd, "/dev/tty", vfs_tty);
-    kprintf("Symlink: %s\n", vfs_read_symlink(cwd, "/dev/tty"));
+    DBG_INFO("Symlink: %s\n", vfs_read_symlink(cwd, "/dev/tty"));
     int fd = vfs_file_open(cwd, "/dev/tty", O_RDWR, 0);
     char test_prompt[] = "Hello from Omen\n";
     if (fd) vfs_file_write(fd, test_prompt, strlen(test_prompt));

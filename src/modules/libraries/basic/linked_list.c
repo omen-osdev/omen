@@ -3,9 +3,9 @@
 
 void debug_list(struct list_head *head) {
     struct list_head *node;
-    kprintf("%p -> ", head);
+    DBG_INFO("%p -> ", head);
     list_for_each(node, head) {
-      kprintf("%p -> ", node);
+      DBG_INFO("%p -> ", node);
     }
-    kprintf("%p\n", head);
+    DBG_INFO("%p\n", head);
 }

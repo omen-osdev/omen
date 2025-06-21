@@ -76,31 +76,31 @@ void parse_stack(void * stack) {
     //Print the argc, argv, envp, auxv from the stack
     size_t * pointer_table = (size_t *)stack;
     size_t argc = *pointer_table++;
-    kprintf("argc: %zu\n", argc);
+    DBG_DEBUG("argc: %zu\n", argc);
     char ** argv = (char **)pointer_table;
     for (size_t i = 0; i < argc; i++) {
         if (argv[i] == NULL) {
-            kprintf("argv[%zu] at %p points to NULL\n", i, (void *)&argv[i]);
+            DBG_DEBUG("argv[%zu] at %p points to NULL\n", i, (void *)&argv[i]);
         } else {
-            kprintf("argv[%zu] at %p points to: %p, value: %s\n", i, (void *)&argv[i], (void *)argv[i], argv[i]);
+            DBG_DEBUG("argv[%zu] at %p points to: %p, value: %s\n", i, (void *)&argv[i], (void *)argv[i], argv[i]);
         }
     }
     pointer_table += argc + 1; // Move past argv pointers
     char ** envp = (char **)pointer_table;
     size_t envp_count = 0;
     while (envp[envp_count] != NULL) {
-        kprintf("envp[%zu] at %p points to: %p, value: %s\n", envp_count, (void *)&envp[envp_count], (void *)envp[envp_count], envp[envp_count]);
+        DBG_DEBUG("envp[%zu] at %p points to: %p, value: %s\n", envp_count, (void *)&envp[envp_count], (void *)envp[envp_count], envp[envp_count]);
         envp_count++;
     }
     pointer_table += envp_count + 1; // Move past envp pointers
     struct auxv * auxv = (struct auxv *)pointer_table;
     size_t auxv_count = 0;
     while (auxv[auxv_count].a_type != AT_NULL) {
-        kprintf("auxv[%zu]: type: %llu, value: %p\n", auxv_count, auxv[auxv_count].a_type, auxv[auxv_count].a_val);
+        DBG_DEBUG("auxv[%zu]: type: %llu, value: %p\n", auxv_count, auxv[auxv_count].a_type, auxv[auxv_count].a_val);
         auxv_count++;
     }
-    kprintf("End of auxv\n");
-    kprintf("End of stack parsing\n");
+    DBG_DEBUG("End of auxv\n");
+    DBG_DEBUG("End of stack parsing\n");
 
 }
 
@@ -128,7 +128,7 @@ void * create_args_env_aux(void * stack, uint64_t max_size, char ** argv, char *
     uint64_t ptr_buffer[PROTOSTACK_MAX_SIZE];
     uint64_t * ptr = ptr_buffer;
     uint64_t original_addr = (uint64_t)ptr;
-    kprintf("Argc at address: %p, value: %d\n", (void *)ptr, argc);
+    DBG_DEBUG("Argc at address: %p, value: %d\n", (void *)ptr, argc);
     *ptr++ = argc;
     for (int i = 0; i < argc; i++) {argv_pointers[i] = (uint64_t) ptr; *ptr = 0x1234; ptr++;}
     *ptr++ = 0x0;
@@ -259,10 +259,10 @@ void init_stacks(thread_t * thread, uint64_t size, uint64_t entry) {
     thread->ustack = create_args_env_aux(thread->ustack, thread->ustack_size, task->argv, task->envp, task->auxv);
     thread->kstack = create_args_env_aux(thread->kstack, thread->kstack_size, task->argv, task->envp, task->auxv); //We just need the alignment here...
 
-    kprintf("Thread %d created stack at %p with size %llu\n", thread->id, thread->ustack, thread->ustack_size);
+    DBG_DEBUG("Thread %d created stack at %p with size %llu\n", thread->id, thread->ustack, thread->ustack_size);
     newuctxcreat((uint64_t)&(thread->ustack), (uint64_t)entry);
     newctxcreat((uint64_t)&(thread->kstack), (uint64_t)_idle);
-    kprintf("Thread %d created uctx at %p\n", thread->id, &(thread->ustack));
+    DBG_DEBUG("Thread %d created uctx at %p\n", thread->id, &(thread->ustack));
 
     if (get_pml4() != task->vmm) {
         unmap_range(get_pml4(), thread->ustack_base, thread->ustack_size);
@@ -332,7 +332,7 @@ void restore_signal_context(thread_t * thread, cpu_context_t * ctx) {
     vdso_get_data(thread->process->vdso, VDSO_ENTRY_SIGNAL_SIGCTXT, (void**)&vdso_sigctxt_region, &size);
     vdso_get_data(thread->process->vdso, VDSO_ENTRY_SIGNAL_SIGACTION, (void**)&vdso_sigact_region, &size);
     if (vdso_signo_region == 0 || vdso_sigctxt_region == 0 || vdso_sigact_region == 0) {
-        kprintf("Failed to get vdso signal regions\n");
+        DBG_ERROR("Failed to get vdso signal regions\n");
         return;
     }
     vdso_free_region(thread->process->vdso, vdso_signo_region);
@@ -427,7 +427,7 @@ void create_signal_context(thread_t * thread, int signo, struct sigaction * siga
 
     void * vdso_signal_trampoline = get_signal_trampoline(thread->process);
     if (vdso_signal_trampoline == NULL) {
-        kprintf("Failed to get vdso signal trampoline\n");
+        DBG_ERROR("Failed to get vdso signal trampoline\n");
         return;
     }
 
@@ -640,18 +640,18 @@ int duplicate_fds(thread_t * parent_thread, thread_t * child_thread) {
         if (pfd == -1) continue;
         int newfd = vfs_file_dup(pfd, -1); //-1 means get a new file descriptor automatically
         if (newfd < 0) {
-            kprintf("Failed to duplicate file descriptor %d for thread %d\n", pfd, child_thread->id);
+            DBG_ERROR("Failed to duplicate file descriptor %d for thread %d\n", pfd, child_thread->id);
             continue;
         }
         int fd = add_open_file(child_thread->process, newfd);
         if (fd < 0) {
-            kprintf("Failed to add file descriptor %d for thread %d\n", newfd, child_thread->id);
+            DBG_ERROR("Failed to add file descriptor %d for thread %d\n", newfd, child_thread->id);
             vfs_file_close(newfd);
             continue;
         }
     }
     if (parent_thread->process->open_files_count != child_thread->process->open_files_count) {
-        kprintf("Open files count mismatch: parent %d, child %d\n", parent_thread->process->open_files_count, child_thread->process->open_files_count);
+        DBG_ERROR("Open files count mismatch: parent %d, child %d\n", parent_thread->process->open_files_count, child_thread->process->open_files_count);
         panic("Open files count mismatch after duplication\n");
     }
     return child_thread->process->open_files_count;
@@ -723,7 +723,7 @@ process_t * duplicate_process(thread_t * parent_thread) {
     vmm_copy_stack(task->vmm, parent_thread->altstack_base, parent_thread->altstack_size, VMM_USER_BIT | VMM_WRITE_BIT);
     //vdso_remap(task->vmm, task->vdso);
     engrave_vmareas(task, parent);
-    kprintf("Process %d duplicated\n", task->pid);
+    DBG_DEBUG("Process %d duplicated\n", task->pid);
     return task;
 }
 
@@ -782,7 +782,7 @@ void alter_process_on_exec(process_t * task, struct loaded_elf * ld, char ** arg
 
     init_thread(task, ld->entry);
 
-    kprintf("Exec: Process %d created\n", task->pid);
+    DBG_DEBUG("Exec: Process %d created\n", task->pid);
 }
 
 int exec(process_t * task, char const *path, char const **argv, char const **envp) {
@@ -808,7 +808,7 @@ int exec(process_t * task, char const *path, char const **argv, char const **env
     strcpy(dynpath, path);
     int fd = vfs_file_open(task->fs, dynpath, 0, 0);
     if (fd < 0) {
-        kprintf("Could not open file %s\n", dynpath);
+        DBG_ERROR("Could not open file %s\n", dynpath);
         return -1;
     }
     kfree(dynpath);
@@ -816,7 +816,7 @@ int exec(process_t * task, char const *path, char const **argv, char const **env
     vfs_file_seek(fd, 0, 0x2); //SEEK_END
     int64_t size = vfs_file_tell(fd);
     if (size < 0) {
-        kprintf("Could not get file size for %s\n", path);
+        DBG_ERROR("Could not get file size for %s\n", path);
         vfs_file_close(fd);
         return -1;
     }
@@ -831,11 +831,11 @@ int exec(process_t * task, char const *path, char const **argv, char const **env
     unsigned char *md5_buffer = kmalloc(16);
     memset(md5_buffer, 0, 16);
     MD5_Digest(md5_buffer, buf, size);
-    kprintf("MD5: ");
+    DBG_DEBUG("MD5: ");
     for (int i = 0; i < 16; i++) {
-        kprintf("%x", md5_buffer[i]);
+        DBG_DEBUG("%x", md5_buffer[i]);
     }
-    kprintf("\n");
+    DBG_DEBUG("\n");
 
     elf_readelf(buf, size);
     kfree(md5_buffer);
@@ -925,23 +925,73 @@ uint8_t sched_thread(process_t * task) {
 void delete_process(process_t * task) {
     
     if (task->vdso) {
-        //vdso_free(task->vdso);
+        vdso_free(task->vdso);
     }
     for (int i = 0; i < task->thread_count; i++) {
         thread_t * thread = &(task->threads[i]);
         if (thread->ustack_base) {
-            //stackfree(thread->process->vmm, thread->ustack_base, PROCESS_STACK_SIZE);
+            struct stack ustack;
+            ustack.base = thread->ustack_base;
+            ustack.top = thread->ustack;
+            ustack.size = thread->ustack_size;
+            ustack.guard_size = thread->ustack_guard_size;
+            ustack.flags = 0;
+            stackfree(thread->process->vmm, &ustack);
         }
         if (thread->kstack_base) {
-            //kstackfree(thread->process->vmm, thread->kstack_base, PROCESS_STACK_SIZE);
+            struct stack kstack;
+            kstack.base = thread->kstack_base;
+            kstack.top = thread->kstack;
+            kstack.size = thread->kstack_size;
+            kstack.guard_size = thread->kstack_guard_size;
+            kstack.flags = 0;
+            kstackfree(thread->process->vmm, &kstack);
         }
+        if (thread->altstack_base) {
+            struct stack altstack;
+            altstack.base = thread->altstack_base;
+            altstack.top = thread->altstack;
+            altstack.size = thread->altstack_size;
+            altstack.guard_size = thread->altstack_guard_size;
+            altstack.flags = 0;
+            stackfree(thread->process->vmm, &altstack);
+        }
+        if (thread->user_context) {
+            kfree(thread->user_context->fxsave_region);
+            kfree(thread->user_context->cpu_context->info);
+            kfree(thread->user_context->cpu_context);
+            kfree(thread->user_context);
+        }
+        if (thread->kernel_context) {
+            kfree(thread->kernel_context->fxsave_region);
+            kfree(thread->kernel_context->cpu_context->info);
+            kfree(thread->kernel_context->cpu_context);
+            kfree(thread->kernel_context);
+        }
+        if (thread->signal_context) {
+            kfree(thread->signal_context->fxsave_region);
+            kfree(thread->signal_context->cpu_context->info);
+            kfree(thread->signal_context->cpu_context);
+            kfree(thread->signal_context);
+        }
+        remove_all_vmareas(thread->process);
     }
     memset(task, 0, sizeof(process_t));
     task->pid = -1;
-    kprintf("Process %d deleted\n", task->pid);
+    DBG_DEBUG("Process %d deleted\n", task->pid);
 }
 
 int16_t waitpid(thread_t * thread, int pid, int * status, int options) {
+
+    //Wait for a process to exit
+    thread->waiting = 1;
+    thread->waitpid_status_address = status;
+    while (thread->waiting == 1) {
+        DBG_DEBUG("PID %d THREAD %d is waiting for child process to exit\n", thread->process->pid, thread->id);
+        sleep(thread, SLEEP_WAITPID);
+        DBG_DEBUG("PID %d THREAD %d woke up from waitpid\n", thread->process->pid, thread->id);
+    }
+    
     if (pid == -1) {
         for (int i = 0; i < MAX_PROCESSES; i++) {
             if (process_list[i].pid == -1) {
@@ -993,14 +1043,6 @@ int16_t waitpid(thread_t * thread, int pid, int * status, int options) {
         return -1;
     }
 
-    //Wait for a process to exit
-    thread->waiting = 1;
-    thread->waitpid_status_address = status;
-    while (thread->waiting == 1) {
-        kprintf("PID %d THREAD %d is waiting for child process to exit\n", thread->process->pid, thread->id);
-        sleep(thread, SLEEP_WAITPID);
-        kprintf("PID %d THREAD %d woke up from waitpid\n", thread->process->pid, thread->id);
-    }
     return -2;
 }
 
@@ -1057,17 +1099,17 @@ process_t * sched() {
     //    if (prio_list_size[i] == 0)
     //        continue;
 //
-    //    kprintf("PQUEUE %d: ", i);
+    //    DBG_DEBUG("PQUEUE %d: ", i);
     //    for (int j = 0; j < prio_list_size[i]; j++) {
-    //        kprintf("[PID:%d|TSB:%llu|NICE:%d|CNICE:%d|LS:%d] ", processes[i][j]->pid, processes[i][j]->last_scheduled, processes[i][j]->nice, processes[i][j]->current_nice, processes[i][j]->last_scheduled);
-    //    }
-    //    kprintf("\n");
+    //        DBG_DEBUG("[PID:%d|TSB:%llu|NICE:%d|CNICE:%d|LS:%d] ", processes[i][j]->pid, processes[i][j]->last_scheduled, processes[i][j]->nice, processes[i][j]->current_nice, processes[i][j]->last_scheduled);
+    //    }DBG_DEBUG
+    //    DBG_DEBUG("\n");
     //}
 
     for (int i = 0; i < PROCESS_PRIORITIES; i++) {
         for (int j = 0; j < prio_list_size[i]; j++) {
             if (sched_thread(processes[i][j])) {
-                //kprintf("Chosen candidate [PID:%d|LS:%llu|NICE:%d|CNICE:%d]\n", processes[i][j]->pid, processes[i][j]->last_scheduled, processes[i][j]->nice, processes[i][j]->current_nice);
+                //DBG_DEBUG("Chosen candidate [PID:%d|LS:%llu|NICE:%d|CNICE:%d]\n", processes[i][j]->pid, processes[i][j]->last_scheduled, processes[i][j]->nice, processes[i][j]->current_nice);
                 task = processes[i][j];
                 goto found;
             }
@@ -1219,7 +1261,7 @@ process_t * create_user_process(struct page_directory* pd, void * init, char * t
 
     init_thread(task, init);
 
-    kprintf("Process %d created\n", task->pid);
+    DBG_DEBUG("Process %d created\n", task->pid);
     return task;
 }
 
@@ -1298,7 +1340,7 @@ void process_signals(thread_t * thread) {
 
 void chdir(process_t * task, const char * path) {
     if (goes_behind_root(path)) {
-        kprintf("chdir: Path goes behind root\n");
+        DBG_ERROR("chdir: Path goes behind root\n");
         return;
     }
 
@@ -1343,18 +1385,18 @@ char * getcwd(process_t * task) {
         return new_path;
     } else {
         //Panic
-        kprintf("getcwd: CWD path does not contain root path\n");
+        DBG_DEBUG("getcwd: CWD path does not contain root path\n");
         //Print root path
-        kprintf("Root path: %s\n", root_path);
+        DBG_DEBUG("Root path: %s\n", root_path);
         //Print cwd path
-        kprintf("CWD path: %s\n", cwd_path);
+        DBG_DEBUG("CWD path: %s\n", cwd_path);
         return 0x0;
     }
 }
 
 void chroot(process_t * task, const char * path) {
     if (goes_behind_root(path)) {
-        kprintf("chroot: Path goes behind root\n");
+        DBG_WARN("chroot: Path goes behind root\n");
         return;
     }
 

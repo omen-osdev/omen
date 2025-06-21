@@ -124,3 +124,10 @@ uint64_t strftime(char *s, uint64_t max, const char *format, const struct tm *tm
     s[i] = 0;
     return i;
 }
+
+struct timespec epoch_to_timespec(uint32_t epoch) {
+    struct timespec ts;
+    ts.tv_sec = epoch;
+    ts.tv_nsec = 0; // No nanoseconds in epoch
+    return ts;
+}

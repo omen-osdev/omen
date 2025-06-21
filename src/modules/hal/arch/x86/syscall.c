@@ -109,17 +109,17 @@ extern void setFsBase(uint64_t base);
 extern void syscall_entry();
 
 int64_t dummy_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
-    kprintf("[PID: %d | TID %d] DUMMY_SYSCALL(%d)\n", thread->process->pid, thread->id, ctx->rax);
+    DBG_STRACE("[PID: %d | TID %d] DUMMY_SYSCALL(%d)\n", thread->process->pid, thread->id, ctx->rax);
     return SYSCALL_SUCCESS;
 }
 
 int64_t futex_wait_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
-    kprintf("[PID: %d | TID %d] FUTEX_WAIT()\n", thread->process->pid, thread->id);
+    DBG_STRACE("[PID: %d | TID %d] FUTEX_WAIT()\n", thread->process->pid, thread->id);
     return SYSCALL_SUCCESS;
 }
 
 int64_t futex_wake_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
-    kprintf("[PID: %d | TID %d] FUTEX_WAKE()\n", thread->process->pid, thread->id);
+    DBG_STRACE("[PID: %d | TID %d] FUTEX_WAKE()\n", thread->process->pid, thread->id);
     return SYSCALL_SUCCESS;
 }
 
@@ -130,7 +130,7 @@ int64_t pselect_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     fd_set * exceptfds = (fd_set *)SYSCALL_ARG3(ctx);
     struct timespec * timeout = (struct timespec *)SYSCALL_ARG4(ctx);
     int * num_events = (int *)SYSCALL_ARG5(ctx);
-    kprintf("[PID: %d | TID %d] PSELECT_SYSCALL(%d, %p, %p, %p, %p, %p)\n", 
+    DBG_STRACE("[PID: %d | TID %d] PSELECT_SYSCALL(%d, %p, %p, %p, %p, %p)\n", 
            thread->process->pid, thread->id, nfds, readfds, writefds, exceptfds, timeout, num_events);
     
     struct timespec current_time;
@@ -188,7 +188,7 @@ int64_t pselect_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
                 int fd = i * 8 + j;
                 int pfd = get_open_file(thread->process, fd);
                 if (pfd < 0) {
-                    kprintf("Invalid file descriptor %d\n", fd);
+                    DBG_ERROR("Invalid file descriptor %d\n", fd);
                     continue;
                 }
 
@@ -209,7 +209,7 @@ int64_t pselect_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 
                 int evs = vfs_file_event(pfd, events, &revents);
                 if (evs < 0) {
-                    kprintf("Error checking events for fd %d\n", fd);
+                    DBG_ERROR("Error checking events for fd %d\n", fd);
                     continue;
                 }
 
@@ -237,7 +237,7 @@ int64_t pselect_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
             timespec_now(&now);
             if (now.tv_sec > end_time.tv_sec || 
                 (now.tv_sec == end_time.tv_sec && now.tv_nsec >= end_time.tv_nsec)) {
-                kprintf("[PID: %d | TID %d] PSELECT_SYSCALL timed out\n", thread->process->pid, thread->id);
+                DBG_WARN("[PID: %d | TID %d] PSELECT_SYSCALL timed out\n", thread->process->pid, thread->id);
                 break;
             }
         }
@@ -252,16 +252,16 @@ int64_t read_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     uint64_t fd = SYSCALL_ARG0(ctx);
     uint64_t buffer = SYSCALL_ARG1(ctx);
     uint64_t size = SYSCALL_ARG2(ctx);
-    kprintf("[PID: %d | TID %d] READ_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, buffer, size);
+    DBG_STRACE("[PID: %d | TID %d] READ_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, buffer, size);
     char * rbuffer = (char*)kmalloc(size + 1024);
     if (!rbuffer) {
-        kprintf("Could not allocate buffer for read\n");
+        DBG_ERROR("Could not allocate buffer for read\n");
         return SYSCALL_ERROR;
     }
 
     int pfd = get_open_file(thread->process, fd);
     if (pfd < 0) {
-        kprintf("Invalid file descriptor %d\n", fd);
+        DBG_ERROR("Invalid file descriptor %d\n", fd);
         kfree(rbuffer);
         return SYSCALL_ERROR;
     }
@@ -269,7 +269,7 @@ int64_t read_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     memset(rbuffer, 0, size + 1024);
     int64_t res = vfs_file_read(pfd, (void*)rbuffer, size);
     //Print 10 bytes
-    kprintf("Read %d bytes\n", res);
+    DBG_DEBUG("Read %d bytes\n", res);
     if (res < 0) {
         return SYSCALL_ERROR;
     }
@@ -291,17 +291,17 @@ int64_t write_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)size;
 
     if (size != 1)
-        kprintf("[PID: %d | TID %d] WRITE_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, buffer, size);
+        DBG_STRACE("[PID: %d | TID %d] WRITE_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, buffer, size);
 
     int pfd = get_open_file(thread->process, fd);
     if (pfd < 0) {
-        kprintf("Invalid file descriptor %d\n", fd);
+        DBG_ERROR("Invalid file descriptor %d\n", fd);
         return SYSCALL_ERROR;
     }
 
     int64_t res = vfs_file_write(pfd, (void*)buffer, size);
     if (res < 0) {
-        kprintf("Error writing to file descriptor %d\n", fd);
+        DBG_ERROR("Error writing to file descriptor %d\n", fd);
         return SYSCALL_ERROR;
     }
     vfs_file_flush(pfd);
@@ -311,7 +311,7 @@ int64_t write_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 
 int64_t dir_open_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char * path = SYSCALL_ARG0(ctx);
-    kprintf("[PID: %d | TID %d] DIR_OPEN_SYSCALL(%s)\n", thread->process->pid, thread->id, path);
+    DBG_STRACE("[PID: %d | TID %d] DIR_OPEN_SYSCALL(%s)\n", thread->process->pid, thread->id, path);
     
     int fd = vfs_dir_open(thread->process->fs, path);
     if (fd < 0) {
@@ -325,10 +325,10 @@ int64_t open_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char* path = SYSCALL_ARG0(ctx);
     int flags = SYSCALL_ARG1(ctx);
     int mode = SYSCALL_ARG2(ctx);
-    kprintf("[PID: %d | TID %d] OPEN_SYSCALL(%s,%d,%d)\n", thread->process->pid, thread->id, path, flags, mode);
+    DBG_STRACE("[PID: %d | TID %d] OPEN_SYSCALL(%s,%d,%d)\n", thread->process->pid, thread->id, path, flags, mode);
     
     if (thread->process->open_files_count >= MAX_OPEN_FILES) {
-        kprintf("Max open files reached\n");
+        DBG_ERROR("Max open files reached\n");
         return SYSCALL_ERROR;
     }
     
@@ -343,7 +343,7 @@ int64_t open_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 int64_t getcwd_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char * buffer = (char *)SYSCALL_ARG0(ctx);
     size_t size = SYSCALL_ARG1(ctx);
-    kprintf("[PID: %d | TID %d] GETCWD_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, buffer, size);
+    DBG_STRACE("[PID: %d | TID %d] GETCWD_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, buffer, size);
     
     if (buffer == NULL || size == 0) {
         return SYSCALL_ERROR;
@@ -351,12 +351,12 @@ int64_t getcwd_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     
     char * cwd = getcwd(thread->process);
     if (cwd == NULL) {
-        kprintf("Could not get cwd\n");
+        DBG_ERROR("Could not get cwd\n");
         return SYSCALL_ERROR;
     }
 
     if (strlen(cwd) > size) {
-        kprintf("Buffer too small\n");
+        DBG_ERROR("Buffer too small\n");
         return SYSCALL_ERROR;
     } else {
         memcpy(buffer, cwd, strlen(cwd));
@@ -367,7 +367,7 @@ int64_t getcwd_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 
 int64_t chdir_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char * path = (char *)SYSCALL_ARG0(ctx);
-    kprintf("[PID: %d | TID %d] CHDIR_SYSCALL(%s)\n", thread->process->pid, thread->id, path);
+    DBG_STRACE("[PID: %d | TID %d] CHDIR_SYSCALL(%s)\n", thread->process->pid, thread->id, path);
     
     if (path == NULL) {
         return SYSCALL_ERROR;
@@ -375,23 +375,23 @@ int64_t chdir_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     
     char *cwd = getcwd(thread->process);
     if (cwd == NULL) {
-        kprintf("Could not get cwd\n");
+        DBG_ERROR("Could not get cwd\n");
         return SYSCALL_ERROR;
     }
-    kprintf("Current working directory before chdir: %s\n", cwd);
+    DBG_DEBUG("Current working directory before chdir: %s\n", cwd);
     chdir(thread->process, path);
     cwd = getcwd(thread->process);
     if (cwd == NULL) {
-        kprintf("Could not get cwd after chdir\n");
+        DBG_ERROR("Could not get cwd after chdir\n");
         return SYSCALL_ERROR;
     }
-    kprintf("Current working directory after chdir: %s\n", cwd);
+    DBG_DEBUG("Current working directory after chdir: %s\n", cwd);
     return SYSCALL_SUCCESS;
 }
 
 int64_t rmdir_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char * path = (char *)SYSCALL_ARG0(ctx);
-    kprintf("[PID: %d | TID %d] RMDIR_SYSCALL(%s)\n", thread->process->pid, thread->id, path);
+    DBG_STRACE("[PID: %d | TID %d] RMDIR_SYSCALL(%s)\n", thread->process->pid, thread->id, path);
     
     if (path == NULL) {
         return SYSCALL_ERROR;
@@ -407,7 +407,7 @@ int64_t rmdir_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 int64_t creat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char * path = (char *)SYSCALL_ARG0(ctx);
     int mode = SYSCALL_ARG1(ctx);
-    kprintf("[PID: %d | TID %d] CREAT_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, path, mode);
+    DBG_STRACE("[PID: %d | TID %d] CREAT_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, path, mode);
     
     if (path == NULL) {
         return SYSCALL_ERROR;
@@ -424,8 +424,8 @@ int64_t creat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 int64_t unlinkat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char * path = (char *)SYSCALL_ARG0(ctx);
     int flags = SYSCALL_ARG1(ctx);
-    kprintf("[PID: %d | TID %d] UNLINKAT_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, path, flags);
-    kprintf("WARNING: UNLINKAT IS THE SAME AS RMDIR, WE ARE IGNORING AT\n");
+    DBG_STRACE("[PID: %d | TID %d] UNLINKAT_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, path, flags);
+    DBG_WARN("UNLINKAT IS THE SAME AS RMDIR, WE ARE IGNORING AT\n");
     if (path == NULL) {
         return SYSCALL_ERROR;
     }
@@ -440,7 +440,7 @@ int64_t unlinkat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 int64_t rename_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char * oldpath = (char *)SYSCALL_ARG0(ctx);
     char * newpath = (char *)SYSCALL_ARG1(ctx);
-    kprintf("[PID: %d | TID %d] RENAME_SYSCALL(%s,%s)\n", thread->process->pid, thread->id, oldpath, newpath);
+    DBG_STRACE("[PID: %d | TID %d] RENAME_SYSCALL(%s,%s)\n", thread->process->pid, thread->id, oldpath, newpath);
     
     if (oldpath == NULL || newpath == NULL) {
         return SYSCALL_ERROR;
@@ -457,8 +457,8 @@ int64_t renameat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char * oldpath = (char *)SYSCALL_ARG0(ctx);
     char * newpath = (char *)SYSCALL_ARG1(ctx);
     int flags = SYSCALL_ARG2(ctx);
-    kprintf("[PID: %d | TID %d] RENAMEAT_SYSCALL(%s,%s,%d)\n", thread->process->pid, thread->id, oldpath, newpath, flags);
-    kprintf("WARNING: RENAME IS THE SAME AS RENAMEAT\n");
+    DBG_STRACE("[PID: %d | TID %d] RENAMEAT_SYSCALL(%s,%s,%d)\n", thread->process->pid, thread->id, oldpath, newpath, flags);
+    DBG_WARN("RENAME IS THE SAME AS RENAMEAT\n");
     if (oldpath == NULL || newpath == NULL) {
         return SYSCALL_ERROR;
     }
@@ -477,7 +477,7 @@ int64_t readdir_syscall_handler(thread_t * thread, cpu_context_t * ctx) {
 
     int pfd = get_open_file(thread->process, handle);
     if (pfd < 0) {
-        kprintf("Invalid file descriptor %d\n", handle);
+        DBG_ERROR("Invalid file descriptor %d\n", handle);
         return SYSCALL_ERROR;
     }
 
@@ -491,22 +491,22 @@ int64_t readdir_syscall_handler(thread_t * thread, cpu_context_t * ctx) {
 
 int64_t close_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     int fd = SYSCALL_ARG0(ctx);
-    kprintf("[PID: %d | TID %d] CLOSE_SYSCALL(%d)\n", thread->process->pid, thread->id, fd);
+    DBG_STRACE("[PID: %d | TID %d] CLOSE_SYSCALL(%d)\n", thread->process->pid, thread->id, fd);
     
     int pfd = get_open_file(thread->process, fd);
     if (pfd < 0) {
-        kprintf("File descriptor not found\n");
+        DBG_ERROR("File descriptor not found\n");
         return SYSCALL_ERROR;
     }
 
     int ret = vfs_file_close(pfd);
     if (ret < 0) {
-        kprintf("Could not close file descriptor %d\n", pfd);
+        DBG_ERROR("Could not close file descriptor %d\n", pfd);
         return SYSCALL_ERROR;
     }
 
     remove_open_file(thread->process, fd);
-    kprintf("File descriptor %d closed successfully\n", fd);
+    DBG_DEBUG("File descriptor %d closed successfully\n", fd);
     return SYSCALL_SUCCESS;
 }
 
@@ -514,7 +514,7 @@ int64_t close_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 
 int64_t sigreturn_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
-    kprintf("[PID: %d | TID %d] SIGRETURN_SYSCALL()\n", thread->process->pid, thread->id);
+    DBG_STRACE("[PID: %d | TID %d] SIGRETURN_SYSCALL()\n", thread->process->pid, thread->id);
     restore_signal_context(thread, ctx);
 }
 
@@ -522,7 +522,7 @@ int64_t seek_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     int fd = SYSCALL_ARG0(ctx);
     int offset = SYSCALL_ARG1(ctx);
     int whence = SYSCALL_ARG2(ctx);
-    kprintf("[PID: %d | TID %d] SEEK_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, offset, whence);
+    DBG_STRACE("[PID: %d | TID %d] SEEK_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, offset, whence);
     
     if (fd < 0) {
         return SYSCALL_ERROR;
@@ -539,15 +539,20 @@ int64_t seek_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 int64_t stat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char * path = SYSCALL_ARG0(ctx);
     //size_t path_len = SYSCALL_ARG1(ctx);
-    int flags = SYSCALL_ARG1(ctx);
-    stat_t* stat = SYSCALL_ARG2(ctx);
-    kprintf("[PID: %d | TID %d] STAT_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, path, stat);
-    if (flags != 0) {
-        kprintf("Flags not supported in stat syscall\n");
+    int flags = SYSCALL_ARG2(ctx);
+    stat_t* stat = SYSCALL_ARG3(ctx);
+    DBG_STRACE("[PID: %d | TID %d] STAT_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, path, stat);
+    if (flags != 0 && flags != AT_SYMLINK_NOFOLLOW) {
+        DBG_ERROR("Flags not supported in stat syscall\n");
         return SYSCALL_ERROR;
     }
 
-    int fd = vfs_file_open(thread->process->fs, (char*)path, O_RDONLY, 0);
+    int mode = O_RDONLY;
+    if (flags & AT_SYMLINK_NOFOLLOW) {
+        mode |= O_NOFOLLOW;
+    }
+
+    int fd = vfs_file_open(thread->process->fs, (char*)path, mode, 0);
     if (fd < 0) {
         return SYSCALL_ERROR;
     }
@@ -558,8 +563,8 @@ int64_t stat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     }
 
     vfs_file_close(fd);
-    kprintf("File size: %d\n", stat->st_size);
-    kprintf("File mode: %d\n", stat->st_mode);
+    DBG_DEBUG("File size: %d\n", stat->st_size);
+    DBG_DEBUG("File mode: %d\n", stat->st_mode);
     return SYSCALL_SUCCESS;
 }
 
@@ -569,16 +574,16 @@ int64_t statx_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     int flags = SYSCALL_ARG2(ctx);
     unsigned int mask = SYSCALL_ARG3(ctx);
     struct statx* statx = (struct statx*)SYSCALL_ARG4(ctx);
-    kprintf("[PID: %d | TID %d] STATX_SYSCALL()\n", thread->process->pid, thread->id);
+    DBG_STRACE("[PID: %d | TID %d] STATX_SYSCALL()\n", thread->process->pid, thread->id);
     int pfd;
     (void)mask; //We ignore the mask for now
     if (statx == NULL) {
-        kprintf("Invalid statx pointer\n");
+        DBG_ERROR("Invalid statx pointer\n");
         return SYSCALL_ERROR;
     }
 
     if (flags & AT_NO_AUTOMOUNT || flags & AT_STATX_SYNC_AS_STAT || flags & AT_STATX_DONT_SYNC || flags & AT_STATX_FORCE_SYNC) {
-        kprintf("Flags not supported in statx syscall\n");
+        DBG_ERROR("Flags not supported in statx syscall\n");
         return SYSCALL_ERROR;
     }
 
@@ -586,7 +591,7 @@ int64_t statx_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
         if (flags & AT_EMPTY_PATH) {
             pfd = get_open_file(thread->process, dirfd);
         } else {
-            kprintf("Invalid pathname\n");
+            DBG_ERROR("Invalid pathname\n");
             return SYSCALL_ERROR;
         }
     }
@@ -597,7 +602,7 @@ int64_t statx_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     }
 
     if (pathname[0] == '/') {
-        kprintf("Absolute path: %s\n", pathname);
+        DBG_DEBUG("Absolute path: %s\n", pathname);
         struct vfs_struct vfs;
         vfs.root = thread->process->fs->root;
         vfs.pwd = thread->process->fs->root;
@@ -606,19 +611,19 @@ int64_t statx_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
         if (dirfd == AT_FDCWD) {
             pfd = vfs_file_open(thread->process->fs, pathname, open_flags, 0);
         } else {
-            kprintf("Relative statx not implemented yet\n");
+            DBG_ERROR("Relative statx not implemented yet\n");
             return SYSCALL_ERROR;
         }
     }
 
     if (pfd < 0) {
-        kprintf("Could not open file descriptor %d\n", pfd);
+        DBG_ERROR("Could not open file descriptor %d\n", pfd);
         return SYSCALL_ERROR;
     }
     stat_t stat;
     int ret = vfs_file_stat(pfd, &stat);
     if (ret < 0) {
-        kprintf("Could not get file stat\n");
+        DBG_ERROR("Could not get file stat\n");
         vfs_file_close(pfd);
         return SYSCALL_ERROR;
     }
@@ -629,15 +634,15 @@ int64_t statx_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     statx->stx_ino = stat.st_ino;
     statx->stx_uid = stat.st_uid;
     statx->stx_gid = stat.st_gid;
-    statx->stx_atime.tv_sec = stat.st_atime;
+    statx->stx_atime.tv_sec = stat.st_atim.tv_sec;
     statx->stx_atime.tv_nsec = 0;
-    statx->stx_mtime.tv_sec = stat.st_mtime;
+    statx->stx_mtime.tv_sec = stat.st_mtim.tv_sec;
     statx->stx_mtime.tv_nsec = 0;
-    statx->stx_ctime.tv_sec = stat.st_ctime;
+    statx->stx_ctime.tv_sec = stat.st_ctim.tv_sec;
     statx->stx_ctime.tv_nsec = 0;
     statx->stx_size = stat.st_size;
     statx->stx_nlink = stat.st_nlink;
-    statx->stx_blksize = 512; // Typical block size
+    statx->stx_blksize = stat.st_blksize; // Typical block size
     statx->stx_blocks = (stat.st_size + statx->stx_blksize - 1) / statx->stx_blksize; // Calculate number of blocks
 
     //Set the mask
@@ -651,9 +656,9 @@ int64_t sigprocmask_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
     int how = SYSCALL_ARG0(ctx);
     sigset_t* set = (sigset_t*)SYSCALL_ARG1(ctx);
     sigset_t* oldset = (sigset_t*)SYSCALL_ARG2(ctx);
-    kprintf("[PID: %d | TID %d] SIGPROCMASK_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, how, set, oldset);
+    DBG_STRACE("[PID: %d | TID %d] SIGPROCMASK_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, how, set, oldset);
     if (how != SIG_BLOCK && how != SIG_UNBLOCK && how != SIG_SETMASK) {
-        kprintf("Invalid how value\n");
+        DBG_ERROR("Invalid how value\n");
         return SYSCALL_ERROR;
     }
     return sigprocmask(&(thread->sigprocmask), how, set, oldset);
@@ -663,9 +668,9 @@ int64_t sigaction_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
     int signum = SYSCALL_ARG0(ctx);
     struct sigaction* act = (struct sigaction*)SYSCALL_ARG1(ctx);
     struct sigaction* oldact = (struct sigaction*)SYSCALL_ARG2(ctx);
-    kprintf("[PID: %d | TID %d] SIGACTION_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, signum, act, oldact);
+    DBG_STRACE("[PID: %d | TID %d] SIGACTION_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, signum, act, oldact);
     if (signum < 0 || signum >= NSIG) {
-        kprintf("Invalid signal number\n");
+        DBG_ERROR("Invalid signal number\n");
         return SYSCALL_ERROR;
     }
     return sigaction(thread->process->signal_handlers, signum, act, oldact);
@@ -673,9 +678,9 @@ int64_t sigaction_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
 
 int64_t sigsuspend_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
     sigset_t* mask = (sigset_t*)SYSCALL_ARG0(ctx);
-    kprintf("[PID: %d | TID %d] SIGSUSPEND_SYSCALL(%d)\n", thread->process->pid, thread->id, mask);
+    DBG_STRACE("[PID: %d | TID %d] SIGSUSPEND_SYSCALL(%d)\n", thread->process->pid, thread->id, mask);
     if (mask == NULL) {
-        kprintf("Invalid mask\n");
+        DBG_ERROR("Invalid mask\n");
         return SYSCALL_ERROR;
     }
     int64_t ret = sigsuspend(&(thread->sigsuspend_mask), mask);
@@ -698,9 +703,9 @@ int64_t pread_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
 
 int64_t sigpending_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
     sigset_t* set = (sigset_t*)SYSCALL_ARG0(ctx);
-    kprintf("[PID: %d | TID %d] SIGPENDING_SYSCALL(%d)\n", thread->process->pid, thread->id, set);
+    DBG_STRACE("[PID: %d | TID %d] SIGPENDING_SYSCALL(%d)\n", thread->process->pid, thread->id, set);
     if (set == NULL) {
-        kprintf("Invalid set\n");
+        DBG_ERROR("Invalid set\n");
         return SYSCALL_ERROR;
     }
     return sigpending(thread->process->signal_queue, set);
@@ -709,9 +714,9 @@ int64_t sigpending_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
 int64_t sigaltstack_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
     struct stack* ss = (struct stack*)SYSCALL_ARG0(ctx);
     struct stack* old_ss = (struct stack*)SYSCALL_ARG1(ctx);
-    kprintf("[PID: %d | TID %d] SIGALTSTACK_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, ss, old_ss);
+    DBG_STRACE("[PID: %d | TID %d] SIGALTSTACK_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, ss, old_ss);
     if (ss == NULL) {
-        kprintf("Invalid stack\n");
+        DBG_ERROR("Invalid stack\n");
         return SYSCALL_ERROR;
     }
     struct stack stack;
@@ -732,14 +737,14 @@ int64_t sigaltstack_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
 int64_t kill_syscall_handler(thread_t* thread, cpu_context_t* ctx) {
     int pid = SYSCALL_ARG0(ctx);
     int signal = SYSCALL_ARG1(ctx);
-    kprintf("[PID: %d | TID %d] KILL_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, pid, signal);
+    DBG_STRACE("[PID: %d | TID %d] KILL_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, pid, signal);
     if (pid < 0 || signal < 0 || signal >= NSIG) {
-        kprintf("Invalid pid or signal\n");
+        DBG_ERROR("Invalid pid or signal\n");
         return SYSCALL_ERROR;
     }
     struct task_signal ** squeue = get_process_by_pid(pid)->signal_queue;
     if (squeue == NULL) {
-        kprintf("No such process\n");
+        DBG_ERROR("No such process\n");
         return SYSCALL_ERROR;
     }
     return kill(squeue, signal);
@@ -750,10 +755,10 @@ int64_t fstat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     int flags = SYSCALL_ARG1(ctx);
     stat_t* stat = SYSCALL_ARG2(ctx);
 
-    kprintf("[PID: %d | TID %d] FSTAT_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, fd, stat);
+    DBG_STRACE("[PID: %d | TID %d] FSTAT_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, fd, stat);
     
-    if (flags != 0) {
-        kprintf("Flags not supported in fstat syscall\n");
+    if (flags != 0 && flags != AT_SYMLINK_NOFOLLOW) {
+        DBG_ERROR("Flags not supported in fstat syscall\n");
         return SYSCALL_ERROR;
     }
 
@@ -762,8 +767,8 @@ int64_t fstat_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     if (ret < 0) {
         return SYSCALL_ERROR;
     }
-    kprintf("File size: %d\n", stat->st_size);
-    kprintf("File mode: %d\n", stat->st_mode);
+    DBG_DEBUG("File size: %d\n", stat->st_size);
+    DBG_DEBUG("File mode: %d\n", stat->st_mode);
 
     return SYSCALL_SUCCESS;
 }
@@ -772,14 +777,14 @@ int64_t ioctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     uint64_t fd = SYSCALL_ARG0(ctx);
     uint64_t request = SYSCALL_ARG1(ctx);
     uint64_t arg = SYSCALL_ARG2(ctx);
-    kprintf("[PID: %d | TID %d] IOCTL_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, request, arg);
+    DBG_STRACE("[PID: %d | TID %d] IOCTL_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, fd, request, arg);
     int pfd = get_open_file(thread->process, fd);
     int ret = vfs_file_ioctl(pfd, request, arg);
     if (ret < 0) {
         return SYSCALL_ERROR;
     }
 
-    kprintf("IOCTL request: %d\n", request);
+    DBG_DEBUG("IOCTL request: %d\n", request);
     return ret;
 }
 
@@ -788,10 +793,10 @@ int64_t clock_gettime_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     struct timespec * ts = (struct timespec *)SYSCALL_ARG1(ctx);
 
     if (clock_id != CLOCK_MONOTONIC) {
-        kprintf("Invalid clock id\n");
+        DBG_ERROR("Invalid clock id\n");
         return SYSCALL_ERROR;
     }
-    kprintf("[PID: %d | TID %d] CLOCK_GETTIME_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, clock_id, ts);
+    DBG_STRACE("[PID: %d | TID %d] CLOCK_GETTIME_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, clock_id, ts);
     if (ts != NULL) {
         timespec_now(ts);
     }
@@ -802,7 +807,7 @@ int64_t clock_gettime_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 int64_t clock_settime_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
     (void)thread;
-    kprintf("Not implemented yet\n");
+    DBG_ERROR("Not implemented yet\n");
     return SYSCALL_ERROR;
 }
 
@@ -811,10 +816,10 @@ int64_t clock_getres_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     struct timespec * ts = (struct timespec *)SYSCALL_ARG1(ctx);
 
     if (clock_id != CLOCK_MONOTONIC) {
-        kprintf("Invalid clock id\n");
+        DBG_ERROR("Invalid clock id\n");
         return SYSCALL_ERROR;
     }
-    kprintf("[PID: %d | TID %d] CLOCK_GETRES_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, clock_id, ts);
+    DBG_STRACE("[PID: %d | TID %d] CLOCK_GETRES_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, clock_id, ts);
     if (ts != NULL) {
         clock_res(ts);
     }
@@ -826,7 +831,7 @@ int64_t clock_getres_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 int64_t gettimeofday_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     struct timeval *tv = (struct timeval *)SYSCALL_ARG0(ctx);
     struct timezone *tz = (struct timezone *)SYSCALL_ARG1(ctx);
-    kprintf("[PID: %d | TID %d] GETTIMEOFDAY_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, tv, tz);
+    DBG_STRACE("[PID: %d | TID %d] GETTIMEOFDAY_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, tv, tz);
     if (tv != NULL) {
         timeval_now(tv);
     }
@@ -835,7 +840,7 @@ int64_t gettimeofday_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 
 int64_t fcntl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
-    kprintf("[PID: %d | TID %d] FCNTL NOT IMPLEMENTED!!!\n", thread->process->pid, thread->id);
+    DBG_STRACE("[PID: %d | TID %d] FCNTL NOT IMPLEMENTED!!!\n", thread->process->pid, thread->id);
     return SYSCALL_SUCCESS;
 }
 
@@ -844,15 +849,15 @@ int64_t waitpid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     int pid = SYSCALL_ARG0(ctx);
     int * status = (int *)SYSCALL_ARG1(ctx);
     int options = SYSCALL_ARG2(ctx);
-    kprintf("[PID: %d | TID %d] WAITPID_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, pid, status, options);
+    DBG_STRACE("[PID: %d | TID %d] WAITPID_SYSCALL(%d,%d,%d)\n", thread->process->pid, thread->id, pid, status, options);
     
     if (pid < -1) {
-        kprintf("Invalid pid\n");
+        DBG_ERROR("Invalid pid\n");
         return SYSCALL_ERROR;
     }
 
     if (pid == 0) {
-        kprintf("Invalid pid\n");
+        DBG_ERROR("Invalid pid\n");
         return SYSCALL_ERROR;
     }
 
@@ -866,18 +871,18 @@ int64_t waitpid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 
 int64_t sched_yield_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
-    kprintf("[PID: %d | TID %d] SCHED_YIELD_SYSCALL()\n", thread->process->pid, thread->id);
-    kprintf("Yielding process %d\n", get_current_process()->pid);
+    DBG_STRACE("[PID: %d | TID %d] SCHED_YIELD_SYSCALL()\n", thread->process->pid, thread->id);
+    DBG_DEBUG("Yielding process %d\n", get_current_process()->pid);
     sched();
-    kprintf("Resuming process %d\n", get_current_process()->pid);
+    DBG_DEBUG("Resuming process %d\n", get_current_process()->pid);
     return SYSCALL_SUCCESS;
 }
 
 int64_t fork_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
-    kprintf("[PID: %d | TID %d] FORK_SYSCALL()\n", thread->process->pid, thread->id);
+    DBG_STRACE("[PID: %d | TID %d] FORK_SYSCALL()\n", thread->process->pid, thread->id);
     uint64_t child_pid = (uint64_t)fork(thread);
-    kprintf("Child PID: %d | TID %d\n", child_pid, 0);
+    DBG_DEBUG("Child PID: %d | TID %d\n", child_pid, 0);
     return child_pid;
 }
 
@@ -887,12 +892,12 @@ int64_t execve_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     const char ** argv = (const char **)SYSCALL_ARG1(ctx);
     const char ** envp = (const char **)SYSCALL_ARG2(ctx);
     if (path == NULL) {
-        kprintf("Invalid arguments for execve\n");
+        DBG_ERROR("Invalid arguments for execve\n");
         return SYSCALL_ERROR;
     } else if (argv == NULL || envp == NULL) {
-        kprintf("[PID: %d | TID %d] EXECVE_SYSCALL(%s,NULL,NULL)\n", thread->process->pid, thread->id, path);
+        DBG_STRACE("[PID: %d | TID %d] EXECVE_SYSCALL(%s,NULL,NULL)\n", thread->process->pid, thread->id, path);
     } else {
-        kprintf("[PID: %d | TID %d] EXECVE_SYSCALL(%s,%s,%s)\n", thread->process->pid, thread->id, path, argv, envp);
+        DBG_STRACE("[PID: %d | TID %d] EXECVE_SYSCALL(%s,%s,%s)\n", thread->process->pid, thread->id, path, argv, envp);
     }
     if (execve(thread->process, path, argv, envp) != 0) {
         return SYSCALL_ERROR;
@@ -905,7 +910,7 @@ int64_t arch_prctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)thread;
     uint64_t option = SYSCALL_ARG0(ctx);
     uint64_t arg2 = SYSCALL_ARG1(ctx);
-    kprintf("[PID: %d | TID %d] PRCTL_SYSCALL(%llx,%llx)\n", thread->process->pid, thread->id, option, arg2);
+    DBG_STRACE("[PID: %d | TID %d] PRCTL_SYSCALL(%llx,%llx)\n", thread->process->pid, thread->id, option, arg2);
     switch (option) {
         case ARCH_SET_CPUID:
             return -ENODEV;
@@ -944,7 +949,7 @@ int64_t arch_prctl_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 
 int64_t thread_exit_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
-    kprintf("[PID: %d | TID %d] THREAD_EXIT_SYSCALL()\n", thread->process->pid, thread->id);
+    DBG_STRACE("[PID: %d | TID %d] THREAD_EXIT_SYSCALL()\n", thread->process->pid, thread->id);
     thread_exit(thread);
     return SYSCALL_SUCCESS;
 }
@@ -952,28 +957,28 @@ int64_t thread_exit_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 int64_t exit_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
     int error_code = SYSCALL_ARG0(ctx);
-    kprintf("[PID: %d | TID %d] EXIT_SYSCALL(%d)\n", thread->process->pid, thread->id, error_code);
+    DBG_STRACE("[PID: %d | TID %d] EXIT_SYSCALL(%d)\n", thread->process->pid, thread->id, error_code);
     exit(thread->process, error_code);
     return SYSCALL_SUCCESS;
 }
 
 int64_t get_tid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
-    //kprintf("[PID: %d | TID %d] GET_TID_SYSCALL()\n", thread->process->pid, thread->id);
+    //DBG_STRACE("[PID: %d | TID %d] GET_TID_SYSCALL()\n", thread->process->pid, thread->id);
     return thread->id;
 }
 
 int64_t getpid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
-    kprintf("[PID: %d | TID %d] GETPID_SYSCALL()\n", thread->process->pid, thread->id);
+    DBG_STRACE("[PID: %d | TID %d] GETPID_SYSCALL()\n", thread->process->pid, thread->id);
     return thread->process->pid;
 }
 
 int64_t getppid_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     (void)ctx;
-    kprintf("[PID: %d | TID %d] GETPPID_SYSCALL()\n", thread->process->pid, thread->id);
+    DBG_STRACE("[PID: %d | TID %d] GETPPID_SYSCALL()\n", thread->process->pid, thread->id);
     if (thread->process->parent == NULL) {
-        kprintf("No parent process\n");
+        DBG_ERROR("No parent process\n");
         return 1;
     }
     return thread->process->parent->pid;
@@ -983,7 +988,7 @@ int64_t mkdir_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char * path = (char *)SYSCALL_ARG0(ctx);
     int mode = SYSCALL_ARG1(ctx);
 
-    kprintf("[PID: %d | TID %d] MKDIR_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, path, mode);
+    DBG_STRACE("[PID: %d | TID %d] MKDIR_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, path, mode);
     int ret = vfs_mkdir(thread->process->fs, path, mode);
     if (ret < 0) {
         return SYSCALL_ERROR;
@@ -995,10 +1000,10 @@ int64_t log_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     char * message = (char *)SYSCALL_ARG0(ctx);
     //uint64_t length = SYSCALL_ARG1(ctx);
     //enable_debugger();
-    //kprintf("[PID: %d | TID %d] LOG_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, message, length);
+    //DBG_STRACE("[PID: %d | TID %d] LOG_SYSCALL(%s,%d)\n", thread->process->pid, thread->id, message, length);
     //uint8_t dbg = is_debugger_enabled();
     //if (!dbg) enable_debugger();
-    kprintf("%s\n", message);
+    DBG_INFO("%s\n", message);
     //if (!dbg) disable_debugger();
     //disable_debugger();
     return SYSCALL_SUCCESS;
@@ -1035,7 +1040,7 @@ int64_t mmap_syscall_handler(thread_t*thread, cpu_context_t*ctx) {
     int flags = SYSCALL_ARG3(ctx);
     int fd = SYSCALL_ARG4(ctx);
     off_t offset = SYSCALL_ARG5(ctx);
-    kprintf("[PID: %d | TID %d] MMAP_SYSCALL(%p,%d,%d,%d,%d,%d)\n", thread->process->pid, thread->id, addr, length, prot, flags, fd, offset);
+    DBG_STRACE("[PID: %d | TID %d] MMAP_SYSCALL(%p,%d,%d,%d,%d,%d)\n", thread->process->pid, thread->id, addr, length, prot, flags, fd, offset);
     int pfd = get_open_file(thread->process, fd);
     //Validate the arguments
     if (length == 0) {
@@ -1092,7 +1097,7 @@ int64_t mmap_syscall_handler(thread_t*thread, cpu_context_t*ctx) {
         panic("Failed to find a free area\n");
         return SYSCALL_ERROR;
     }
-    //kprintf("Found free area: %p\n", addr);
+    //DBG_DEBUG("Found free area: %p\n", addr);
 
     if (flags & MAP_PRIVATE || flags & MAP_SHARED) {
 
@@ -1101,7 +1106,7 @@ int64_t mmap_syscall_handler(thread_t*thread, cpu_context_t*ctx) {
         int newfd = -1;
         if (flags & MAP_ANONYMOUS) {
             create_vmarea(thread->process, addr, (addr + length), vmm_flags, vma_flags, PAGE_SIZE_4KIB, newfd, 0);
-            //kprintf("MMAP <anon> Giving range: %p-%p, length: %d, prot: %d, flags: %d, fd: %d, offset: %d\n", addr, (void*)(((uint64_t)addr)+length), length, prot, flags, newfd, offset);
+            //DBG_DEBUG("MMAP <anon> Giving range: %p-%p, length: %d, prot: %d, flags: %d, fd: %d, offset: %d\n", addr, (void*)(((uint64_t)addr)+length), length, prot, flags, newfd, offset);
             return addr;
         } else {
             newfd = vfs_file_dup(pfd, -1);
@@ -1117,14 +1122,14 @@ int64_t mmap_syscall_handler(thread_t*thread, cpu_context_t*ctx) {
 
         //Read the file into the memory
         if (vfs_file_seek(newfd, offset, SEEK_SET) < 0) {
-            kprintf("Failed to seek file\n");
+            DBG_ERROR("Failed to seek file\n");
             vfs_file_close(newfd);
             goto cleanup_on_error;
         }
 
         int64_t bytes_read = vfs_file_read(newfd, addr, length);
         if (bytes_read < 0) {
-            kprintf("Failed to read file\n");
+            DBG_ERROR("Failed to read file\n");
             vfs_file_close(newfd);
             goto cleanup_on_error;
         } 
@@ -1132,7 +1137,7 @@ int64_t mmap_syscall_handler(thread_t*thread, cpu_context_t*ctx) {
         //Reset permissions but keep readonly so it page faults on a write
         uint8_t roflags = vmm_flags & ~VMM_WRITE_BIT;   
         mprotect(thread->process->vmm, addr, length, roflags);
-        //kprintf("MMAP Giving range: %p-%p, length: %d, prot: %d, flags: %d, fd: %d, offset: %d\n", addr, (void*)(((uint64_t)addr)+length), length, prot, flags, newfd, offset);
+        //DBG_DEBUG("MMAP Giving range: %p-%p, length: %d, prot: %d, flags: %d, fd: %d, offset: %d\n", addr, (void*)(((uint64_t)addr)+length), length, prot, flags, newfd, offset);
         return addr;
     }
 
@@ -1149,7 +1154,7 @@ int64_t mprotect_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     size_t length = SYSCALL_ARG1(ctx);
     int prot = SYSCALL_ARG2(ctx);
 
-    kprintf("[PID: %d | TID %d] MPROTECT_SYSCALL(%p,%d,%d)\n", thread->process->pid, thread->id, addr, length, prot);
+    DBG_STRACE("[PID: %d | TID %d] MPROTECT_SYSCALL(%p,%d,%d)\n", thread->process->pid, thread->id, addr, length, prot);
     if (addr == NULL || length == 0) {
         return SYSCALL_ERROR;
     }
@@ -1192,7 +1197,7 @@ int64_t mprotect_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 int64_t munmap_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     void * addr = (void *)SYSCALL_ARG0(ctx);
     size_t length = SYSCALL_ARG1(ctx);
-    kprintf("[PID: %d | TID %d] MUNMAP_SYSCALL(%p,%d)\n", thread->process->pid, thread->id, addr, length);
+    DBG_STRACE("[PID: %d | TID %d] MUNMAP_SYSCALL(%p,%d)\n", thread->process->pid, thread->id, addr, length);
     
     if (addr == NULL || length == 0) {
         return SYSCALL_ERROR;
@@ -1225,7 +1230,7 @@ int64_t msync_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     void * addr = (void *)SYSCALL_ARG0(ctx);
     size_t length = SYSCALL_ARG1(ctx);
     int flags = SYSCALL_ARG2(ctx);
-    kprintf("[PID: %d | TID %d] MSYNC_SYSCALL(%p,%d,%d)\n", thread->process->pid, thread->id, addr, length, flags);
+    DBG_STRACE("[PID: %d | TID %d] MSYNC_SYSCALL(%p,%d,%d)\n", thread->process->pid, thread->id, addr, length, flags);
 
     if (flags & MS_ASYNC) {
         panic("MS_ASYNC not implemented\n");
@@ -1259,9 +1264,9 @@ int64_t msync_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 int64_t nanosleep_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     struct timespec *duration = SYSCALL_ARG0(ctx);
     struct timespec *rem = SYSCALL_ARG1(ctx);
-    //kprintf("[PID: %d | TID %d] NANOSLEEP_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, duration, rem);
+    //DBG_STRACE("[PID: %d | TID %d] NANOSLEEP_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, duration, rem);
     if (duration == NULL) {
-        kprintf("Invalid duration\n");
+        DBG_ERROR("Invalid duration\n");
         return SYSCALL_ERROR;
     }
 
@@ -1270,13 +1275,13 @@ int64_t nanosleep_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 
 int64_t dup_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     int fd = SYSCALL_ARG0(ctx);
-    kprintf("[PID: %d | TID %d] DUP_SYSCALL(%d)\n", thread->process->pid, thread->id, fd);
+    DBG_STRACE("[PID: %d | TID %d] DUP_SYSCALL(%d)\n", thread->process->pid, thread->id, fd);
     if (fd < 0) {
         return SYSCALL_ERROR;
     }
 
     if (thread->process->open_files_count >= MAX_OPEN_FILES) {
-        kprintf("Max open files reached\n");
+        DBG_ERROR("Max open files reached\n");
         return SYSCALL_ERROR;
     }
 
@@ -1292,13 +1297,13 @@ int64_t dup_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 int64_t dup2_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
     int oldfd = SYSCALL_ARG0(ctx);
     int newfd = SYSCALL_ARG1(ctx);
-    kprintf("[PID: %d | TID %d] DUP2_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, oldfd, newfd);
+    DBG_STRACE("[PID: %d | TID %d] DUP2_SYSCALL(%d,%d)\n", thread->process->pid, thread->id, oldfd, newfd);
     if (oldfd < 0 || newfd < 0) {
         return SYSCALL_ERROR;
     }
 
     if (thread->process->open_files_count >= MAX_OPEN_FILES) {
-        kprintf("Max open files reached\n");
+        DBG_ERROR("Max open files reached\n");
         return SYSCALL_ERROR;
     }
     int pfd = get_open_file(thread->process, oldfd);
@@ -1311,21 +1316,15 @@ int64_t dup2_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 
 int64_t disable_debugger_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
 
-    int enable = SYSCALL_ARG0(ctx);
-    kprintf("[PID: %d | TID %d] DISABLE_DEBUGGER_SYSCALL()\n", thread->process->pid, thread->id);
-    if (enable) {
-        kprintf("Enabling debugger\n");
-        enable_debugger();
-    } else {
-        kprintf("Disabling debugger\n");
-        disable_debugger();
-    }
+    uint64_t enable = SYSCALL_ARG0(ctx);
+    DBG_STRACE("[PID: %d | TID %d] DISABLE_DEBUGGER_SYSCALL()\n", thread->process->pid, thread->id);
+    set_debug_level((uint8_t)enable);
     return SYSCALL_SUCCESS;
 }
 
 
 int64_t undefined_syscall_handler(thread_t*thread, cpu_context_t* ctx) {
-    kprintf("[PID: %d | TID %d] UNDEFINED_SYSCALL(%d)\n", thread->process->pid, thread->id, ctx->rax);
+    DBG_STRACE("[PID: %d | TID %d] UNDEFINED_SYSCALL(%d)\n", thread->process->pid, thread->id, ctx->rax);
     return SYSCALL_UNDEFINED;
 }
 
@@ -1418,7 +1417,7 @@ void global_syscall_handler(cpu_context_t* ctx) {
     current_thread->syscall_ready = 1;
 
     //if (ctx->rax != 186 && ctx->rax != 337 && (ctx->rax != 1 || SYSCALL_ARG2(ctx) != 1))
-    //    kprintf("[PID: %d | TID %d] SYSCALL(%d)\n", current_thread->process->pid, current_thread->id, ctx->rax);    
+    //    DBG_STRACE("[PID: %d | TID %d] SYSCALL(%d)\n", current_thread->process->pid, current_thread->id, ctx->rax);    
     memcpy(current_thread->user_context->cpu_context, ctx, sizeof(cpu_context_t));
     memcpy(current_thread->user_context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
     arch_simd_save_context(current_thread->user_context->fxsave_region);
@@ -1427,17 +1426,17 @@ void global_syscall_handler(cpu_context_t* ctx) {
     if (ctx->rax < SYSCALL_HANDLER_COUNT) {
         current_thread->last_syscall_result = syscall_handlers[ctx->rax](current_thread, ctx);
     } else {
-        kprintf("Syscall number overflow %d\n", ctx->rax);
+        DBG_ERROR("Syscall number overflow %d\n", ctx->rax);
         current_thread->last_syscall_result = SYSCALL_ERROR;
     }
 
     current_thread = get_current_thread();
     if (current_thread->process != entry_thread->process) {
-        kprintf("Process changed during syscall!\n");
-        //kprintf("[PID: %d | TID: %d] SYSCALL(%d) RETURNING %d\n", current_thread->process->pid, current_thread->id, ctx->rax, current_thread->last_syscall_result);
+        DBG_DEBUG("Process changed during syscall!\n");
+        //DBG_STRACE("[PID: %d | TID: %d] SYSCALL(%d) RETURNING %d\n", current_thread->process->pid, current_thread->id, ctx->rax, current_thread->last_syscall_result);
     } else {
     //if (ctx->rax != 186 && ctx->rax != 337 && (ctx->rax != 1 || SYSCALL_ARG2(ctx) != 1)) {
-    //    //kprintf("[PID: %d | TID: %d] SYSCALL(%d) RETURNING %d\n", entry_thread->process->pid, entry_thread->id, ctx->rax, entry_thread->last_syscall_result);
+    //    //DBG_STRACE("[PID: %d | TID: %d] SYSCALL(%d) RETURNING %d\n", entry_thread->process->pid, entry_thread->id, ctx->rax, entry_thread->last_syscall_result);
     }
     
     if (!current_thread->syscall_ready && current_thread->kernel_context_ready)
@@ -1461,18 +1460,18 @@ void global_syscall_handler(cpu_context_t* ctx) {
         struct sigaction * sigact = select_signal(current_thread, &signo);
         if (sigact == NULL) {
             if (current_thread->waiting == 2) {
-                kprintf("Waitpid ready to be handled [PID: %d | TID: %d]\n", current_thread->process->pid, current_thread->id);
+                DBG_DEBUG("Waitpid ready to be handled [PID: %d | TID: %d]\n", current_thread->process->pid, current_thread->id);
                 current_thread->waiting = 0;
                 int * phys = get_physical_address(current_thread->process->vmm, current_thread->waitpid_status_address);
                 if (phys == NULL) {
-                    kprintf("Failed to get physical address\n");
+                    DBG_ERROR("Failed to get physical address\n");
                     SYSRET(ctx, -1);
                 }
                 *(int*)(to_identity_map(phys)) = current_thread->waitpid_status;
                 SYSRET(ctx, current_thread->waitpid_pid);
             }
         } else {
-            kprintf("Signal ready to be handled [HANDLER: %p | SIGACTION: %p | MASK: %llx | FLAGS: %x | RESTORER: %p]\n", sigact->sa_handler, sigact->sa_sigaction, sigact->sa_mask, sigact->sa_flags, sigact->sa_restorer);
+            DBG_DEBUG("Signal ready to be handled [HANDLER: %p | SIGACTION: %p | MASK: %llx | FLAGS: %x | RESTORER: %p]\n", sigact->sa_handler, sigact->sa_sigaction, sigact->sa_mask, sigact->sa_flags, sigact->sa_restorer);
             create_signal_context(current_thread, signo, sigact, ctx);
         }
 

@@ -18,7 +18,7 @@ uint64_t serial_dd_read_block(uint64_t port, uint64_t size, uint64_t skip, uint8
 }
 
 uint64_t serial_dd_write_block(uint64_t port, uint64_t size, uint64_t skip, uint8_t* buffer) {
-    //kprintf("Writing to serial port %x (size: %d, skip: %d)\n", port, size, skip);
+    //DBG_DEBUG("Writing to serial port %x (size: %d, skip: %d)\n", port, size, skip);
     struct serial_device* device = get_serial((int)port);
     if (!device) return 0;
 

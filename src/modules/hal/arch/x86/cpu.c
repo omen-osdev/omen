@@ -57,7 +57,7 @@ void startup_cpu(uint8_t cpuid) {
     struct page_directory * pml4 = get_pml4();
     kstackalloc(pml4, &kernel_stack, KERNEL_STACK_SIZE);
 
-    kprintf("Starting CPU %d\n", ctx->core_id);
+    DBG_DEBUG("Starting CPU %d\n", ctx->core_id);
     ctx->ustack = 0;
     ctx->cr3 = from_identity_map(get_pml4());
     ctx->cinfo = kmalloc(sizeof(struct cpu_context_info));

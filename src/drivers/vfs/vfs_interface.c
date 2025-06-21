@@ -6,9 +6,6 @@
 #include <omen/libraries/std/string.h>
 #include <omen/libraries/std/dirent.h>
 
-#define PRINT_ENABLE 0
-#define vfs_print(...) if (PRINT_ENABLE) kprintf(__VA_ARGS__)
-
 void vfs_normalize_path(struct vfs_struct * cwd, char * rpath) {
     if (rpath == 0) {
         panic("vfs_normalize_path: Invalid arguments");
@@ -17,12 +14,14 @@ void vfs_normalize_path(struct vfs_struct * cwd, char * rpath) {
     if (path == 0) {
         panic("vfs_normalize_path: Invalid path");
     }
-    //kprintf("Normalizing: %s\n", path);
+    //DBG_DEBUG("Normalizing: %s\n", path);
     //Substitute . and .. in the path
     char * path_ptr = path;
     char * path_ptr2 = path;
     while (*path_ptr != 0) {
-        if (*path_ptr == '.' && *(path_ptr + 1) == '/') {
+        if (*path_ptr == '/' && *(path_ptr + 1) == '/') {
+            path_ptr++;
+        } else if (*path_ptr == '.' && *(path_ptr + 1) == '/') {
             path_ptr += 2;
         } else if (*path_ptr == '.' && *(path_ptr + 1) == '.' && *(path_ptr + 2) == '/') {
             path_ptr += 3;
@@ -51,7 +50,10 @@ void vfs_normalize_path(struct vfs_struct * cwd, char * rpath) {
 
     *path_ptr2 = 0;
 
-    //kprintf("Normalized path: %s\n", path);
+    DBG_DEBUG("Normalized path: %s\n", path);
+    memset(rpath, 0, strlen(rpath) + 1);
+    strcpy(rpath, path);
+    kfree(path);
 }
 
 void vfs_lsdisk() {
@@ -63,7 +65,7 @@ int vfs_socket_open(int family, int type, int protocol) {
 }
 
 int vfs_file_dup(int old, int new) {
-    vfs_print("vfs_file_dup(%d, %d)\n", old, new);
+    DBG_DEBUG("vfs_file_dup(%d, %d)\n", old, new);
     char * path = get_full_path_from_fd(old);
     if (path == 0) {
         return VFS_ERROR;
@@ -93,7 +95,7 @@ int vfs_file_open(struct vfs_struct * cwd, char* path, int flags, int mode) {
         strcpy(npath, symlink_path);
     }
     vfs_normalize_path(cwd, npath);
-    vfs_print("vfs_file_open(%s, %d, %d)\n", npath, flags, mode);
+    DBG_DEBUG("vfs_file_open(%s, %d, %d)\n", npath, flags, mode);
     char * native_path_buffer = kmalloc(strlen(npath) + 1);
     struct vfs_mount* mount = get_mount_from_path(npath, native_path_buffer);
     int res = VFS_ERROR;
@@ -106,7 +108,7 @@ int vfs_file_open(struct vfs_struct * cwd, char* path, int flags, int mode) {
 }
 
 int vfs_file_close(int fd) {
-    vfs_print("vfs_file_close(%d)\n", fd);
+    DBG_DEBUG("vfs_file_close(%d)\n", fd);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
         return VFS_ERROR;
@@ -124,7 +126,7 @@ int vfs_file_close(int fd) {
 }
 
 int64_t vfs_file_read(int fd, void* buffer, uint64_t size) {
-    vfs_print("vfs_file_read(%d, %p, %ld)\n", fd, buffer, size);
+    DBG_DEBUG("vfs_file_read(%d, %p, %ld)\n", fd, buffer, size);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
         return VFS_ERROR;
@@ -142,10 +144,10 @@ int64_t vfs_file_read(int fd, void* buffer, uint64_t size) {
 }
 
 int64_t vfs_file_write(int fd, void* buffer, uint64_t size) {
-    vfs_print("vfs_file_write(%d, %p, %ld)\n", fd, buffer, size);
+    DBG_DEBUG("vfs_file_write(%d, %p, %ld)\n", fd, buffer, size);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
-        kprintf("vfs_file_write: Invalid path for fd %d\n", fd);
+        DBG_ERROR("vfs_file_write: Invalid path for fd %d\n", fd);
         return VFS_ERROR;
     }
     char * native_path_buffer = kmalloc(strlen(path) + 1);
@@ -162,7 +164,7 @@ int64_t vfs_file_write(int fd, void* buffer, uint64_t size) {
 }
 
 int64_t vfs_file_ioctl(int fd, int request, void* arg) {
-    vfs_print("vfs_file_ioctl(%d, %d, %p)\n", fd, request, arg);
+    DBG_DEBUG("vfs_file_ioctl(%d, %d, %p)\n", fd, request, arg);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
         return VFS_ERROR;
@@ -186,7 +188,7 @@ int vfs_file_creat(struct vfs_struct * cwd, char* path, int mode) {
     char * npath = kmalloc(strlen(path) + 1);
     strcpy(npath, path);
     vfs_normalize_path(cwd, npath);
-    vfs_print("vfs_file_creat(%s, %d)\n", npath, mode);
+    DBG_DEBUG("vfs_file_creat(%s, %d)\n", npath, mode);
     char * native_path_buffer = kmalloc(strlen(npath) + 1);
     struct vfs_mount* mount = get_mount_from_path(npath, native_path_buffer);
     int res = VFS_ERROR;
@@ -199,7 +201,7 @@ int vfs_file_creat(struct vfs_struct * cwd, char* path, int mode) {
 }
 
 int vfs_file_event(int fd, int event_kind, int* event_result) {
-    vfs_print("vfs_file_event(%d, %d, %p)\n", fd, event_kind, event_result);
+    DBG_DEBUG("vfs_file_event(%d, %d, %p)\n", fd, event_kind, event_result);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
         return VFS_ERROR;
@@ -216,7 +218,7 @@ int vfs_file_event(int fd, int event_kind, int* event_result) {
 }
 
 char * vfs_read_symlink(struct vfs_struct * cwd, char * path) {
-    vfs_print("vfs_read_symlink(%s)\n", path);
+    DBG_DEBUG("vfs_read_symlink(%s)\n", path);
     if (cwd == 0 || path == 0) {
         panic("vfs_read_symlink: Invalid arguments");
     }
@@ -241,7 +243,7 @@ int vfs_link_creat(struct vfs_struct * cwd, char* path, char* target) {
     char * npath = kmalloc(strlen(path) + 1);
     strcpy(npath, path);
     vfs_normalize_path(cwd, npath);
-    vfs_print("vfs_link_creat(%s, %s)\n", npath, target);
+    DBG_DEBUG("vfs_link_creat(%s, %s)\n", npath, target);
     char * native_path_buffer = kmalloc(strlen(npath) + 1);
     struct vfs_mount* mount = get_mount_from_path(npath, native_path_buffer);
     int res = VFS_ERROR;
@@ -254,7 +256,7 @@ int vfs_link_creat(struct vfs_struct * cwd, char* path, char* target) {
 }
 
 int vfs_file_stat(int fd, stat_t* st) {
-    vfs_print("vfs_file_stat(%d, %p)\n", fd, st);
+    DBG_DEBUG("vfs_file_stat(%d, %p)\n", fd, st);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
         return VFS_ERROR;
@@ -266,13 +268,17 @@ int vfs_file_stat(int fd, stat_t* st) {
     if (mount != 0) {
         res = mount->fst->file_stat(mount->internal_index, fd, st);
     }
+
+    if (st->st_mode & S_IFCHR || st->st_mode & S_IFBLK || st->st_mode & S_IFIFO) {
+        //If the file is a character or block device, we need to set the device number
+    }
     kfree(native_path_buffer);
     kfree(path);
     return res;
 }
 
 int64_t vfs_file_seek(int fd, uint64_t offset, int whence) {
-    vfs_print("vfs_file_seek(%d, %ld, %d)\n", fd, offset, whence);
+    DBG_DEBUG("vfs_file_seek(%d, %ld, %d)\n", fd, offset, whence);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
         return VFS_ERROR;
@@ -290,7 +296,7 @@ int64_t vfs_file_seek(int fd, uint64_t offset, int whence) {
 }
 
 int64_t vfs_file_tell(int fd) {
-    vfs_print("vfs_file_tell(%d)\n", fd);
+    DBG_DEBUG("vfs_file_tell(%d)\n", fd);
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
         return VFS_ERROR;
@@ -315,7 +321,7 @@ void* vfs_dir_open(struct vfs_struct * cwd, char* path) {
     char * npath = kmalloc(strlen(path) + 1);
     strcpy(npath, path);
     vfs_normalize_path(cwd, npath);
-    vfs_print("vfs_dir_open(%s)\n", path);
+    DBG_DEBUG("vfs_dir_open(%s)\n", path);
     char * native_path_buffer = kmalloc(strlen(npath) + 1);
     struct vfs_mount* mount = get_mount_from_path(npath, native_path_buffer);
     void * res = 0;
@@ -329,7 +335,7 @@ void* vfs_dir_open(struct vfs_struct * cwd, char* path) {
 }
 
 int vfs_dir_close(int fd) {
-    vfs_print("vfs_dir_close(%d)\n", fd);
+    DBG_DEBUG("vfs_dir_close(%d)\n", fd);
 
     char * path = get_full_path_from_dir(fd);
     if (path == 0) {
@@ -349,7 +355,7 @@ int vfs_dir_close(int fd) {
 }
 
 void vfs_file_flush(int fd) {
-    vfs_print("vfs_file_flush(%d)\n", fd);
+    DBG_DEBUG("vfs_file_flush(%d)\n", fd);
 
     char * path = get_full_path_from_fd(fd);
     if (path == 0) {
@@ -367,7 +373,7 @@ void vfs_file_flush(int fd) {
 }
 
 int vfs_dir_load(int fd) {
-    vfs_print("vfs_dir_load(%d)\n", fd);
+    DBG_DEBUG("vfs_dir_load(%d)\n", fd);
 
     char * path = get_full_path_from_dir(fd);
     if (path == 0) {
@@ -471,7 +477,7 @@ void testdir(void* entry, uint32_t count) {
     while (1) {
         struct dirent * dirent = (struct dirent *) ((char *) entry + next_offset);
         //Print the directory entry
-        kprintf("DIR ENTRY: %s, %ld, %ld, %d, %d\n", dirent->d_name, dirent->d_ino, dirent->d_off, dirent->d_reclen, dirent->d_type);
+        DBG_DEBUG("DIR ENTRY: %s, %ld, %ld, %d, %d\n", dirent->d_name, dirent->d_ino, dirent->d_off, dirent->d_reclen, dirent->d_type);
         if (dirent->d_reclen == 0) {
             break; // End of directory entries
         }
@@ -480,14 +486,14 @@ void testdir(void* entry, uint32_t count) {
     }
 
     if (found != count) {
-        kprintf("Warning: Found %d entries, expected %d\n", found, count);
+        DBG_WARN("Warning: Found %d entries, expected %d\n", found, count);
     } else {
-        kprintf("Found %d entries as expected\n", found);
+        DBG_DEBUG("Found %d entries as expected\n", found);
     }
 }
 
 int vfs_dir_read(int fd, void * dirp, uint32_t count) {
-    vfs_print("vfs_dir_read(%d)\n", fd);
+    DBG_DEBUG("vfs_dir_read(%d)\n", fd);
 
     char * path = get_full_path_from_dir(fd);
     if (path == 0) {
@@ -512,7 +518,7 @@ int vfs_dir_read(int fd, void * dirp, uint32_t count) {
     uint32_t directory_items = 0;
     do {
         if (written >= count) {
-            //kprintf("DIR READ: %d\n", written);
+            //DBG_DEBUG("DIR READ: %d\n", written);
             break; // We have written enough entries
         }
         res = mount->fst->dir_read(mount->internal_index, fd, name, &name_len, &type);
@@ -520,16 +526,16 @@ int vfs_dir_read(int fd, void * dirp, uint32_t count) {
             uint64_t rlen = name_len + sizeof(long) + sizeof(long) + sizeof(unsigned short) + sizeof(unsigned char);
             if (written + rlen > count) {
                 int current_entry = vfs_dir_tell(fd);
-                kprintf("Going back from entry %d\n", current_entry);
+                DBG_DEBUG("Going back from entry %d\n", current_entry);
                 vfs_dir_seek(fd, current_entry-1, SEEK_SET);
                 current_entry = vfs_dir_tell(fd);
-                kprintf("Current entry is now %d\n", current_entry);
+                DBG_DEBUG("Current entry is now %d\n", current_entry);
                 break; // We have written enough entries
             }
-            //kprintf("DIR ENTRY: %s, %d, %d\n", name, type, name_len);
+            //DBG_DEBUG("DIR ENTRY: %s, %d, %d\n", name, type, name_len);
             if (name_len != strlen(name)) {
-                kprintf("ERROR: Name length mismatch: %d != %d\n", name_len, strlen(name));
-                kprintf("Name: %s strlen: %d reported: %d\n", name, strlen(name), name_len);
+                DBG_ERROR("ERROR: Name length mismatch: %d != %d\n", name_len, strlen(name));
+                DBG_ERROR("Name: %s strlen: %d reported: %d\n", name, strlen(name), name_len);
                 panic("Directory entry name length mismatch");
             }
             directory_items++;
@@ -544,7 +550,7 @@ int vfs_dir_read(int fd, void * dirp, uint32_t count) {
             written += dirent.d_reclen;
         }
     } while (res > 0);
-    //kprintf("DIR READ: %d\n", written);
+    //DBG_DEBUG("DIR READ: %d\n", written);
     kfree(name);
     kfree(native_path_buffer);
     kfree(path);
@@ -554,7 +560,7 @@ int vfs_dir_read(int fd, void * dirp, uint32_t count) {
 }
 
 int vfs_dir_seek(int fd, int offset, int whence) {
-    vfs_print("vfs_dir_seek(%d, %ld, %d)\n", fd, offset, whence);
+    DBG_DEBUG("vfs_dir_seek(%d, %ld, %d)\n", fd, offset, whence);
 
     char * path = get_full_path_from_dir(fd);
     if (path == 0) {
@@ -573,7 +579,7 @@ int vfs_dir_seek(int fd, int offset, int whence) {
 }
 
 int vfs_dir_tell(int fd) {
-    vfs_print("vfs_dir_tell(%d)\n", fd);
+    DBG_DEBUG("vfs_dir_tell(%d)\n", fd);
 
     char * path = get_full_path_from_dir(fd);
     if (path == 0) {
@@ -598,7 +604,7 @@ int vfs_mkdir(struct vfs_struct * cwd, char* cpath, int mode) {
     char * path = kmalloc(strlen(cpath) + 1);
     strcpy(path, cpath);
     vfs_normalize_path(cwd, path);
-    vfs_print("vfs_dir_creat(%s)\n", path);
+    DBG_DEBUG("vfs_dir_creat(%s)\n", path);
 
     char * native_path_buffer = kmalloc(strlen(path) + 1);
     struct vfs_mount* mount = get_mount_from_path(path, native_path_buffer);
@@ -619,7 +625,7 @@ int vfs_remove(struct vfs_struct * cwd, char* cpath, uint8_t force) {
     char * path = kmalloc(strlen(cpath) + 1);
     strcpy(path, cpath);
     vfs_normalize_path(cwd, path);
-    vfs_print("vfs_remove(%s)\n", path);
+    DBG_DEBUG("vfs_remove(%s)\n", path);
     char * native_path_buffer = kmalloc(strlen(path) + 1);
     struct vfs_mount* mount = get_mount_from_path(path, native_path_buffer);
 
@@ -644,7 +650,7 @@ void vfs_debug_by_path(struct vfs_struct * cwd, char* cpath) {
     char * path = kmalloc(strlen(cpath) + 1);
     strcpy(path, cpath);
     vfs_normalize_path(cwd, path);
-    vfs_print("vfs_debug_by_path(%s)\n", path);
+    DBG_DEBUG("vfs_debug_by_path(%s)\n", path);
     char * native_path_buffer = kmalloc(strlen(path) + 1);
     struct vfs_mount* mount = get_mount_from_path(path, native_path_buffer);
     if (mount != 0) {

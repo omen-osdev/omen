@@ -156,7 +156,7 @@ int read_dirfd(int fd, char * name, uint32_t * name_len, uint32_t * type) {
     if (dentry == 0 || dentry->next == 0) return 0;
     dentry = dentry->next; // Skip the first entry as it is empty
     for (uint32_t i = 0; i < index; i++) {
-        //kprintf("dentry: %s, nl: %d, t: %d\n", dentry->name, dentry->name_len, dentry->type);
+        //DBG_DEBUG("dentry: %s, nl: %d, t: %d\n", dentry->name, dentry->name_len, dentry->type);
         dentry = dentry->next;
     }
     strncpy(name, dentry->name, dentry->name_len);
@@ -185,8 +185,8 @@ int seek_dirfd(int fd, int offset, int whence) {
     }
     if (entry->index < 0) entry->index = 0;
     if (entry->index >= entry->number) entry->index = entry->number - 1;
-    //kprintf("seek_dirfd: %d, %d, %d\n", fd, offset, whence);
-    //kprintf("New index: %d\n", entry->index);
+    //DBG_DEBUG("seek_dirfd: %d, %d, %d\n", fd, offset, whence);
+    //DBG_DEBUG("New index: %d\n", entry->index);
     return 1;
 }
 
@@ -211,7 +211,7 @@ int release_dirfd(int fd) {
 }
 
 uint8_t add_file_to_dirfd(int fd, const char* name, uint32_t inode, uint32_t type, uint32_t name_len) {
-    //kprintf("add_file_to_dirfd: %d, %s, %d, %d, %d\n", fd, name, inode, type, name_len);
+    //DBG_DEBUG("add_file_to_dirfd: %d, %s, %d, %d, %d\n", fd, name, inode, type, name_len);
     if (fd >= VFS_COMPAT_MAX_OPEN_FILES) return 0;
     if (strlen(name) > VFS_FDE_NAME_MAX_LEN) return 0;
     dir_t * entry = GET_DIR(fd);
@@ -229,7 +229,7 @@ uint8_t add_file_to_dirfd(int fd, const char* name, uint32_t inode, uint32_t typ
     dentry->name_len = name_len;
     strncpy(dentry->name, name, strlen(name));
     entry->number++;
-    //kprintf("added file to dirfd: %s new number\n", name, open_directory_table[fd].number);
+    //DBG_DEBUG("added file to dirfd: %s new number\n", name, open_directory_table[fd].number);
     
     return 1;
 }

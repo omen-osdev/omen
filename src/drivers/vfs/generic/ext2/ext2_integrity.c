@@ -40,7 +40,7 @@ struct error_message * error_messages = 0;
 
 void ext2_set_debug_base_path(const char* path) {
     if (strlen(path) > ERROR_FILE_SIZE) {
-        kprintf("[EXT2] Path too long for debug base path\n");
+        EXT2_ERROR("[EXT2] Path too long for debug base path\n");
         return;
     }
 
@@ -52,7 +52,7 @@ char* ext2_format_message(const char* error, ...) {
     va_start(args, error);
     char * buffer = kmalloc(ERROR_MESSAGE_SIZE);
     if (buffer == 0) {
-        kprintf("[EXT2] Failed to allocate memory for error message\n");
+        EXT2_ERROR("[EXT2] Failed to allocate memory for error message\n");
         return 0;
     }
     vsnprintf(buffer, ERROR_MESSAGE_SIZE, error, args);
@@ -112,7 +112,7 @@ void ext2_add_error(char * error, const char* function, char* file, uint32_t lin
     }
 
     if (error_count >= EXT2_MAX_ERRORS) {
-        kprintf("[EXT2] We need to free some space for new errors\n");
+        DBG_WARN("[EXT2] We need to free some space for new errors\n");
         ext2_make_space();
     }
 
@@ -126,7 +126,7 @@ void ext2_add_error(char * error, const char* function, char* file, uint32_t lin
     struct error_message * message = kmalloc(sizeof(struct error_message));
     memset(message, 0, sizeof(struct error_message));
     if (message == 0) {
-        kprintf("[EXT2] Failed to allocate memory for error message\n");
+        DBG_WARN("[EXT2] Failed to allocate memory for error message\n");
         kfree(error);
         return;
     }
@@ -177,7 +177,7 @@ void ext2_add_error(char * error, const char* function, char* file, uint32_t lin
     error_messages = message;
 
 #ifdef PRINT_RIGHT_AWAY
-    kprintf("[EXT2] [%s] %-128s [%s]\n", error_type_names[type], error, function);
+    DBG_INFO("[EXT2] [%s] %-128s [%s]\n", error_type_names[type], error, function);
 #endif
 
     kfree(error);
@@ -207,7 +207,7 @@ void ext2_print_errors(uint8_t min_level) {
     struct error_message * message = error_messages;
     while (message != 0) {
         if (message->type >= min_level) {
-            kprintf("[EXT2] [%s] %-128s [%s]\n", error_type_names[message->type], message->msg, message->function);
+            DBG_INFO("[EXT2] [%s] %-128s [%s]\n", error_type_names[message->type], message->msg, message->function);
         }
         message = message->next;
     }

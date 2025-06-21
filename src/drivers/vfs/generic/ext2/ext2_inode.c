@@ -21,7 +21,7 @@ void ext2_dump_inode_bitmap(struct ext2_partition * partition) {
     uint32_t block_size = 1024 << (((struct ext2_superblock*)partition->sb)->s_log_block_size);
     uint32_t block_group_count = partition->group_number;
     
-    kprintf("[EXT2] Dumping inode bitmaps: %d\n", block_group_count);
+    EXT2_INFO("[EXT2] Dumping inode bitmaps: %d\n", block_group_count);
     for (uint32_t i = 0; i < block_group_count; i++) {
         struct ext2_block_group_descriptor * bgd = (struct ext2_block_group_descriptor *)&partition->gd[i];
         uint8_t * bitmap = (uint8_t*)ext2_buffer_for_size(block_size, block_size);
@@ -35,11 +35,11 @@ void ext2_dump_inode_bitmap(struct ext2_partition * partition) {
             continue;
         }
 
-        kprintf("[EXT2] Inode bitmap for block group %d\n", i);
+        EXT2_INFO("[EXT2] Inode bitmap for block group %d\n", i);
         for (uint32_t j = 0; j < block_size; j++) {
-            kprintf("%02x ", bitmap[j]);
+            EXT2_INFO("%02x ", bitmap[j]);
         }
-        kprintf("\n");
+        EXT2_INFO("\n");
 
         kfree(bitmap);
     }
@@ -323,24 +323,24 @@ void ext2_print_inode(struct ext2_inode_descriptor_generic* inode) {
     epoch_to_date(mtime, inode->i_mtime);
     epoch_to_date(dtime, inode->i_dtime);
 
-    kprintf("[EXT2] Inode dump start ----\n");
-    kprintf("i_mode: %d\n", inode->i_mode);
-    kprintf("i_uid: %d\n", inode->i_uid);
-    kprintf("i_size: %d\n", inode->i_size);
-    kprintf("i_atime: %s\n", atime);
-    kprintf("i_ctime: %s\n", ctime);
-    kprintf("i_mtime: %s\n", mtime);
-    kprintf("i_dtime: %s\n", dtime);
-    kprintf("i_gid: %d\n", inode->i_gid);
-    kprintf("i_links_count: %d\n", inode->i_links_count);
-    kprintf("i_sectors: %d\n", inode->i_sectors);
-    kprintf("i_flags: %d\n", inode->i_flags);
-    kprintf("i_osd1: %d\n", inode->i_osd1);
-    kprintf("i_generation: %d\n", inode->i_generation);
-    kprintf("i_file_acl: %d\n", inode->i_file_acl);
-    kprintf("i_dir_acl: %d\n", inode->i_dir_acl);
-    kprintf("i_faddr: %d\n", inode->i_faddr);
-    kprintf("[EXT2] Inode dump end ----\n");
+    EXT2_INFO("[EXT2] Inode dump start ----\n");
+    EXT2_INFO("i_mode: %d\n", inode->i_mode);
+    EXT2_INFO("i_uid: %d\n", inode->i_uid);
+    EXT2_INFO("i_size: %d\n", inode->i_size);
+    EXT2_INFO("i_atime: %s\n", atime);
+    EXT2_INFO("i_ctime: %s\n", ctime);
+    EXT2_INFO("i_mtime: %s\n", mtime);
+    EXT2_INFO("i_dtime: %s\n", dtime);
+    EXT2_INFO("i_gid: %d\n", inode->i_gid);
+    EXT2_INFO("i_links_count: %d\n", inode->i_links_count);
+    EXT2_INFO("i_sectors: %d\n", inode->i_sectors);
+    EXT2_INFO("i_flags: %d\n", inode->i_flags);
+    EXT2_INFO("i_osd1: %d\n", inode->i_osd1);
+    EXT2_INFO("i_generation: %d\n", inode->i_generation);
+    EXT2_INFO("i_file_acl: %d\n", inode->i_file_acl);
+    EXT2_INFO("i_dir_acl: %d\n", inode->i_dir_acl);
+    EXT2_INFO("i_faddr: %d\n", inode->i_faddr);
+    EXT2_INFO("[EXT2] Inode dump end ----\n");
 
 }
 
@@ -704,15 +704,15 @@ uint8_t ext2_delete_inode(struct ext2_partition* partition, uint32_t inode_numbe
 }
 
 void ext2_dump_inode(struct ext2_inode_descriptor_generic * inode) {
-    kprintf("i_mode: %x i_uid: %x i_size: %x\n", inode->i_mode, inode->i_uid, inode->i_size);
-    kprintf("i_atime: %x i_ctime: %x i_mtime: %x i_dtime: %x\n", inode->i_atime, inode->i_ctime, inode->i_mtime, inode->i_dtime);
-    kprintf("i_gid: %x i_links_count: %x i_sectors: %x i_flags: %x i_osd1: %x\n", inode->i_gid, inode->i_links_count, inode->i_sectors, inode->i_flags, inode->i_osd1);
-    kprintf("i_generation: %x i_file_acl: %x i_dir_acl: %x i_faddr: %x\n", inode->i_generation, inode->i_file_acl, inode->i_dir_acl, inode->i_faddr);
+    EXT2_INFO("i_mode: %x i_uid: %x i_size: %x\n", inode->i_mode, inode->i_uid, inode->i_size);
+    EXT2_INFO("i_atime: %x i_ctime: %x i_mtime: %x i_dtime: %x\n", inode->i_atime, inode->i_ctime, inode->i_mtime, inode->i_dtime);
+    EXT2_INFO("i_gid: %x i_links_count: %x i_sectors: %x i_flags: %x i_osd1: %x\n", inode->i_gid, inode->i_links_count, inode->i_sectors, inode->i_flags, inode->i_osd1);
+    EXT2_INFO("i_generation: %x i_file_acl: %x i_dir_acl: %x i_faddr: %x\n", inode->i_generation, inode->i_file_acl, inode->i_dir_acl, inode->i_faddr);
 
     for (uint32_t i = 0; i < 15; i++) {
-        kprintf("i_block[%d]: %x", i, inode->i_block[i]);
+        EXT2_INFO("i_block[%d]: %x", i, inode->i_block[i]);
     }
-    kprintf("\n");
+    EXT2_INFO("\n");
 }
 
 uint8_t ext2_dentry_walk_inodes_cb(struct ext2_partition* partition, uint32_t inode_index) {
@@ -737,7 +737,7 @@ void ext2_dump_all_inodes(struct ext2_partition* partition, const char* root_pat
             continue;
         }
 
-        kprintf("Entry %d: %s%s, inode %d\n", i, root_path, entry->name, entry->inode);
+        EXT2_INFO("Entry %d: %s%s, inode %d\n", i, root_path, entry->name, entry->inode);
         ext2_dentry_walk_inodes_cb(partition, entry->inode);
 
         if (entry->file_type == EXT2_DIR_TYPE_DIRECTORY) {

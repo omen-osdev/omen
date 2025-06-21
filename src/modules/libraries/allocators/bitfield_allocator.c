@@ -157,7 +157,7 @@ void debug_bitfield(struct bitfield *bf) {
         }
     }
 
-    kprintf("Total size: %lu\n", total_size);
-    kprintf("Allocated space: %lu\n", allocated_space);
-    kprintf("Free space: %lu\n", free_space);
+    DBG_INFO("Total size: %lu\n", total_size);
+    DBG_INFO("Allocated space: %lu\n", allocated_space);
+    DBG_INFO("Free space: %lu\n", free_space);
 }

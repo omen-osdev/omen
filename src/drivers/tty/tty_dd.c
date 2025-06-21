@@ -13,7 +13,7 @@ uint64_t tty_dd_read_block_direct(struct tty* dev, uint64_t size, uint64_t skip,
     if (skip) {
         char * skip_buffer = kmalloc(skip);
         if ((uint64_t)(int)skip != skip) {
-            kprintf("Warning: Skipping more than 2^32 bytes in _tty_read\n");
+            DBG_WARN("Skipping more than 2^32 bytes in _tty_read\n");
         }
 
         _tty_read(dev, skip_buffer, (int)skip);
@@ -21,7 +21,7 @@ uint64_t tty_dd_read_block_direct(struct tty* dev, uint64_t size, uint64_t skip,
     }
     
     if ((uint64_t)(int)size != size) {
-        kprintf("Warning: Reading more than 2^32 bytes in _tty_read\n");
+        DBG_WARN("Reading more than 2^32 bytes in _tty_read\n");
     }
     
     _tty_read(dev, (char*)buffer, (int)size);
@@ -31,7 +31,7 @@ uint64_t tty_dd_read_block_direct(struct tty* dev, uint64_t size, uint64_t skip,
 uint64_t tty_dd_write_block_direct(struct tty* dev, uint64_t size, uint64_t skip, uint8_t* buffer) {
     buffer += skip;
     if ((uint64_t)(int)size != size) {
-        kprintf("Warning: Writing more than 2^32 bytes in _tty_write\n");
+        DBG_WARN("Writing more than 2^32 bytes in _tty_write\n");
     }
     _tty_write(dev, (char*)buffer, (int)size);
 
@@ -44,28 +44,28 @@ uint64_t tty_dd_read_block(uint64_t port, uint64_t size, uint64_t skip, uint8_t*
 
     char * skip_buffer = kmalloc(skip);
     if ((uint64_t)(int)skip != skip) {
-        kprintf("Warning: Skipping more than 2^32 bytes in tty_dd_read_block\n");
+        DBG_WARN("Skipping more than 2^32 bytes in tty_dd_read_block\n");
     }
     _tty_read(device, skip_buffer, (int)skip);
     kfree(skip_buffer);
     if ((uint64_t)(int)size != size) {
-        kprintf("Warning: Reading more than 2^32 bytes in tty_dd_read_block\n");
+        DBG_WARN("Reading more than 2^32 bytes in tty_dd_read_block\n");
     }
     _tty_read(device, (char*)buffer, (int)size);
     return strlen((char*)buffer);
 }
 
 uint64_t tty_dd_write_block(uint64_t port, uint64_t size, uint64_t skip, uint8_t* buffer) {
-    //kprintf("Writing to serial port %x (size: %d, skip: %d)\n", port, size, skip);
+    //DBG_DEBUG("Writing to serial port %x (size: %d, skip: %d)\n", port, size, skip);
     struct tty* device = get_tty((int)port);
     if (!is_valid_tty(device)) {
-        kprintf("tty_dd_write_block: Invalid TTY device\n");
+        DBG_ERROR("Invalid TTY device\n");
         return 0;
     }
 
     buffer += skip;
     if ((uint64_t)(int)size != size) {
-        kprintf("Warning: Writing more than 2^32 bytes in tty_dd_write_block\n");
+        DBG_WARN("Writing more than 2^32 bytes in tty_dd_write_block\n");
     }
     _tty_write(device, (char*)buffer, (int)size);
 

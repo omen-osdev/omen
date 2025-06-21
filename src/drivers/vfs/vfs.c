@@ -44,7 +44,7 @@ uint8_t iterate_mounts(uint8_t (*callback)(struct vfs_mount*, void * data, void*
 void dump_mounts() {
     struct vfs_mount * mount = mount_list_head;
     while (mount != 0 && mount->device != 0 && mount->fst != 0 && mount->partition != 0) {
-        kprintf("[%s] Dev: %s FS: %s II: %d\n", mount->partition->name, mount->device->name, mount->fst->name, mount->internal_index);
+        DBG_INFO("[%s] Dev: %s FS: %s II: %d\n", mount->partition->name, mount->device->name, mount->fst->name, mount->internal_index);
         mount = mount->next;
     }
 }
@@ -118,15 +118,15 @@ void register_filesystem(struct vfs_compatible * registrar) {
 
     //TODO: Expand to vfs_compat
     if (strlen(registrar->name) > VFS_COMPAT_FS_NAME_MAX_LEN) {
-        kprintf("[VFS] Either FS name is too long or you are tryna hack us\n");
-        kprintf("[VFS] anyway, im restricting it to %d chars\n", VFS_COMPAT_FS_NAME_MAX_LEN);
+        DBG_WARN("[VFS] Either FS name is too long or you are tryna hack us\n");
+        DBG_WARN("[VFS] anyway, im restricting it to %d chars\n", VFS_COMPAT_FS_NAME_MAX_LEN);
         strncpy(fst->name, registrar->name, VFS_COMPAT_FS_NAME_MAX_LEN);
     } else {
         strncpy(fst->name, registrar->name, strlen(registrar->name));
     }
     fst->next = init_file_system_type_header();
     if (fst->next == 0) panic("[VFS] File system type allocation failed!\n");
-    kprintf("[VFS] Registered file system type %s\n", fst->name);
+    DBG_INFO("[VFS] Registered file system type %s\n", fst->name);
 }
 
 void add_mount(struct vfs_mount * head, struct device* device, struct vfs_partition * part, struct vfs_file_system_type* fst, int internal_index) {
@@ -155,7 +155,7 @@ uint8_t mount_fs(struct device* dev, struct vfs_partition* partition, const char
     if (mount_list_head == 0) mount_list_head = init_mount_header();
     struct vfs_file_system_type * fst = file_system_type_list_head;
     if (fst == 0) {
-        kprintf("[VFS] There are no registerd fs -\\_(-.-)_/-\n");
+        DBG_ERROR("[VFS] There are no registerd fs -\\_(-.-)_/-\n");
         return 0;
     }
 
@@ -176,22 +176,22 @@ uint8_t mount_fs(struct device* dev, struct vfs_partition* partition, const char
             continue;
         }
         if (fst->detect(dev->name, partition->lba)) {
-            kprintf("[VFS] Detected %s on %s, trying to mount on %s\n", fst->name, dev->name, mountpoint);
+            DBG_INFO("[VFS] Detected %s on %s, trying to mount on %s\n", fst->name, dev->name, mountpoint);
             int ret = fst->register_partition(dev->name, partition->lba, mountpoint);
             if (ret == VFS_ERROR) {
-                kprintf("[VFS] Failed to mount %s on %s\n", fst->name, mountpoint);
+                DBG_ERROR("[VFS] Failed to mount %s on %s\n", fst->name, mountpoint);
                 return 0;
             }
             snprintf(partition->name, 48, "%s", mountpoint);
             add_mount(mount_list_head, dev, partition, fst, ret);
-            kprintf("[VFS] Mounted %s on %s index %d\n", fst->name, mountpoint, ret);
+            DBG_INFO("[VFS] Mounted %s on %s index %d\n", fst->name, mountpoint, ret);
             return 1;
         }
         fst = fst->next;
         fs_idx++;
     }
     
-    kprintf("[VFS] Device %s is not supported by any fs\n", dev->name);
+    DBG_WARN("[VFS] Device %s is not supported by any fs\n", dev->name);
     return 0;
 }
 
@@ -223,7 +223,7 @@ void detect_devices() {
         //Check if device is already registered
         for (uint32_t i = 0; i < vfs_root_size; i++) {
             if (vfs_root[i].dev == dev) {
-                kprintf("[VFS] Device %s already registered\n", dev->name);
+                DBG_ERROR("[VFS] Device %s already registered\n", dev->name);
                 dev = get_next_device(dev);
                 continue;
             }
@@ -236,17 +236,17 @@ void detect_devices() {
         devmap = &vfs_root[device_index];
         devmap->dev = dev;
         devmap->partitions = init_partition_header();
-        kprintf("[VFS] Scanning device: %s\n", dev->name);
+        DBG_INFO("[VFS] Scanning device: %s\n", dev->name);
 
         uint32_t partitions = detect_partitions(dev, devmap->partitions);
         devmap->partition_no = partitions;
         if (partitions != 0 && devmap->partitions == 0)
             panic("[VFS] partitions detected but no partition struct found\n");
         if (partitions == 0)
-            kprintf("[VFS] Skipping device %s, no partitions found\n", dev->name);
+            DBG_WARN("[VFS] Skipping device %s, no partitions found\n", dev->name);
         struct vfs_partition* part = devmap->partitions;
         while (part->next != 0) {
-            kprintf("[VFS] Partitions: %d, %d, %d, %d\n", part->lba, part->size, part->status, part->type);
+            DBG_INFO("[VFS] Partitions: %d, %d, %d, %d\n", part->lba, part->size, part->status, part->type);
             part = part->next;
         }
 
@@ -274,10 +274,10 @@ char* get_full_path_from_dir(int fd) {
 int is_safe_for_removing(const char* path, uint8_t force) {
     if (is_open(path) > 0) {
         if (force == 0) {
-            kprintf("[VFS] File is open, cannot remove\n");
+            DBG_DEBUG("[VFS] File is open, cannot remove\n");
             return 0;
         } else {
-            kprintf("[VFS] File is open, but force is enabled, removing anyway\n");
+            DBG_WARN("[VFS] File is open, but force is enabled, removing anyway\n");
             force_release(path);
         }
     }
@@ -367,17 +367,17 @@ void detect_partition_fs() {
 }
 
 void probe_fs() {
-    kprintf("[VFS] Probing FS\n");
+    DBG_INFO("[VFS] Probing FS\n");
     detect_devices();
     detect_partition_fs();
 }
 
 void init_vfs() {
-    kprintf("### VFS STARTUP ###\n");
+    DBG_INFO("### VFS STARTUP ###\n");
     detect_devices();
     detect_partition_fs();
     dump_mounts();
-    kprintf("### VFS STARTUP END ###\n");
+    DBG_INFO("### VFS STARTUP END ###\n");
 }
 
 uint8_t is_absolute_path(const char* path) {
@@ -413,8 +413,19 @@ uint8_t goes_behind_root(const char* path) {
 
 
 char * apply_cwd(struct vfs_struct * cwd, const char* path, uint64_t * size) {
-    if (path == 0 || goes_behind_root(path)) {
-        kprintf("[VFS] Path goes behind root\n");
+    if (path == 0) panic("[VFS] apply_cwd: Invalid path");
+    if (!strncmp(path, "/dev/", 5)) {
+        char * full_path = kmalloc(strlen(path) + 1);
+        if (full_path == 0) return 0;
+        strcpy(full_path, path);
+        if (size != 0) {
+            *size = strlen(full_path);
+        }
+        return full_path;
+    }
+
+    if (goes_behind_root(path)) {
+        DBG_ERROR("[VFS] Path goes behind root\n");
         return 0;
     }
     

@@ -40,14 +40,14 @@ int8_t fifo_compat_unregister_device(int index) {
 
 uint8_t fifo_compat_detect(const char* name , uint32_t port) {
     (void)port;
-    kprintf("fifo_compat_detect: %s\n", name);
+    DBG_DEBUG("fifo_compat_detect: %s\n", name);
     return (fifo_search(name) == SUCCESS);
 }
 
 void fifo_compat_debug() {
     for (int i = 0; i < MAX_FIFO_DEVICES; i++) {
         if (fifo_devices[i] != 0) {
-            kprintf("FIFO %d\n", i);
+            DBG_DEBUG("FIFO %d\n", i);
             fifo_dump_device(fifo_devices[i]);
         }
     }

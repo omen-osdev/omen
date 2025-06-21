@@ -15,7 +15,7 @@ struct vfs_fifo* fifo_register_device(const char * device, uint32_t mode, const 
     
     snprintf(fifo->name, 32, "%s", mountpoint);
     snprintf(fifo->device, 32, "%s", device);
-    kprintf("FIFO: Mounting device %s at %s\n", device, mountpoint);
+    DBG_INFO("FIFO: Mounting device %s at %s\n", device, mountpoint);
 
     return fifo;
 }
@@ -34,7 +34,7 @@ int fifo_sync(struct vfs_fifo* fifo) {
 }
 
 void fifo_dump_device(struct vfs_fifo* fifo) {
-    kprintf("FIFO: %s, dev: %s\n", fifo->name, fifo->device);
+    DBG_INFO("FIFO: %s, dev: %s\n", fifo->name, fifo->device);
 }
 
 int64_t vfs_fifo_get_size(struct vfs_fifo* fifo) {

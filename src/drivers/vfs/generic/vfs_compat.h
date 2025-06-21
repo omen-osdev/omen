@@ -1,6 +1,7 @@
 #ifndef _VFS_COMPAT_H
 #define _VFS_COMPAT_H
 #include <omen/libraries/std/stdint.h>
+#include <omen/libraries/std/time.h>
 #define VFS_COMPAT_FS_NAME_MAX_LEN 32
 #define VFS_COMPAT_MAX_OPEN_FILES 65536
 #define VFS_FDE_NAME_MAX_LEN 256
@@ -62,20 +63,23 @@
 #define S_ISSOCK(m) (((m)&S_IFMT) == S_IFSOCK)
 
 struct stat {
-    uint64_t st_dev;
-    uint64_t st_ino;
-    uint64_t st_mode;
-    uint64_t st_nlink;
-    uint64_t st_uid;
-    uint64_t st_gid;
-    uint64_t st_rdev;
-    uint64_t st_size;
-    uint64_t st_blksize;
-    uint64_t st_blocks;
-    uint64_t st_atime;
-    uint64_t st_mtime;
-    uint64_t st_ctime;
+	uint64_t st_dev;
+	uint64_t st_ino;
+	unsigned long st_nlink;
+	unsigned int st_mode;
+	unsigned int st_uid;
+	unsigned int st_gid;
+	unsigned int __pad0;
+	uint64_t st_rdev;
+	long st_size;
+	long st_blksize;
+	int64_t st_blocks;
+	struct timespec st_atim;
+	struct timespec st_mtim;
+	struct timespec st_ctim;
+	long __unused[3];
 };
+
 typedef struct stat stat_t;
 
 struct file_descriptor_entry {

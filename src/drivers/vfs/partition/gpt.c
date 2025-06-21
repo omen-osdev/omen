@@ -22,7 +22,7 @@ uint32_t read_gpt(const char* disk, struct vfs_partition* partitions, void (*add
 
 	if (gpt_header->signature != GPT_SIGNATURE)
 		return 0;
-	kprintf("[GPT] Compatible disk found on %s [sig: %llx]\n", disk, gpt_header->signature);
+	DBG_INFO("[GPT] Compatible disk found on %s [sig: %llx]\n", disk, gpt_header->signature);
 	struct gpt_entry gpt_entries[gpt_header->partition_count];
 	for (uint32_t i = 0; i < gpt_header->partition_count; i+=4) {
 		uint32_t lba = gpt_header->partition_table_lba + ((i * gpt_header->partition_entry_size) >> 9);
@@ -54,9 +54,9 @@ uint32_t read_gpt(const char* disk, struct vfs_partition* partitions, void (*add
 		}
 
 		if (!memcmp(buffer, GPT_EFI_ENTRY, strlen(GPT_EFI_ENTRY))) {
-			kprintf("[GPT] EFI partition found at LBA 0x%llx\n", gpt_entries[i].first_lba);
+			DBG_INFO("[GPT] EFI partition found at LBA 0x%llx\n", gpt_entries[i].first_lba);
 		} else {
-			kprintf("[GPT] Non EFI partition found at LBA 0x%llx\n", gpt_entries[i].first_lba);
+			DBG_WARN("[GPT] Non EFI partition found at LBA 0x%llx\n", gpt_entries[i].first_lba);
 		}
 		valid_partitions++;
 	}
@@ -66,7 +66,7 @@ uint32_t read_gpt(const char* disk, struct vfs_partition* partitions, void (*add
 
 	for (uint8_t i = 0; i < valid_partitions; i++) {
 		add_part(partitions, gpt_entries[i].first_lba, (gpt_entries[i].last_lba - gpt_entries[i].first_lba), 0, 0);
-		kprintf("[GPT] Partition %d: LBA %d, size %d\n", i, gpt_entries[i].first_lba, (gpt_entries[i].last_lba - gpt_entries[i].first_lba));
+		DBG_INFO("[GPT] Partition %d: LBA %d, size %d\n", i, gpt_entries[i].first_lba, (gpt_entries[i].last_lba - gpt_entries[i].first_lba));
 	}
 
 	return valid_partitions;

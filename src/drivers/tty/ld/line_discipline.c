@@ -15,14 +15,14 @@ int ld_ignore(struct line_discipline* ld, char c) {
 int ld_bell(struct line_discipline* ld, char c) {
     (void)ld;
     (void)c;
-    kprintf("A bell is ringing...\n");
+    DBG_DEBUG("A bell is ringing...\n");
     return 0;
 }
 
 int ld_eof(struct line_discipline* ld, char c) {
     (void)ld;
     (void)c;
-    kprintf("EOF is called...\n");
+    line_discipline_force_flush(ld);
     return 0;
 }
 
@@ -35,28 +35,28 @@ int ld_erase(struct line_discipline* ld, char c) {
 int ld_htab(struct line_discipline* ld, char c) {
     (void)ld;
     (void)c;
-    kprintf("Horizontal tab is called...\n");
+    DBG_DEBUG("Horizontal tab is called...\n");
     return 0;
 }
 
 int ld_lfeed(struct line_discipline* ld, char c) {
     (void)ld;
     (void)c;
-    kprintf("Line feed is called...\n");
+    DBG_DEBUG("Line feed is called...\n");
     return 0;
 }
 
 int ld_vtab(struct line_discipline* ld, char c) {
     (void)ld;
     (void)c;
-    kprintf("Vertical tab is called...\n");
+    DBG_DEBUG("Vertical tab is called...\n");
     return 0;
 }
 
 int ld_newpage(struct line_discipline* ld, char c) {
     (void)ld;
     (void)c;
-    kprintf("New page is called...\n");
+    DBG_DEBUG("New page is called...\n");
     return 0;
 }
 
@@ -69,35 +69,35 @@ int ld_cret(struct line_discipline* ld, char c) {
 int ld_restart_out(struct line_discipline* ld, char c) {
     (void)ld;
     (void)c;
-    kprintf("Restart output is called...\n");
+    DBG_DEBUG("Restart output is called...\n");
     return 0;
 }
 
 int ld_stop_out(struct line_discipline* ld, char c) {
     (void)ld;
     (void)c;
-    kprintf("Stop output is called...\n");
+    DBG_DEBUG("Stop output is called...\n");
     return 0;
 }
 
 int ld_sigint(struct line_discipline* ld, char c) {
     (void)ld;
     (void)c;
-    kprintf("SIGINT is called...\n");
+    DBG_DEBUG("SIGINT is called...\n");
     return 0;
 }
 
 int ld_sigstop(struct line_discipline* ld, char c) {
     (void)ld;
     (void)c;
-    kprintf("SIGSTOP is called...\n");
+    DBG_DEBUG("SIGSTOP is called...\n");
     return 0;
 }
 
 int ld_del(struct line_discipline* ld, char c) {
     (void)ld;
     (void)c;
-    kprintf("DEL is called...\n");
+    DBG_DEBUG("DEL is called...\n");
     return 0;
 }
 
@@ -172,13 +172,13 @@ struct line_discipline * line_discipline_create(int mode, int echo, int table, i
 void line_discipline_delete_last(struct line_discipline *ld) {
     if (ld == 0 || ld->valid == 0) return;
     if (ld->tail == ld->head) return;
-    //kprintf("Debug tail before = %d ", ld->tail);
+    //DBG_DEBUG("Debug tail before = %d ", ld->tail);
     ld->tail = (ld->tail - 1) % ld->size;
-    //kprintf("tail = %d head = %d text = ", ld->tail, ld->head);
+    //DBG_DEBUG("tail = %d head = %d text = ", ld->tail, ld->head);
     //for (int i = ld->head; i != ld->tail; i = (i + 1) % ld->size) {
-    //    kprintf("%c", ld->buffer[i]);
+    //    DBG_DEBUG("%c", ld->buffer[i]);
     //}
-    //kprintf("\n");
+    //DBG_DEBUG("\n");
 }
 
 void line_discipline_insert(struct line_discipline* ld, char c) {
@@ -262,7 +262,7 @@ int line_discipline_translate(struct line_discipline *ld, char original_characte
         goto same;
     }
 
-    //kprintf("original_character = %x\n", original_character);
+    //DBG_DEBUG("original_character = %x\n", original_character);
 
     if (ld->mode == LINE_DISCIPLINE_MODE_RAW) {
         goto same;
@@ -284,19 +284,19 @@ same:
 }
 
 void line_discipline_debug() {
-    kprintf("ld_ignore: %p\n", ld_ignore);
-    kprintf("ld_bell: %p\n", ld_bell);
-    kprintf("ld_eof: %p\n", ld_eof);
-    kprintf("ld_erase: %p\n", ld_erase);
-    kprintf("ld_htab: %p\n", ld_htab);
-    kprintf("ld_lfeed: %p\n", ld_lfeed);
-    kprintf("ld_vtab: %p\n", ld_vtab);
-    kprintf("ld_newpage: %p\n", ld_newpage);
-    kprintf("ld_cret: %p\n", ld_cret);
-    kprintf("ld_restart_out: %p\n", ld_restart_out);
-    kprintf("ld_sigint: %p\n", ld_sigint);
-    kprintf("ld_sigstop: %p\n", ld_sigstop);
-    kprintf("ld_del: %p\n", ld_del);
+    DBG_DEBUG("ld_ignore: %p\n", ld_ignore);
+    DBG_DEBUG("ld_bell: %p\n", ld_bell);
+    DBG_DEBUG("ld_eof: %p\n", ld_eof);
+    DBG_DEBUG("ld_erase: %p\n", ld_erase);
+    DBG_DEBUG("ld_htab: %p\n", ld_htab);
+    DBG_DEBUG("ld_lfeed: %p\n", ld_lfeed);
+    DBG_DEBUG("ld_vtab: %p\n", ld_vtab);
+    DBG_DEBUG("ld_newpage: %p\n", ld_newpage);
+    DBG_DEBUG("ld_cret: %p\n", ld_cret);
+    DBG_DEBUG("ld_restart_out: %p\n", ld_restart_out);
+    DBG_DEBUG("ld_sigint: %p\n", ld_sigint);
+    DBG_DEBUG("ld_sigstop: %p\n", ld_sigstop);
+    DBG_DEBUG("ld_del: %p\n", ld_del);
 }
 
 void line_discipline_force_flush(struct line_discipline *ld) {

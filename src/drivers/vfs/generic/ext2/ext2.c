@@ -17,6 +17,7 @@
 
 #include <omen/libraries/std/stdint.h>
 #include <omen/libraries/std/string.h>
+#include <omen/libraries/std/time.h>
 #include <omen/apps/debug/debug.h>
 #include <omen/apps/panic/panic.h>
 #include <omen/libraries/allocators/heap_allocator.h>
@@ -330,7 +331,11 @@ int64_t ext2_read_file(struct ext2_partition * partition, const char * path, uin
 
     if (skip+size > inode->i_size) {
         EXT2_WARN("Trying to read past the end of the file[skip=%d, size=%d, file_size=%d]", skip, size, inode->i_size);
-        return 0;
+        size = inode->i_size - skip;
+        if ((inode->i_size - skip) <= 0) {
+            EXT2_WARN("File is empty or skip is too large");
+            return 0;
+        }
     }
 
     int64_t read_bytes = ext2_read_inode_bytes(partition, inode_index, destination_buffer, size, skip);
@@ -427,20 +432,23 @@ int64_t ext2_write_file(struct ext2_partition * partition, const char * path, ui
 }
 
 struct stat {
-    uint64_t st_dev;
-    uint64_t st_ino;
-    uint64_t st_mode;
-    uint64_t st_nlink;
-    uint64_t st_uid;
-    uint64_t st_gid;
-    uint64_t st_rdev;
-    uint64_t st_size;
-    uint64_t st_blksize;
-    uint64_t st_blocks;
-    uint64_t st_atime;
-    uint64_t st_mtime;
-    uint64_t st_ctime;
+	uint64_t st_dev;
+	uint64_t st_ino;
+	unsigned long st_nlink;
+	unsigned int st_mode;
+	unsigned int st_uid;
+	unsigned int st_gid;
+	unsigned int __pad0;
+	uint64_t st_rdev;
+	long st_size;
+	long st_blksize;
+	int64_t st_blocks;
+	struct timespec st_atim;
+	struct timespec st_mtim;
+	struct timespec st_ctim;
+	long __unused[3];
 };
+
 typedef struct stat stat_t;
 
 int64_t ext2_get_stat(struct ext2_partition* partition, const char * path, void* st_generic) {
@@ -496,16 +504,17 @@ int64_t ext2_get_stat(struct ext2_partition* partition, const char * path, void*
 
     st->st_dev = partition->lba;
     st->st_ino = inode_index;
-    st->st_mode = inode->i_mode;
     st->st_nlink = inode->i_links_count;
+    st->st_mode = inode->i_mode;
     st->st_uid = inode->i_uid;
     st->st_gid = inode->i_gid;
+    st->st_rdev = 0;
     st->st_size = inode->i_size;
     st->st_blksize = 1024 << (((struct ext2_superblock*)partition->sb)->s_log_block_size);
     st->st_blocks = inode->i_sectors;
-    st->st_atime = inode->i_atime;
-    st->st_mtime = inode->i_mtime;
-    st->st_ctime = inode->i_ctime;  
+    st->st_atim = epoch_to_timespec(inode->i_atime);
+    st->st_mtim = epoch_to_timespec(inode->i_mtime);
+    st->st_ctim = epoch_to_timespec(inode->i_ctime);
 
     return EXT2_RESULT_OK;
 }
@@ -568,11 +577,11 @@ void ext2_inhibit_errors(uint8_t t) {
 uint8_t ext2_stacktrace() {
     EXT2_INFO("Printing stacktrace");
     if (ext2_has_errors(EXT2_ERROR_INFO)) {
-        kprintf("[EXT2] Stacktrace requested\n");
+        EXT2_INFO("[EXT2] Stacktrace requested\n");
         ext2_print_errors(EXT2_ERROR_INFO);
         ext2_clear_errors();
     } else {
-        kprintf("[EXT2] No errors\n");
+        EXT2_INFO("[EXT2] No errors\n");
     }
 
     return EXT2_RESULT_OK;

@@ -16,7 +16,7 @@ struct vfs_tty* tty_register_device(const char * device, uint32_t mode, const ch
     
     snprintf(tty->name, 32, "%s", mountpoint);
     snprintf(tty->device, 32, "%s", device);
-    kprintf("TTY: Mounting device %s at %s\n", device, mountpoint);
+    DBG_DEBUG("TTY: Mounting device %s at %s\n", device, mountpoint);
 
     return tty;
 }
@@ -35,7 +35,7 @@ int tty_sync(struct vfs_tty* tty) {
 }
 
 void tty_dump_device(struct vfs_tty* tty) {
-    kprintf("TTY: %s, dev: %s\n", tty->name, tty->device);
+    DBG_DEBUG("TTY: %s, dev: %s\n", tty->name, tty->device);
 }
 
 uint64_t vfs_tty_get_size(struct vfs_tty* tty) {

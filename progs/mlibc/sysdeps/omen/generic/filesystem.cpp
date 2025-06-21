@@ -182,7 +182,6 @@ namespace mlibc{
 
     int sys_stat(fsfd_target fsfdt, int fd, const char *path, int flags, struct stat *statbuf){
         auto result = 0;
-
         switch(fsfdt){
             case fsfd_target::path:{
                 result = do_syscall(SYS_PATH_STAT, path, strlen(path), flags, statbuf);

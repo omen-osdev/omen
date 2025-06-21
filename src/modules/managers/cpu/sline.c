@@ -152,7 +152,7 @@ extern void save_context(cpu_context_t * ctx);
 
 void __sleep(thread_t * thread, int condition, struct timespec * rem, struct timespec * duration) {
     // Check if the thread is already sleeping
-    kprintf("Process %d - Thread %d is going to sleep on condition %d\n", thread->process->pid, thread->id, condition);
+    DBG_DEBUG("Process %d - Thread %d is going to sleep on condition %d\n", thread->process->pid, thread->id, condition);
     // Add the thread to the squeue
     struct squeue * queue = find_squeue(condition);
     if (queue == NULL) {
@@ -172,7 +172,7 @@ void __sleep(thread_t * thread, int condition, struct timespec * rem, struct tim
     }
 
     void * thread_phys_addr = get_physical_address(thread->process->vmm, thread);
-    kprintf("[PID %d] __sleep thread is at physical address: %p\n", thread->process->pid, thread_phys_addr);
+    DBG_DEBUG("[PID %d] __sleep thread is at physical address: %p\n", thread->process->pid, thread_phys_addr);
 
     thread->status = THREAD_STATUS_INTERRUPTIBLE_SLEEP;
     while (thread->status == THREAD_STATUS_INTERRUPTIBLE_SLEEP) {
@@ -183,13 +183,13 @@ void __sleep(thread_t * thread, int condition, struct timespec * rem, struct tim
 void wakeup(int condition) {
     struct squeue * queue = find_squeue(condition);
     if (queue == NULL) {
-        //kprintf("Warning: No threads to wake up for condition %d as queue is null\n", condition);
+        //DBG_WARN("No threads to wake up for condition %d as queue is null\n", condition);
         return;
     }
     struct snode * current = queue->head;
     while (current != NULL) {
         current->thread->status = THREAD_STATUS_READY;
-        kprintf("Waking up process %d - thread %d from condition %d\n", current->thread->process->pid, current->thread->id, condition);
+        DBG_DEBUG("Waking up process %d - thread %d from condition %d\n", current->thread->process->pid, current->thread->id, condition);
         current = current->next;
     }
     destroy_squeue(queue);
@@ -219,7 +219,7 @@ void sleep_current(int condition) {
     }
     struct timespec * rem = is_sleeping(current_thread);
     if (rem != NULL) {
-        kprintf("Thread %d is already sleeping\n", current_thread->id);
+        DBG_WARN("Thread %d is already sleeping\n", current_thread->id);
         return;
     }
     __sleep(current_thread, condition, NULL, NULL);
@@ -231,7 +231,7 @@ void sleep(thread_t * thread, int condition) {
     }
     struct timespec * rem = is_sleeping(thread);
     if (rem != NULL) {
-        kprintf("Thread %d is already sleeping\n", thread->id);
+        DBG_WARN("Thread %d is already sleeping\n", thread->id);
         return;
     }
     __sleep(thread, condition, NULL, NULL);
@@ -240,13 +240,13 @@ void sleep(thread_t * thread, int condition) {
 void force_wakeup_task(thread_t * thread) {
     struct squeue * queue = find_squeue_by_thread(thread);
     if (queue == NULL) {
-        kprintf("No threads to wake up\n");
+        DBG_WARN("No threads to wake up\n");
         return;
     }
     int64_t remaining_ticks = get_remaining_ticks(queue->id);
     uint64_t remaining_ns = ticks_to_ns(remaining_ticks);
     if (remaining_ns == 0) {
-        kprintf("No remaining ticks\n");
+        DBG_WARN("No remaining ticks\n");
         return;
     }
 

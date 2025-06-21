@@ -30,7 +30,7 @@ void SERIAL_OF_HANDLER(cpu_context_t* ctx, uint8_t cpuid) {
       _serial_flush(interrupted_serial_device->port);
       serial_discard(interrupted_serial_device->port);
    } else {
-      kprintf("[WARNIG] Serial overflow interrupt, but cant find device to flush\n");
+      DBG_WARN("Serial overflow interrupt, but cant find device to flush\n");
    }
 }
 
@@ -283,7 +283,7 @@ int init_serial_comm(int port) {
  
    // Check if serial is faulty (i.e: not same byte as sent)
    if(inb(port + 0) != 0xAB) {
-      kprintf("Serial port %x seems to be down\n", port);
+      DBG_ERROR("Serial port %x seems to be down\n", port);
       #ifndef _VBOX_COMPAT
       return 0;
       #endif
@@ -315,7 +315,7 @@ void disable_serial_int(struct serial_device* device) {
 
 void init_serial(int inbs, int outbs) {
    if (initialized) return;
-   kprintf("### Initializing serial devices ### \n");
+   DBG_INFO("### Initializing serial devices ### \n");
    for (int i = 0; i < MAX_COM_DEVICES; i++) {
       struct serial_device* device = &(serial_devices[i]);
       if (init_serial_comm(device->port)) {
@@ -349,7 +349,7 @@ void init_serial(int inbs, int outbs) {
          if (device->inb && device->outb) {
             enable_serial_int(device);
             device->valid = 1;
-            kprintf("Serial port %x initialized successfully\n", device->port);
+            DBG_INFO("Serial port %x initialized successfully\n", device->port);
             serial_discard(device->port);
             reconfigure_serial_comm(device->port, device->config.baud_rate, device->config.parity, device->config.stop_bits, device->config.data_bits);
          }

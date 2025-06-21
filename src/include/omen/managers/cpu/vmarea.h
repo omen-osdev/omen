@@ -28,4 +28,5 @@ void duplicate_vmarea_cow(process_t * task, struct vm_area* vma);
 void vmarea_sync(struct vm_area * vma, uint64_t size);
 void vmarea_sync_all_files(process_t *task);
 void dump_vmareas(process_t* process);
+void remove_all_vmareas(process_t * task);
 #endif

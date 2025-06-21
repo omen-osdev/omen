@@ -15,18 +15,18 @@
 struct ext2_partition * ext2_partition_head = 0x0;
 
 void ext2_partition_dump_partition(struct ext2_partition* partition) {
-    kprintf("ext2 partition:\n");
-    kprintf("name: %s\n", partition->name);
-    kprintf("disk: %s\n", partition->disk);
-    kprintf("lba: %u\n", partition->lba);
-    kprintf("group_number: %u\n", partition->group_number);
-    kprintf("sector_size: %u\n", partition->sector_size);
-    kprintf("bgdt_block: %u\n", partition->bgdt_block);
-    kprintf("sb_block: %u\n", partition->sb_block);
-    kprintf("flush_required: %u\n", partition->flush_required);
-    kprintf("sb: %p\n", (void*)partition->sb);
-    kprintf("gd: %p\n", (void*)partition->gd);
-    kprintf("next: %p\n", (void*)partition->next);
+    EXT2_INFO("ext2 partition:\n");
+    EXT2_INFO("name: %s\n", partition->name);
+    EXT2_INFO("disk: %s\n", partition->disk);
+    EXT2_INFO("lba: %u\n", partition->lba);
+    EXT2_INFO("group_number: %u\n", partition->group_number);
+    EXT2_INFO("sector_size: %u\n", partition->sector_size);
+    EXT2_INFO("bgdt_block: %u\n", partition->bgdt_block);
+    EXT2_INFO("sb_block: %u\n", partition->sb_block);
+    EXT2_INFO("flush_required: %u\n", partition->flush_required);
+    EXT2_INFO("sb: %p\n", (void*)partition->sb);
+    EXT2_INFO("gd: %p\n", (void*)partition->gd);
+    EXT2_INFO("next: %p\n", (void*)partition->next);
 }
 
 void ext2_disk_from_partition(char * destination, const char * partition) {

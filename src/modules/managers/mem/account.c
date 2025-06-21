@@ -76,7 +76,7 @@ void dump_allocations(void* root)
             struct vmm_mapping * mapping = node->mappings;
             while (mapping)
             {
-                kprintf("[ACCOUNT] Mapping: %p -> %p (%d)\n", mapping->virtual_address, mapping->physical_address, mapping->size);
+                DBG_INFO("[ACCOUNT] Mapping: %p -> %p (%d)\n", mapping->virtual_address, mapping->physical_address, mapping->size);
                 mapping = mapping->next;
             }
             return;
@@ -104,7 +104,7 @@ void insert_allocation(void* root, void * virtual_address, void * physical_addre
 #ifdef ACCOUNT_DEBUG_EGGHUNTER
     if (virtual_address == (void*)ACCOUNT_DEBUG_EGGHUNTER)
     {
-        kprintf("[ACCOUNT] EggHunter mapping: %p -> %p (%d)\n", virtual_address, physical_address, size);
+        DBG_INFO("[ACCOUNT] EggHunter mapping: %p -> %p (%d)\n", virtual_address, physical_address, size);
         BREAKPOINT();
     }
 #endif

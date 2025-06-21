@@ -4,7 +4,7 @@
 #include "ext2.h"
 
 #include "ext2_structs.h"
-
+#include "ext2_integrity.h"
 #include <vfs/generic/vfs_compat.h>
 #include <omen/apps/debug/debug.h>
 
@@ -54,7 +54,7 @@ int ext2_compat_flush(int index) {
 void ext2_compat_debug() {
     for (int i = 0; i < MAX_EXT2_PARTITIONS; i++) {
         if (ext2_partitions[i] != 0) {
-            kprintf("Partition %d\n", i);
+            EXT2_INFO("Partition %d\n", i);
             ext2_dump_partition(ext2_partitions[i]);
         }
     }
@@ -63,7 +63,7 @@ void ext2_compat_debug() {
 int ext2_compat_file_open(int partno, const char* path, int flags, int mode) {
     if (partno < 0 || partno >= MAX_EXT2_PARTITIONS) 
         return VFS_ERROR;
-    kprintf("opening file: partno: %d, path: %s\n", partno, path);
+    EXT2_INFO("opening file: partno: %d, path: %s\n", partno, path);
     struct ext2_partition * partition = ext2_partitions[partno];
     if (partition == 0)
         return VFS_ERROR;
@@ -76,7 +76,7 @@ int ext2_compat_dir_open(int partno, const char* path) {
     
     if (partno < 0 || partno >= MAX_EXT2_PARTITIONS) 
         return VFS_ERROR;
-    kprintf("opening directory: partno: %d, path: %s\n", partno, path);
+    EXT2_INFO("opening directory: partno: %d, path: %s\n", partno, path);
     struct ext2_partition * partition = ext2_partitions[partno];
     if (partition == 0)
         return VFS_ERROR;
@@ -108,7 +108,7 @@ int ext2_compat_dir_close(int partno, int fd) {
 int ext2_compat_file_creat(int partno, const char* path, int mode) {
     if (partno < 0 || partno >= MAX_EXT2_PARTITIONS) 
         return VFS_ERROR;
-    kprintf("creating file: partno: %d, path: %s in mode: %d\n", partno, path, mode);
+    EXT2_INFO("creating file: partno: %d, path: %s in mode: %d\n", partno, path, mode);
     struct ext2_partition * partition = ext2_partitions[partno];
     if (partition == 0)
         return VFS_ERROR;
@@ -125,7 +125,7 @@ int ext2_compat_file_creat(int partno, const char* path, int mode) {
 int ext2_compat_link_creat(int partno, const char* path, const char* target, int mode) {
     if (partno < 0 || partno >= MAX_EXT2_PARTITIONS) 
         return VFS_ERROR;
-    kprintf("creating file: partno: %d, path: %s in mode: %d\n", partno, path, mode);
+    EXT2_INFO("creating file: partno: %d, path: %s in mode: %d\n", partno, path, mode);
     struct ext2_partition * partition = ext2_partitions[partno];
     if (partition == 0)
         return VFS_ERROR;
@@ -139,10 +139,10 @@ int ext2_compat_link_creat(int partno, const char* path, const char* target, int
     //Write the target to the symlink
     int64_t written = ext2_write_file(partition, path, (void*)target, strlen(target), 0);
     if (written < 0) {
-        kprintf("Error writing to symlink: %s\n", path);
+        EXT2_ERROR("Error writing to symlink: %s\n", path);
         return VFS_ERROR;
     }
-    kprintf("Symlink created: %s -> %s\n", path, target);
+    EXT2_INFO("Symlink created: %s -> %s\n", path, target);
 
     return get_fd(path, partition->name, 0, mode);
 }
@@ -153,11 +153,11 @@ char* ext2_compat_file_readlink(int partno, const char * path) {
 
     struct ext2_directory_entry entry;
     if (ext2_get_dentry(ext2_partitions[partno], path, &entry) != EXT2_RESULT_OK) {
-        kprintf("Error getting dentry for symlink: %s\n", path);
+        EXT2_ERROR("Error getting dentry for symlink: %s\n", path);
         return 0;
     }
     if (entry.file_type != EXT2_FILE_TYPE_SYMLINK) {
-        kprintf("Path %s is not a symlink\n", path);
+        EXT2_WARN("Path %s is not a symlink\n", path);
         return (char*)path;
     }
 
@@ -170,7 +170,7 @@ char* ext2_compat_file_readlink(int partno, const char * path) {
     char * target = kmalloc(link_size + 1);
     int64_t res = ext2_read_file(partition, path, (uint8_t*)target, link_size, 0);
     if (res < 0) {
-        kprintf("Error reading symlink: %s\n", path);
+        EXT2_ERROR("Error reading symlink: %s\n", path);
         kfree(target);
         return 0;
     }
@@ -194,7 +194,7 @@ int ext2_compat_file_dup(int partno, int oldfd, int newfd) {
 int ext2_compat_dir_creat(int partno, const char* path, int mode) {
     if (partno < 0 || partno >= MAX_EXT2_PARTITIONS) 
         return VFS_ERROR;
-    kprintf("creating directory: partno: %d, path: %s in mode: %d\n", partno, path, mode);
+    EXT2_DEBUG("creating directory: partno: %d, path: %s in mode: %d\n", partno, path, mode);
     struct ext2_partition * partition = ext2_partitions[partno];
     if (partition == 0)
         return VFS_ERROR;
@@ -246,7 +246,7 @@ int64_t ext2_compat_file_read(int partno, int fd, void* buffer, uint64_t size) {
     struct file_descriptor_entry * entry = vfs_compat_get_file_descriptor(fd);
     if (entry == 0 || entry->loaded == 0) return 1;
     int64_t result = ext2_read_file(partition, entry->name, buffer, size, entry->offset);
-    ext2_compat_file_seek(partno, fd, result, SEEK_CUR);
+    if (result > 0) ext2_compat_file_seek(partno, fd, result, SEEK_CUR);
     return result;
 }
 
@@ -271,14 +271,14 @@ int ext2_compat_dir_load(int partno, int fd) {
     uint32_t count = 0;
     int64_t result = ext2_read_directory(partition, entry->name, &count, &entries);
     if (result != EXT2_RESULT_OK) {
-        //kprintf("(ext2_compat_dir_load) Error reading directory\n");
+        //EXT2_ERROR("(ext2_compat_dir_load) Error reading directory\n");
         return VFS_ERROR;
     }
 
-    //kprintf("(ext2_compat_dir_load) count: %d Loading directory: %s\n", count, entry->name);
+    //EXT2_DEBUG("(ext2_compat_dir_load) count: %d Loading directory: %s\n", count, entry->name);
 
     for (uint32_t i = 0; i < count; i++) {
-        //kprintf("Adding file to dirfd: %s\n", entries[i].name);
+        //EXT2_INFO("Adding file to dirfd: %s\n", entries[i].name);
         struct ext2_directory_entry * entry = &entries[i];
         add_file_to_dirfd(fd, entry->name, entry->inode, entry->file_type, entry->name_len);
     }

@@ -77,35 +77,35 @@ uint8_t acpi_sdt_checksum(struct acpi_sdt_header* table_header)
 
 struct acpi_sdt_header* find_rsdt(struct rsdt* rsdt, const char* signature, uint64_t sig_len) {
     uint32_t entries = (rsdt->header.length - sizeof(struct acpi_sdt_header)) / sizeof(uint32_t);
-    kprintf("find_rsdt Navigating %d entries searching for %s\n", entries, signature);
+    DBG_INFO("find_rsdt Navigating %d entries searching for %s\n", entries, signature);
 
     for (uint32_t i = 0; i < entries; i++) {
         uint32_t pto = rsdt->pointer_other_sdt[i];
         struct acpi_sdt_header* header = to_identity_map((struct acpi_sdt_header*)(uint64_t)pto); //TODO: delete this inmediately
-        kprintf("Entry %d => %x HEADER AT: %p SIG: %.4s\n", i, pto, header, header->signature);
+        DBG_DEBUG("Entry %d => %x HEADER AT: %p SIG: %.4s\n", i, pto, header, header->signature);
 
         if (!memcmp(header->signature, signature, sig_len))
             return header;
     }
 
-    kprintf("Could not find ACPI table with signature %.4s\n", signature);
+    DBG_ERROR("Could not find ACPI table with signature %.4s\n", signature);
     return 0;
 }
 
 struct acpi_sdt_header* find_xsdt(struct xsdt* xsdt, const char* signature, uint64_t sig_len) {
     uint32_t entries = (xsdt->header.length - sizeof(struct acpi_sdt_header)) / sizeof(uint64_t);
-    kprintf("find_xsdt Navigating %d entries searching for %s\n", entries, signature);
+    DBG_INFO("find_xsdt Navigating %d entries searching for %s\n", entries, signature);
 
     for (uint32_t i = 0; i < entries; i++) {
         uint32_t pto = xsdt->pointer_other_sdt[i];
         struct acpi_sdt_header* header =  to_identity_map((struct acpi_sdt_header*)(uint64_t)pto); //TODO: delete this inmediately
-        kprintf("Entry %d => %x HEADER AT: %p SIG: %.4s\n", i, pto, header, header->signature);
+        DBG_DEBUG("Entry %d => %x HEADER AT: %p SIG: %.4s\n", i, pto, header, header->signature);
 
         if (!memcmp(header->signature, signature, sig_len))
             return header;
     }
 
-    kprintf("Could not find ACPI table with signature %.4s\n", signature);
+    DBG_ERROR("Could not find ACPI table with signature %.4s\n", signature);
     return 0;
 }
 
@@ -113,7 +113,7 @@ void* init_acpi_vt(void* rsdp_address, const char* target) {
     char signature[9];
     char oemid[7];
 
-    //kprintf("RSDP revision 2\n");
+    //DBG_INFO("RSDP revision 2\n");
 
     struct rsdp2_descriptor* rsdp = (struct rsdp2_descriptor*)rsdp_address;
 
@@ -124,7 +124,7 @@ void* init_acpi_vt(void* rsdp_address, const char* target) {
     strncpy(signature, rsdp->first_part.signature, 8);
 
     /*   
-    kprintf("RSDPv2 at: 0x%llx Sig: %.4s Check: %d OEM: %s Rev: %d RsdtAddr: 0x%llx Len: 0x%llx XsdtAddr: 0x%llx ExtCheck: %d Res: %s\n",
+    DBG_DEBUG("RSDPv2 at: 0x%llx Sig: %.4s Check: %d OEM: %s Rev: %d RsdtAddr: 0x%llx Len: 0x%llx XsdtAddr: 0x%llx ExtCheck: %d Res: %s\n",
         rsdp, signature, rsdp->first_part.checksum, oemid, rsdp->first_part.revision, rsdp->first_part.rsdt_address, rsdp->length,
         rsdp->xsdt_address, rsdp->extended_checksum, rsdp->reserved
     );
@@ -145,7 +145,7 @@ void* init_acpi_vz(void* rsdp_address, const char * target) {
     char signature[9];
     char oemid[7];
 
-    //kprintf("RSDP revision 0\n");
+    //DBG_INFO("RSDP revision 0\n");
 
     struct rsdp_descriptor* rsdp = (struct rsdp_descriptor*)rsdp_address;
 
@@ -156,7 +156,7 @@ void* init_acpi_vz(void* rsdp_address, const char * target) {
     strncpy(signature, rsdp->signature, 8);
 
     /*   
-    kprintf("RSDP at: 0x%llx Sig: %.4s Check: %d OEM: %s Rev: %d RsdtAddr: 0x%llx\n",
+    DBG_DEBUG("RSDP at: 0x%llx Sig: %.4s Check: %d OEM: %s Rev: %d RsdtAddr: 0x%llx\n",
         rsdp, signature, rsdp->checksum, oemid, rsdp->revision, rsdp->rsdt_address
     );
     */
@@ -191,7 +191,7 @@ struct mcfg_header* get_acpi_mcfg() {
     strncpy(oemtableid, mcfg_header->header.oem_table_id, 8);
     strncpy(oemid, mcfg_header->header.oem_id, 6);
 
-    kprintf("MCFG at: 0x%llx Sig: %.4s Len: 0x%llx Rev: %d Check: %d OEM: %s OTI: %s OR: %d CID: %d CREV: %d\n",
+    DBG_INFO("MCFG at: 0x%llx Sig: %.4s Len: 0x%llx Rev: %d Check: %d OEM: %s OTI: %s OR: %d CID: %d CREV: %d\n",
         mcfg_header, signature, mcfg_header->header.length, mcfg_header->header.revision, mcfg_header->header.checksum, oemid, oemtableid,
         mcfg_header->header.oem_revision, mcfg_header->header.creator_id, mcfg_header->header.creator_revision
     );
@@ -220,7 +220,7 @@ struct madt_header* get_acpi_madt() {
     strncpy(oemtableid, madt_header->header.oem_table_id, 8);
     strncpy(oemid, madt_header->header.oem_id, 6);
 
-    kprintf("MADT at: 0x%llx Sig: %.4s Len: 0x%llx Rev: %d Check: %d OEM: %s OTI: %s OR: %d CID: %d CREV: %d\n",
+    DBG_INFO("MADT at: 0x%llx Sig: %.4s Len: 0x%llx Rev: %d Check: %d OEM: %s OTI: %s OR: %d CID: %d CREV: %d\n",
         madt_header, signature, madt_header->header.length, madt_header->header.revision, madt_header->header.checksum, oemid, oemtableid,
         madt_header->header.oem_revision, madt_header->header.creator_id, madt_header->header.creator_revision
     );
@@ -249,7 +249,7 @@ struct fadt_header* get_acpi_fadt() {
     strncpy(oemtableid, fadt_header->header.oem_table_id, 8);
     strncpy(oemid, fadt_header->header.oem_id, 6);
 
-    kprintf("FADT at: 0x%llx Sig: %.4s Len: 0x%llx Rev: %d Check: %d OEM: %s OTI: %s OR: %d CID: %d CREV: %d\n",
+    DBG_INFO("FADT at: 0x%llx Sig: %.4s Len: 0x%llx Rev: %d Check: %d OEM: %s OTI: %s OR: %d CID: %d CREV: %d\n",
         fadt_header, signature, fadt_header->header.length, fadt_header->header.revision, fadt_header->header.checksum, oemid, oemtableid,
         fadt_header->header.oem_revision, fadt_header->header.creator_id, fadt_header->header.creator_revision
     );
@@ -265,14 +265,14 @@ void enumerate_tables() {
         for (uint32_t i = 0; i < acpi_signature_count; i++) {
             table  = init_acpi_vz(rsdp_address, acpi_signatures[i]);
             if (table) {
-                kprintf("Table %d vz => %s\n", i, table->signature);
+                DBG_DEBUG("Table %d vz => %s\n", i, table->signature);
             }
         }
     } else if (prev_rsdp->revision == 2) {
         for (uint32_t i = 0; i < acpi_signature_count; i++) {
             table = init_acpi_vt(rsdp_address, acpi_signatures[i]);
             if (table) {
-                kprintf("Table %d vt => %s\n", i, table->signature);
+                DBG_DEBUG("Table %d vt => %s\n", i, table->signature);
             }
         }
     } else {
@@ -291,10 +291,10 @@ uint8_t is_enabled(struct fadt_header* fadt_header) {
 
 void init_acpi() {
     struct fadt_header* fadt_header = get_acpi_fadt();
-    if (is_enabled(fadt_header)) {kprintf("ACPI is enabled\n"); return;}
-    kprintf("ACPI is not enabled, trying to enable...\n");
-    if (inw(fadt_header->pm1a_control_block) & 1) {kprintf("ACPI is enabled\n"); return;}
+    if (is_enabled(fadt_header)) {DBG_INFO("ACPI is enabled\n"); return;}
+    DBG_WARN("ACPI is not enabled, trying to enable...\n");
+    if (inw(fadt_header->pm1a_control_block) & 1) {DBG_INFO("ACPI is enabled\n"); return;}
     outb(fadt_header->smi_command_port, fadt_header->acpi_enable);
-    kprintf("Waiting 3 seconds for ACPI to enable...\n");
+    DBG_INFO("Waiting 3 seconds for ACPI to enable...\n");
     while (((inw(fadt_header->pm1a_control_block) & 1) == 0));
 }

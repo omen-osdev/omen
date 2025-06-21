@@ -17,9 +17,20 @@
 void disable_debugger() {
     //Syscall 335
     __asm__ volatile("mov $335, %%rax\n"
-                         "mov $0, %%rdi\n" // 0 to disable debugger
+                         "mov $0, %%rdi\n"
                          "syscall\n"
                          : : : "rax", "rdi");
+}
+
+void print_banner() {
+    for (int i = 0; i < 10; i++) {
+        printf("\n");
+    }
+    printf("OMEN Operating System - \n");
+    printf("Credits to Omen Team and contributors.\n");
+    printf("Visit github.com/omen-osdev/ for more information.\n");
+    printf("Version: 0.1.0 21/06/25\n");
+    printf("\n");
 }
 
 void tty_test() {
@@ -180,10 +191,10 @@ int main(int argc, char* argv[]){
         while (true); // Keep the init process alive
     }
 
-
     // Child process executes bash
     printf("Bash process with pid %d is starting...\n", getpid());
     disable_debugger();
+    print_banner();
     execvp("/usr/bin/bash", exe_argv);
 
     perror("init: /usr/bin/bash not found");

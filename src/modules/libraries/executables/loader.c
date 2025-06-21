@@ -166,16 +166,16 @@ const char * elf_version[] = {
 uint8_t parse_elf_file(uint8_t * buffer) {
     Elf64_Ehdr * header = (Elf64_Ehdr *) buffer;
     if (memcmp(header->e_ident, ELFMAG, SELFMAG) != 0) {
-        kprintf("Invalid ELF magic\n");
+        DBG_ERROR("Invalid ELF magic\n");
         return 0;
     }
 
-    kprintf("Valid elf header\n");
+    DBG_DEBUG("Valid elf header\n");
     return 1;
 }
 
 void readelf_32(uint8_t * buffer, uint64_t size) {
-    kprintf("32 Bit elf header not supported\n");
+    DBG_ERROR("32 Bit elf header not supported\n");
 }
 
 void elf_readelf(uint8_t * buffer, uint64_t size) {
@@ -188,32 +188,32 @@ void elf_readelf(uint8_t * buffer, uint64_t size) {
     }
 
     //readelf_64
-    kprintf("ELF Header:\n");
-    kprintf("  Magic: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n", elf_header->e_ident[0], elf_header->e_ident[1], elf_header->e_ident[2], elf_header->e_ident[3], elf_header->e_ident[4], elf_header->e_ident[5], elf_header->e_ident[6], elf_header->e_ident[7], elf_header->e_ident[8], elf_header->e_ident[9], elf_header->e_ident[10], elf_header->e_ident[11], elf_header->e_ident[12], elf_header->e_ident[13], elf_header->e_ident[14], elf_header->e_ident[15]);
-    kprintf("  Class: %s\n", elf_class[elf_header->e_ident[EI_CLASS]]);
-    kprintf("  Data: %s\n", elf_data[elf_header->e_ident[EI_DATA]]);
-    kprintf("  Version: %s\n", elf_version[elf_header->e_ident[EI_VERSION]]);
-    kprintf("  OS/ABI: %s\n", elf_osabi[elf_header->e_ident[EI_OSABI]]);
-    kprintf("  ABI Version: %d\n", elf_header->e_ident[EI_ABIVERSION]);
-    kprintf("  Type: %s\n", elf_type[elf_header->e_type]);
-    kprintf("  Machine: %s\n", elf_machine[elf_header->e_machine]);
-    kprintf("  Version: 0x%x\n", elf_header->e_version);
-    kprintf("  Entry point address: 0x%x\n", elf_header->e_entry);
-    kprintf("  Start of program headers: %d (bytes into file)\n", elf_header->e_phoff);
-    kprintf("  Start of section headers: %d (bytes into file)\n", elf_header->e_shoff);
-    kprintf("  Flags: 0x%x\n", elf_header->e_flags);
-    kprintf("  Size of this header: %d (bytes)\n", elf_header->e_ehsize);
-    kprintf("  Size of program headers: %d (bytes)\n", elf_header->e_phentsize);
-    kprintf("  Number of program headers: %d\n", elf_header->e_phnum);
-    kprintf("  Size of section headers: %d (bytes)\n", elf_header->e_shentsize);
-    kprintf("  Number of section headers: %d\n", elf_header->e_shnum);
-    kprintf("  Section header string table index: %d\n", elf_header->e_shstrndx);
+    DBG_DEBUG("ELF Header:\n");
+    DBG_DEBUG("  Magic: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n", elf_header->e_ident[0], elf_header->e_ident[1], elf_header->e_ident[2], elf_header->e_ident[3], elf_header->e_ident[4], elf_header->e_ident[5], elf_header->e_ident[6], elf_header->e_ident[7], elf_header->e_ident[8], elf_header->e_ident[9], elf_header->e_ident[10], elf_header->e_ident[11], elf_header->e_ident[12], elf_header->e_ident[13], elf_header->e_ident[14], elf_header->e_ident[15]);
+    DBG_DEBUG("  Class: %s\n", elf_class[elf_header->e_ident[EI_CLASS]]);
+    DBG_DEBUG("  Data: %s\n", elf_data[elf_header->e_ident[EI_DATA]]);
+    DBG_DEBUG("  Version: %s\n", elf_version[elf_header->e_ident[EI_VERSION]]);
+    DBG_DEBUG("  OS/ABI: %s\n", elf_osabi[elf_header->e_ident[EI_OSABI]]);
+    DBG_DEBUG("  ABI Version: %d\n", elf_header->e_ident[EI_ABIVERSION]);
+    DBG_DEBUG("  Type: %s\n", elf_type[elf_header->e_type]);
+    DBG_DEBUG("  Machine: %s\n", elf_machine[elf_header->e_machine]);
+    DBG_DEBUG("  Version: 0x%x\n", elf_header->e_version);
+    DBG_DEBUG("  Entry point address: 0x%x\n", elf_header->e_entry);
+    DBG_DEBUG("  Start of program headers: %d (bytes into file)\n", elf_header->e_phoff);
+    DBG_DEBUG("  Start of section headers: %d (bytes into file)\n", elf_header->e_shoff);
+    DBG_DEBUG("  Flags: 0x%x\n", elf_header->e_flags);
+    DBG_DEBUG("  Size of this header: %d (bytes)\n", elf_header->e_ehsize);
+    DBG_DEBUG("  Size of program headers: %d (bytes)\n", elf_header->e_phentsize);
+    DBG_DEBUG("  Number of program headers: %d\n", elf_header->e_phnum);
+    DBG_DEBUG("  Size of section headers: %d (bytes)\n", elf_header->e_shentsize);
+    DBG_DEBUG("  Number of section headers: %d\n", elf_header->e_shnum);
+    DBG_DEBUG("  Section header string table index: %d\n", elf_header->e_shstrndx);
 }
 
 void allocate_segment(process_t * proc, int fd, struct page_directory * root, Elf64_Phdr * program_header, void * buffer, void* base) {
     if (program_header->p_type != PT_LOAD) return;
 
-    kprintf("Allocating on pml4: %llx, buffer: %llx, base: %llx\n", root, buffer, base);
+    DBG_DEBUG("Allocating on pml4: %llx, buffer: %llx, base: %llx\n", root, buffer, base);
 
     uint64_t vaddr_offset = program_header->p_vaddr & 0xfff;
     uint64_t vaddr = (program_header->p_vaddr & ~0xfff) + (uint64_t)base;
@@ -239,14 +239,14 @@ void allocate_segment(process_t * proc, int fd, struct page_directory * root, El
 int elf_open_file(struct vfs_struct * cwd, char * filename, uint8_t ** buffer, uint64_t * filesize) {
     int fd = vfs_file_open(cwd, filename, 0, 0);
     if (fd < 0) {
-        kprintf("Could not open file %s\n", filename);
+        DBG_ERROR("Could not open file %s\n", filename);
         return 0;
     }
 
     vfs_file_seek(fd, 0, 0x2); //SEEK_END
     int64_t fsize = vfs_file_tell(fd);
     if (fsize < 0) {
-        kprintf("Could not get file size for %s\n", filename);
+        DBG_ERROR("Could not get file size for %s\n", filename);
         vfs_file_close(fd);
         return 0;
     }
@@ -255,7 +255,7 @@ int elf_open_file(struct vfs_struct * cwd, char * filename, uint8_t ** buffer, u
 
     *buffer = kmalloc(*filesize);
     if (!*buffer) {
-        kprintf("Could not allocate buffer for file\n");
+        DBG_ERROR("Could not allocate buffer for file\n");
         return 0;
     }
 
@@ -278,19 +278,19 @@ struct loaded_elf* elf_load_elf(process_t * proc, int fd, struct vfs_struct * cw
 
     //¿Es dinamico?
     if (elf_header->e_type == ET_DYN) {
-        kprintf("Dynamic ELF not supported\n");
+        DBG_ERROR("Dynamic ELF not supported\n");
         return NULL;
     }
 
     if (elf_header->e_type != ET_EXEC) {
-        kprintf("Invalid ELF type\n");
+        DBG_ERROR("Invalid ELF type\n");
         return NULL;
     }
 
     Elf64_Phdr * program_header = (Elf64_Phdr *) (buffer + elf_header->e_phoff);
     struct proc_ld pld = {0};
 
-    kprintf("Spawning process at 0x%x\n", elf_header->e_entry);
+    DBG_DEBUG("Spawning process at 0x%x\n", elf_header->e_entry);
 
     for (int i = 0; i < elf_header->e_phnum; i++) {
         if (program_header[i].p_type == PT_LOAD) {
@@ -299,12 +299,12 @@ struct loaded_elf* elf_load_elf(process_t * proc, int fd, struct vfs_struct * cw
             pld.at_phdr = (void*)(program_header[i].p_vaddr);
         } else if (program_header[i].p_type == PT_INTERP) {
             if (pld.ld_path) {
-                kprintf("Interp path already set\n");
+                DBG_ERROR("Interp path already set\n");
                 return NULL;
             }
 
             if (program_header[i].p_filesz > 0x1000) {
-                kprintf("Interp path too long\n");
+                DBG_ERROR("Interp path too long\n");
                 return NULL;
             }
 
@@ -338,14 +338,14 @@ struct loaded_elf* elf_load_elf(process_t * proc, int fd, struct vfs_struct * cw
     vectors[7].a_val = 0;
 
     if (pld.ld_path) {
-        kprintf("Dynamic linker path: %s\n", pld.ld_path);
+        DBG_DEBUG("Dynamic linker path: %s\n", pld.ld_path);
 
         //Load dynamic linker
         uint8_t * ld_buffer;
         uint64_t ld_size;
         int ld_fd = elf_open_file(cwd, pld.ld_path, &ld_buffer, &ld_size);
         if (!ld_fd) {
-            kprintf("Failed to open dynamic linker\n");
+            DBG_ERROR("Failed to open dynamic linker\n");
             return NULL;
         }
 
@@ -357,7 +357,7 @@ struct loaded_elf* elf_load_elf(process_t * proc, int fd, struct vfs_struct * cw
 
         Elf64_Ehdr * ld_elf_header = (Elf64_Ehdr *) ld_buffer;
         if (ld_elf_header->e_type != ET_DYN) {
-            kprintf("Invalid ELF type\n");
+            DBG_ERROR("Invalid ELF type\n");
             return NULL;
         }
 

@@ -13,7 +13,7 @@
 #include <omen/libraries/std/string.h>
 #include <omen/libraries/allocators/heap_allocator.h>
 
-#define __UNDEFINED_HANDLER __asm__("cli"); kprintf(__func__); (void)frame; panic("Undefined interrupt handler");
+#define __UNDEFINED_HANDLER __asm__("cli"); DBG_ERROR(__func__); (void)frame; panic("Undefined interrupt handler");
 #define IS_EXCEPTION(ctx)(ctx->interrupt_number < 32)
 #define IS_EXCEPTION_INUM(inum)(inum < 32)
 extern void setFsBase(uint64_t base);
@@ -50,45 +50,45 @@ void PageFault_Handler(cpu_context_t* ctx, uint8_t cpuid) {
     (void)cpuid;
     uint64_t faulting_address;
     __asm__ volatile("mov %%cr2, %0" : "=r" (faulting_address));
-    kprintf("Page Fault Address: %lx\n", (uint64_t)faulting_address);
-    kprintf("Error code: %lx\n", ctx->error_code);
+    DBG_DEBUG("Page Fault Address: %lx\n", (uint64_t)faulting_address);
+    DBG_DEBUG("Error code: %lx\n", ctx->error_code);
     thread_t * thread = get_current_thread();
     if (!thread) panic("Page fault, no task detected!\n");
     thread->user_context->cpu_context->cr3 = to_identity_map(ctx->cr3);
 
     struct vm_area* vma = is_in_vmarea(thread->process, (void*)faulting_address);
     if (!thread->process) {
-        kprintf("Page fault, no process found for address %lx\n", faulting_address);
-        kprintf("Thread TID: %d\n", thread->id);
+        DBG_ERROR("Page fault, no process found for address %lx\n", faulting_address);
+        DBG_ERROR("Thread TID: %d\n", thread->id);
         panic("Page fault, no process found!\n");
     }
 
     if (!vma) {
         enable_debugger();
-        kprintf("Page fault, no VMA found for address %lx\n", faulting_address);
-        kprintf("Process PID: %d, TID: %d\n", thread->process->pid, thread->id);
-        kprintf("Error code: %lx\n", ctx->error_code);
+        DBG_ERROR("Page fault, no VMA found for address %lx\n", faulting_address);
+        DBG_ERROR("Process PID: %d, TID: %d\n", thread->process->pid, thread->id);
+        DBG_ERROR("Error code: %lx\n", ctx->error_code);
 
         dump_vmareas(thread->process);
         panic("Page fault, no VMA found!\n");
     }
 
     if ((vma->flags & VMM_WRITE_BIT) && (vma->extended_flags & VMAREA_EXT_SHARED)) {
-        kprintf("Page fault in shared area, allowing write and requesting sync\n");
+        DBG_DEBUG("Page fault in shared area, allowing write and requesting sync\n");
         vma->extended_flags |= VMAREA_EXT_REQ_SYNC;
         mprotect(thread->process->vmm, (void*)faulting_address, vma->page_size, vma->flags);
         thread->user_context->cpu_context->cr3 = from_identity_map(thread->user_context->cpu_context->cr3);
         return;
     }
     if ((vma->flags & VMM_WRITE_BIT) && (vma->extended_flags & VMAREA_EXT_COW)) {
-        kprintf("Page fault in COW area, duplicating page\n");
+        DBG_DEBUG("Page fault in COW area, duplicating page\n");
         duplicate_vmarea_cow(thread->process, vma);
         thread->user_context->cpu_context->cr3 = from_identity_map(thread->user_context->cpu_context->cr3);
-        kprintf("Page fault in COW area, page duplicated\n");
+        DBG_DEBUG("Page fault in COW area, page duplicated\n");
         return;
     }
     if ((vma->flags & VMM_USER_BIT) && (vma->extended_flags & VMAREA_EXT_STACK_GUARD)) {
-        kprintf("Page fault: STACK GUARD\n");
+        DBG_DEBUG("Page fault: STACK GUARD\n");
         struct stack stack;
         stack.base = thread->ustack_base;
         stack.top = thread->ustack;
@@ -146,18 +146,18 @@ void Serial1Int_Handler(cpu_context_t* ctx, uint8_t cpuid) {
     (void)ctx;
     (void)cpuid;
     char c = inb(0x3f8);
-    kprintf("Serial1: ");
-    kprintf("%x", c);
-    kprintf("\n");
+    DBG_DEBUG("Serial1: ");
+    DBG_DEBUG("%x", c);
+    DBG_DEBUG("\n");
 }
 
 void Serial2Int_Handler(cpu_context_t* ctx, uint8_t cpuid) {
     (void)ctx;
     (void)cpuid;
     char c = inb(0x3f8);
-    kprintf("Serial2: ");
-    kprintf("%x", c);
-    kprintf("\n");
+    DBG_DEBUG("Serial2: ");
+    DBG_DEBUG("%x", c);
+    DBG_DEBUG("\n");
 }
 
 void KWakeInt_Handler(cpu_context_t* ctx, uint8_t cpuid) {
@@ -205,14 +205,14 @@ void KSleepInt_Handler(cpu_context_t* ctx, uint8_t cpuid) {
 
     if (current_thread->kernel_context_ready) {
         target_ctx = current_thread->kernel_context;
-        //kprintf("KERNEL THREAD [PID: %d | TID: %d] PIT interrupt on CPU %d returning\n", current_thread->process->pid, current_thread->id, cpu_id);
+        //DBG_DEBUG("KERNEL THREAD [PID: %d | TID: %d] PIT interrupt on CPU %d returning\n", current_thread->process->pid, current_thread->id, cpu_id);
         current_thread->kernel_context_ready = 0;
     } else {
         target_ctx = current_thread->user_context;
-        //kprintf("USER THREAD [PID: %d | TID: %d] PIT interrupt on CPU %d returning\n", current_thread->process->pid, current_thread->id, cpu_id);
+        //DBG_DEBUG("USER THREAD [PID: %d | TID: %d] PIT interrupt on CPU %d returning\n", current_thread->process->pid, current_thread->id, cpu_id);
     }
 
-    //kprintf("[PID: %d | TID %d] Interrupt %d on CPU %d returning\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
+    //DBG_DEBUG("[PID: %d | TID %d] Interrupt %d on CPU %d returning\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
     arch_simd_restore_context(target_ctx->fxsave_region);
     memcpy(ctx, target_ctx->cpu_context, sizeof(cpu_context_t));
     memcpy(ctx->info, target_ctx->cpu_context->info, sizeof(struct cpu_context_info));
@@ -224,7 +224,7 @@ void KSleepInt_Handler(cpu_context_t* ctx, uint8_t cpuid) {
 }
 
 static void interrupt_exception_handler(cpu_context_t* ctx, uint8_t cpu_id) {
-    kprintf("GENERIC EXCEPTION %d ON CPU %d\n", ctx->interrupt_number, cpu_id);
+    DBG_ERROR("GENERIC EXCEPTION %d ON CPU %d\n", ctx->interrupt_number, cpu_id);
     panic("Exception\n");
 }
 
@@ -264,7 +264,7 @@ void load_interrupts_for_local_cpu() {
 }
 
 void init_interrupts() {
-    kprintf("### INTERRUPTS STARTUP ###\n");
+    DBG_INFO("### INTERRUPTS STARTUP ###\n");
     
     if (!check_apic()) {
         panic("APIC not found\n");
@@ -318,7 +318,7 @@ uint8_t global_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
     __asm__ volatile("pushfq; pop %0" : "=r"(rflags));
     //If interrupts are enabled panic
     if (rflags & 0x200) {
-        kprintf("Interrupts enabled in handler\n");
+        DBG_ERROR("Interrupts enabled in handler\n");
         panic("Interrupts enabled in handler\n");
     }
 
@@ -341,7 +341,7 @@ uint8_t global_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
         arch_simd_save_context(current_thread->kernel_context->fxsave_region);
         current_thread->kernel_context_ready = 1;
     } else {
-        //kprintf("[PID: %d | TID %d] Interrupt %d on CPU %d\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
+        //DBG_DEBUG("[PID: %d | TID %d] Interrupt %d on CPU %d\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
         memcpy(current_thread->user_context->cpu_context, ctx, sizeof(cpu_context_t));
         memcpy(current_thread->user_context->cpu_context->info, ctx->info, sizeof(struct cpu_context_info));
         current_thread->user_context->cpu_context->info->kstack = kstack;
@@ -358,12 +358,12 @@ uint8_t global_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
         }
     }
 
-    //kprintf("Interrupt %d received on CPU %d\n", ctx->interrupt_number, cpu_id);
+    //DBG_DEBUG("Interrupt %d received on CPU %d\n", ctx->interrupt_number, cpu_id);
 
     if (handler == 0) {
-        kprintf("No handler for interrupt ");
-        kprintf("%d", interrupt_number);
-        kprintf("\n");
+        DBG_ERROR("No handler for interrupt ");
+        DBG_ERROR("%d", interrupt_number);
+        DBG_ERROR("\n");
         panic("No handler for interrupt !\n");
     }
 
@@ -377,20 +377,20 @@ uint8_t global_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
     if (ctx->interrupt_number == PIT_IRQ) {
         if (current_thread->kernel_context_ready) {
             target_ctx = current_thread->kernel_context;
-            //kprintf("KERNEL THREAD [PID: %d | TID: %d] PIT interrupt on CPU %d returning\n", current_thread->process->pid, current_thread->id, cpu_id);
+            //DBG_DEBUG("KERNEL THREAD [PID: %d | TID: %d] PIT interrupt on CPU %d returning\n", current_thread->process->pid, current_thread->id, cpu_id);
             current_thread->kernel_context_ready = 0;
         } else {
             target_ctx = current_thread->user_context;
-            //kprintf("USER THREAD [PID: %d | TID: %d] PIT interrupt on CPU %d returning\n", current_thread->process->pid, current_thread->id, cpu_id);
+            //DBG_DEBUG("USER THREAD [PID: %d | TID: %d] PIT interrupt on CPU %d returning\n", current_thread->process->pid, current_thread->id, cpu_id);
         }
     } else {
         target_ctx = current_thread->user_context;
-        //kprintf("NON-PIT [PID: %d | TID: %d] Interrupt %d on CPU %d returning\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
+        //DBG_DEBUG("NON-PIT [PID: %d | TID: %d] Interrupt %d on CPU %d returning\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
         //if (interrupt_number != 0xe && interrupt_number != KSAVE_IRQ && interrupt_number != KWAKE_IRQ)
-        //    kprintf("[PID: %d | TID: %d] Interrupt %d returning\n", current_thread->process->pid, current_thread->id, interrupt_number);
+        //    DBG_DEBUG("[PID: %d | TID: %d] Interrupt %d returning\n", current_thread->process->pid, current_thread->id, interrupt_number);
     }
 
-    //kprintf("[PID: %d | TID %d] Interrupt %d on CPU %d returning\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
+    //DBG_DEBUG("[PID: %d | TID %d] Interrupt %d on CPU %d returning\n", current_thread->process->pid, current_thread->id, interrupt_number, cpu_id);
     arch_simd_restore_context(target_ctx->fxsave_region);
     memcpy(ctx, target_ctx->cpu_context, sizeof(cpu_context_t));
     memcpy(ctx->info, target_ctx->cpu_context->info, sizeof(struct cpu_context_info));
@@ -408,7 +408,7 @@ uint8_t global_interrupt_handler(cpu_context_t* ctx, uint8_t cpu_id) {
 void int_hardcore_wrapper(cpu_context_t* ctx, uint8_t cpu_id) {
 
     if (eoi_pending()) {
-        kprintf("Interrupt %d pending EOI\n", ctx->interrupt_number);
+        DBG_WARN("Interrupt %d pending EOI\n", ctx->interrupt_number);
         if (ctx->interrupt_number != 0xe && ctx->interrupt_number != KWAKE_IRQ)
             panic("EOI pending entering interrupt handler\n");
     }
@@ -428,9 +428,9 @@ void int_hardcore_wrapper(cpu_context_t* ctx, uint8_t cpu_id) {
 
     if (eoi_pending()) {
         if (res == 1) {
-            kprintf("EOI pending returning from exception\n");
+            DBG_WARN("EOI pending returning from exception\n");
         } else {
-            kprintf("EOI pending returning from interrupt\n");
+            DBG_WARN("EOI pending returning from interrupt\n");
         }
         if (ctx->interrupt_number != 0xe && ctx->interrupt_number != KWAKE_IRQ)
             panic("EOI pending returning from interrupt handler\n");
@@ -446,7 +446,7 @@ void mask_interrupt(uint8_t irq) {
 
 void unmask_interrupt(uint8_t irq) {
     if (!interrupts_ready) panic("Interrupts not ready\n");
-    kprintf("Unmasking interrupt %d\n", irq);
+    DBG_INFO("Unmasking interrupt %d\n", irq);
     if (!ioapic_mask(irq, 0x1)) {
         panic("Failed to unmask interrupt\n");
     }

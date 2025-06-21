@@ -46,6 +46,22 @@ vdso_t* vdso_init() {
     return vdso;
 }
 
+void vdso_free(vdso_t* vdso) {
+    if (vdso == 0) {
+        return;
+    }
+    
+    vdso_entry_t* entry = vdso->entry;
+    while (entry) {
+        vdso_entry_t* next = entry->next;
+        free_vmm(vdso->pd, entry);
+        entry = next;
+    }
+    
+    free_vmm(vdso->pd, vdso);
+    vdso = 0;
+}
+
 int vdso_set_data(vdso_t* vdso, uint8_t id, void* info, int64_t size) {
     vdso_entry_t* entry = vdso->entry;
     while (entry) {

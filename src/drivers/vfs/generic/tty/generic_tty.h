@@ -43,14 +43,14 @@ int8_t tty_compat_unregister_device(int index) {
 
 uint8_t tty_compat_detect(const char* name , uint32_t port) {
     (void)port;
-    kprintf("tty_compat_detect: %s\n", name);
+    DBG_DEBUG("tty_compat_detect: %s\n", name);
     return (tty_search(name) == SUCCESS);
 }
 
 void tty_compat_debug() {
     for (int i = 0; i < MAX_TTY_DEVICES; i++) {
         if (tty_devices[i] != 0) {
-            kprintf("TTY %d\n", i);
+            DBG_DEBUG("TTY %d\n", i);
             tty_dump_device(tty_devices[i]);
         }
     }
@@ -72,31 +72,42 @@ int64_t tty_compat_file_read(int devno, int fd, void* buffer, uint64_t size) {
         uint64_t read = 0;
         while (read < size) {
             uint64_t res = vfs_tty_read(device, buffer + read, size - read, entry->offset);
-            if (res != 0) kprintf("tty read %d bytes\n", res);
-            else {
+            if (res == 0) {
                 sleep_current(TTY_IO_SLINE);
+                res = vfs_tty_read(device, buffer + read, size - read, entry->offset);
+                read += res;
+                goto end_read;
+            }
+            
+            for (uint64_t i = 0; i < res; i++) {
+                //TODO: If we move the sleep inwards, we may avoid this terrible hack
+                if (((uint8_t*)buffer)[read + i] == '\n') {
+                    read += i + 1;
+                    goto end_read;
+                }
             }
 //¿CAMBIO DE CONTEXTO EN KSPACE? 30/05/25
             read += res;
         }
+end_read:
         return read;
     }
 }
 
 int64_t tty_compat_file_write(int devno, int fd, void* buffer, uint64_t size) {
     if (devno < 0 || devno >= MAX_TTY_DEVICES) {
-        kprintf("tty_compat_file_write: Invalid device number %d\n", devno);
+        DBG_ERROR("tty_compat_file_write: Invalid device number %d\n", devno);
         return VFS_ERROR;
     }
     struct vfs_tty * device = tty_devices[devno];
     if (device == 0) {
-        kprintf("tty_compat_file_write: Device not found for device number %d\n", devno);
+        DBG_ERROR("tty_compat_file_write: Device not found for device number %d\n", devno);
         return VFS_ERROR;
     }
 
     struct file_descriptor_entry * entry = vfs_compat_get_file_descriptor(fd);
     if (entry == 0 || entry->loaded == 0) {
-        kprintf("tty_compat_file_write: Invalid file descriptor %d\n", fd);
+        DBG_ERROR("tty_compat_file_write: Invalid file descriptor %d\n", fd);
         return VFS_ERROR;
     }
     return vfs_tty_write(device, buffer, size, entry->offset);
@@ -230,6 +241,23 @@ int tty_compat_file_dup(int partno, int oldfd, int newfd) {
     return dup_fd(oldfd, newfd);
 }
 
+int tty_compat_stat(int partno, int fd, stat_t* st) {
+    st->st_dev = 0; // Use the partition number as the device ID
+    st->st_ino = 0; // Inode number is not used for TTY devices
+    st->st_nlink = 1; // TTY devices typically have one link
+    st->st_mode = S_IFCHR; // TTY devices are character devices
+    st->st_uid = 0; // Owner user ID, typically root
+    st->st_gid = 0; // Owner group ID, typically root
+    st->st_rdev = partno; // Use the partition number as the device ID
+    st->st_size = 0; // Size is not applicable for TTY devices
+    st->st_blksize = 1024; // Block size is not applicable for TTY devices
+    st->st_blocks = 0; // Number of blocks is not applicable for TTY devices
+    st->st_atim = epoch_to_timespec(0); // Access time is not applicable for TTY devices
+    st->st_mtim = epoch_to_timespec(0); // Modification time is not applicable for TTY devices
+    st->st_ctim = epoch_to_timespec(0); // Change time is not applicable for TTY devices
+    return 0; // Return success
+}
+
 int tty_compat_flush(int partno) {(void)partno; return VFS_ERROR;}
 int tty_compat_dir_open(int partno, const char* path) {(void)partno; (void)path; return VFS_ERROR;}
 int tty_compat_dir_close(int partno, int fd) {(void)partno; (void)fd; return VFS_ERROR;}
@@ -238,7 +266,6 @@ int tty_compat_link_creat(int partno, const char* path, const char* target, int 
 int tty_compat_dir_creat(int partno, const char* path, int mode) {(void)partno; (void)path; (void)mode; return VFS_ERROR;}
 int tty_compat_dir_read(int partno, int fd, char* name, uint32_t * name_len, uint32_t * type) {(void)partno; (void)fd; (void)name_len; (void)type; return VFS_ERROR;}
 int tty_compat_dir_load(int partno, int fd) {(void)partno; (void)fd; return VFS_ERROR;}
-int tty_compat_stat(int partno, int fd, stat_t* st) {(void)partno; (void)fd; (void)st; return VFS_ERROR;}
 int tty_compat_rename(int partno, const char* path, const char* newpath) {(void)partno; (void)path; (void)newpath; return VFS_ERROR;}
 int tty_compat_prepare_remove(int partno, const char* path) {(void)partno; (void)path; return VFS_ERROR;}
 int tty_compat_remove(int partno, const char* path) {(void)partno; (void)path; return VFS_ERROR;}

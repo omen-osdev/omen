@@ -238,10 +238,10 @@ void map_address(struct page_directory* root, void * virtual_address, void * phy
         if (size == PAGE_SIZE_1GIB) {
             init_entry(pdptentry, PAGE_SIZE_1GIB, (uint64_t)physical_address, page_perms);
             flush_tlb_entry(virtual_address);
-            kprintf("1g Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, get_pdpp(pdptentry, PAGE_SIZE_1GIB));
+            DBG_WARN("1g Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, get_pdpp(pdptentry, PAGE_SIZE_1GIB));
             goto check_mapping;
         } else {
-            kprintf("%llx 1g Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, physical_address, get_pdpp(pdptentry, PAGE_SIZE_1GIB));
+            DBG_WARN("%llx 1g Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, physical_address, get_pdpp(pdptentry, PAGE_SIZE_1GIB));
             panic("1GiB Mapping overlap detected\n");
         }
     }
@@ -261,10 +261,10 @@ void map_address(struct page_directory* root, void * virtual_address, void * phy
         if (size == PAGE_SIZE_2MIB) {
             init_entry(pdentry, PAGE_SIZE_2MIB, (uint64_t)physical_address, page_perms);
             flush_tlb_entry(virtual_address);
-            kprintf("2m Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, get_pdpp(pdentry, PAGE_SIZE_2MIB));
+            DBG_WARN("2m Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, get_pdpp(pdentry, PAGE_SIZE_2MIB));
             goto check_mapping;
         } else {
-            kprintf("2m Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, physical_address);
+            DBG_WARN("2m Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, physical_address);
             panic("2MiB Mapping overlap detected\n");
         }
     }
@@ -276,7 +276,7 @@ void map_address(struct page_directory* root, void * virtual_address, void * phy
         init_entry(ptentry, PAGE_SIZE_4KIB, (uint64_t)physical_address, page_perms);
         flush_tlb_entry(virtual_address);
     } else {
-        //kprintf("4k Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, physical_address);
+        //DBG_WARN("4k Mapping overlap detected, trying to map: %llx, already mapped: %llx\n", virtual_address, physical_address);
         init_entry(ptentry, PAGE_SIZE_4KIB, (uint64_t)physical_address, page_perms);
         flush_tlb_entry(virtual_address);
     }
@@ -287,7 +287,7 @@ check_mapping:
     //Check that the address is correct
     if (phys_addr != physical_address)
     {
-        kprintf("Mapping error: %llx != %llx\n", phys_addr, physical_address);
+        DBG_ERROR("Mapping error: %llx != %llx\n", phys_addr, physical_address);
         panic("Mapping error");
     }
 }
@@ -399,14 +399,14 @@ void remap_range(struct page_directory* root, void * virtual_start, void * physi
     {
         pages++;
     }
-    //kprintf("Need to map %d pages\n", pages);
+    //DBG_DEBUG("Need to map %d pages\n", pages);
     for (uint64_t i = 0; i < pages; i++)
     {
         map_address(root, (void*)((uint64_t)virtual_start + (i * page_size)), (void*)((uint64_t)physical_start + (i * page_size)), page_size, flags);
     }
 
     alter_allocation(root, virtual_start, physical_start, size);
-    //kprintf("Mapped range from 0x%llx to 0x%llx\n", virtual_start, (uint64_t)virtual_start + size);
+    //DBG_DEBUG("Mapped range from 0x%llx to 0x%llx\n", virtual_start, (uint64_t)virtual_start + size);
 }
 
 void map_range(struct page_directory* root, void * virtual_start, void * physical_start, uint64_t page_size, uint64_t size, uint8_t flags)
@@ -417,14 +417,14 @@ void map_range(struct page_directory* root, void * virtual_start, void * physica
     {
         pages++;
     }
-    //kprintf("Need to map %d pages\n", pages);
+    //DBG_DEBUG("Need to map %d pages\n", pages);
     for (uint64_t i = 0; i < pages; i++)
     {
         map_address(root, (void*)((uint64_t)virtual_start + (i * page_size)), (void*)((uint64_t)physical_start + (i * page_size)), page_size, flags);
     }
 
     insert_allocation(root, virtual_start, physical_start, size);
-    //kprintf("Mapped range from 0x%llx to 0x%llx\n", virtual_start, (uint64_t)virtual_start + size);
+    //DBG_DEBUG("Mapped range from 0x%llx to 0x%llx\n", virtual_start, (uint64_t)virtual_start + size);
 }
 
 void unmap_range(struct page_directory* root, void * virtual_start, uint64_t size)
@@ -435,14 +435,14 @@ void unmap_range(struct page_directory* root, void * virtual_start, uint64_t siz
     {
         pages++;
     }
-    //kprintf("Need to unmap %d pages\n", pages);
+    //DBG_DEBUG("Need to unmap %d pages\n", pages);
     for (uint64_t i = 0; i < pages; i++)
     {
         unmap_memory(root, (void*)((uint64_t)virtual_start + (i * PAGE_SIZE_4KIB)));
     }
 
     remove_allocation(root, virtual_start);
-    //kprintf("Unmapped range from 0x%llx to 0x%llx\n", virtual_start, (uint64_t)virtual_start + size);
+    //DBG_DEBUG("Unmapped range from 0x%llx to 0x%llx\n", virtual_start, (uint64_t)virtual_start + size);
 }
 
 void duplicate_page_directory(struct page_directory* root, struct page_directory* new, uint8_t level, int override, uint8_t root_on_phys)
@@ -524,7 +524,7 @@ struct page_directory * vmm_copy(struct page_directory* root)
 
 void compare_directories(struct page_directory* root, struct page_directory* new, uint8_t level)
 {
-    kprintf("Comparing directories (%llx vs %llx) at level %d\n", root, new, level);
+    DBG_DEBUG("Comparing directories (%llx vs %llx) at level %d\n", root, new, level);
     for (int i = 0; i < 512; i++)
     {
         vm_entry* entry = GET_ENTRY(root, i);
@@ -533,55 +533,55 @@ void compare_directories(struct page_directory* root, struct page_directory* new
         {
             if (new_entry->directory.P != entry->directory.P)
             {
-                kprintf("P bit mismatch at level %d, entry %d\n", level, i);
+                DBG_WARN("P bit mismatch at level %d, entry %d\n", level, i);
             }
             if (new_entry->directory.RW != entry->directory.RW)
             {
-                kprintf("RW bit mismatch at level %d, entry %d\n", level, i);
+                DBG_WARN("RW bit mismatch at level %d, entry %d\n", level, i);
             }
             if (new_entry->directory.US != entry->directory.US)
             {
-                kprintf("US bit mismatch at level %d, entry %d\n", level, i);
+                DBG_WARN("US bit mismatch at level %d, entry %d\n", level, i);
             }
             if (new_entry->directory.PWT != entry->directory.PWT)
             {
-                kprintf("PWT bit mismatch at level %d, entry %d\n", level, i);
+                DBG_WARN("PWT bit mismatch at level %d, entry %d\n", level, i);
             }
             if (new_entry->directory.PCD != entry->directory.PCD)
             {
-                kprintf("PCD bit mismatch at level %d, entry %d\n", level, i);
+                DBG_WARN("PCD bit mismatch at level %d, entry %d\n", level, i);
             }
             if (new_entry->directory.A != entry->directory.A)
             {
-                kprintf("A bit mismatch at level %d, entry %d\n", level, i);
+                DBG_WARN("A bit mismatch at level %d, entry %d\n", level, i);
             }
             if (new_entry->directory.IGNORED1 != entry->directory.IGNORED1)
             {
-                kprintf("IGNORED1 bit mismatch at level %d, entry %d\n", level, i);
+                DBG_WARN("IGNORED1 bit mismatch at level %d, entry %d\n", level, i);
             }
             if (new_entry->directory.PS != entry->directory.PS)
             {
-                kprintf("PS bit mismatch at level %d, entry %d\n", level, i);
+                DBG_WARN("PS bit mismatch at level %d, entry %d\n", level, i);
             }
             if (new_entry->directory.IGNORED2 != entry->directory.IGNORED2)
             {
-                kprintf("IGNORED2 bit mismatch at level %d, entry %d\n", level, i);
+                DBG_WARN("IGNORED2 bit mismatch at level %d, entry %d\n", level, i);
             }
             if (new_entry->directory.R != entry->directory.R)
             {
-                kprintf("R bit mismatch at level %d, entry %d\n", level, i);
+                DBG_WARN("R bit mismatch at level %d, entry %d\n", level, i);
             }
             if (new_entry->directory.RESERVED != entry->directory.RESERVED)
             {
-                kprintf("RESERVED bit mismatch at level %d, entry %d\n", level, i);
+                DBG_WARN("RESERVED bit mismatch at level %d, entry %d\n", level, i);
             }
             if (new_entry->directory.IGNORED3 != entry->directory.IGNORED3)
             {
-                kprintf("IGNORED3 bit mismatch at level %d, entry %d\n", level, i);
+                DBG_WARN("IGNORED3 bit mismatch at level %d, entry %d\n", level, i);
             }
             if (new_entry->directory.XD != entry->directory.XD)
             {
-                kprintf("XD bit mismatch at level %d, entry %d\n", level, i);
+                DBG_WARN("XD bit mismatch at level %d, entry %d\n", level, i);
             }
 
             if (level > 0 && !entry->directory.PS)
@@ -608,12 +608,12 @@ void* get_physical_address(struct page_directory* root, void* virtual_address)
     struct page_map_index map;
     address_to_map((uint64_t)virtual_address, &map);
 
-    //kprintf("[DEBUG] Virtual address: 0x%llx\n", virtual_address);
-    //kprintf("[DEBUG] PML4 index: %d\n", map.PML4_index);
-    //kprintf("[DEBUG] PDP index: %d\n", map.PDP_index);
-    //kprintf("[DEBUG] PD index: %d\n", map.PD_index);
-    //kprintf("[DEBUG] PT index: %d\n", map.PT_index);
-    //kprintf("[DEBUG] Offset: %llx\n", (uint64_t)virtual_address & 0xfff);
+    //DBG_DEBUG("[DEBUG] Virtual address: 0x%llx\n", virtual_address);
+    //DBG_DEBUG("[DEBUG] PML4 index: %d\n", map.PML4_index);
+    //DBG_DEBUG("[DEBUG] PDP index: %d\n", map.PDP_index);
+    //DBG_DEBUG("[DEBUG] PD index: %d\n", map.PD_index);
+    //DBG_DEBUG("[DEBUG] PT index: %d\n", map.PT_index);
+    //DBG_DEBUG("[DEBUG] Offset: %llx\n", (uint64_t)virtual_address & 0xfff);
 
     struct page_directory* pdptable, *pdtable, *pttable;
     vm_entry *pml4entry, *pdptentry, *pdentry, *ptentry;
@@ -631,7 +631,7 @@ void* get_physical_address(struct page_directory* root, void* virtual_address)
         panic("[DEBUG][PDP] pdptable->entries[PDP_index] not present\n");
     } else if (pdptentry->huge.PS)
     {
-        //kprintf("[DEBUG][PDP] pdptable->entries[PDP_index] is a 1GiB page\n");
+        //DBG_DEBUG("[DEBUG][PDP] pdptable->entries[PDP_index] is a 1GiB page\n");
         return (void*)((((uint64_t)pdptentry->huge.PDPP) << 30) | ((uint64_t)virtual_address & 0x3fffffff));
     }
     
@@ -643,7 +643,7 @@ void* get_physical_address(struct page_directory* root, void* virtual_address)
         panic("[DEBUG][PD] pdtable->entries[PD_index] not present\n");
     } else if (pdentry->big.PS)
     {
-        //kprintf("[DEBUG][PD] pdtable->entries[PD_index] is a 2MiB page\n");
+        //DBG_DEBUG("[DEBUG][PD] pdtable->entries[PD_index] is a 2MiB page\n");
         return (void*)((((uint64_t)pdentry->big.PDPP) << 21) | ((uint64_t)virtual_address & 0x1fffff));
     }
 
@@ -692,7 +692,7 @@ void init_vmm()
     remove_page_directory((void*)TO_IDENTITY_MAP(cr3));
     //compare_directories(get_current_cr3(), global_cr3, 4);
     switch_cr3(FROM_IDENTITY_MAP(global_cr3));
-    kprintf("Page table switched\n");
+    DBG_DEBUG("Page table switched\n");
 }
 
 uint64_t vmm_is_present(struct page_directory* root, void * vmm_address) {
@@ -844,7 +844,7 @@ uint64_t mprotect_page(struct page_directory * root, void* address, uint8_t flag
     struct page_map_index map;
     address_to_map((uint64_t)address, &map);
 
-    //kprintf("Mprotecting vaddr: %llx (phys: %llx) with flags (W: %d, U: %d, NX: %d, CD: %d)\n", address, get_physical_address(root, address), 
+    //DBG_DEBUG("Mprotecting vaddr: %llx (phys: %llx) with flags (W: %d, U: %d, NX: %d, CD: %d)\n", address, get_physical_address(root, address), 
     //       VMM_WRITE_BIT_SET(flags), VMM_USER_BIT_SET(flags), VMM_NX_BIT_SET(flags), VMM_CACHE_BIT_SET(flags));
 
     struct page_directory* pdptable, *pdtable, *pttable;
@@ -913,7 +913,7 @@ void mprotect(struct page_directory * root, void* address, uint64_t size, uint8_
         uint64_t page_size = mprotect_page(root, (void*)next_address, flags);
         if (!page_size)
         {
-            kprintf("Failed to protect page at 0x%llx\n", next_address);
+            DBG_ERROR("Failed to protect page at 0x%llx\n", next_address);
             panic("Failed to protect page\n");
         }
         next_address += page_size;
@@ -1042,8 +1042,8 @@ uint8_t is_executable(struct page_directory* pml4, void * address)
 
 void print_entry(vm_entry* entry, uint64_t size)
 {
-    kprintf("DUMPING ENTRY: 0x%llx\n", entry);
-    kprintf("\tP: %d RW: %d US: %d PWT: %d PCD: %d A: %d IGNORED1: %d \n", 
+    DBG_DEBUG("DUMPING ENTRY: 0x%llx\n", entry);
+    DBG_DEBUG("\tP: %d RW: %d US: %d PWT: %d PCD: %d A: %d IGNORED1: %d \n", 
         entry->directory.P,
         entry->directory.RW,
         entry->directory.US,
@@ -1052,7 +1052,7 @@ void print_entry(vm_entry* entry, uint64_t size)
         entry->directory.A,
         entry->directory.IGNORED1
     );
-    kprintf("\tIGNORED2: %d R: %d RESERVED: %d IGNORED3: %d XD: %d\n",
+    DBG_DEBUG("\tIGNORED2: %d R: %d RESERVED: %d IGNORED3: %d XD: %d\n",
         entry->directory.IGNORED2,
         entry->directory.R,
         entry->directory.RESERVED,
@@ -1063,20 +1063,20 @@ void print_entry(vm_entry* entry, uint64_t size)
     switch (size)
     {
         case PAGE_SIZE_1GIB:
-            kprintf("\t\t[HUGE ENTRY] PS: %d PDPP: %llx\n", entry->huge.PS, entry->huge.PDPP);
-            kprintf("\t\tPhys addr: 0x%llx\n", entry->huge.PDPP);
+            DBG_DEBUG("\t\t[HUGE ENTRY] PS: %d PDPP: %llx\n", entry->huge.PS, entry->huge.PDPP);
+            DBG_DEBUG("\t\tPhys addr: 0x%llx\n", entry->huge.PDPP);
             break;
         case PAGE_SIZE_2MIB:
-            kprintf("\t\t[BIG ENTRY] PS: %d PDPP: %llx\n", entry->big.PS, entry->big.PDPP);
-            kprintf("\t\tPhys addr: 0x%llx\n", entry->big.PDPP);
+            DBG_DEBUG("\t\t[BIG ENTRY] PS: %d PDPP: %llx\n", entry->big.PS, entry->big.PDPP);
+            DBG_DEBUG("\t\tPhys addr: 0x%llx\n", entry->big.PDPP);
             break;
         case PAGE_SIZE_4KIB:
-            kprintf("\t\t[REGULAR ENTRY] PDPP: %llx\n", entry->regular.PDPP);
-            kprintf("\t\tPhys addr: 0x%llx\n", entry->regular.PDPP);
+            DBG_DEBUG("\t\t[REGULAR ENTRY] PDPP: %llx\n", entry->regular.PDPP);
+            DBG_DEBUG("\t\tPhys addr: 0x%llx\n", entry->regular.PDPP);
             break;
         default:
-            kprintf("\t\t[DIRECTORY ENTRY] PS: %d PDPP: %llx\n", entry->directory.PS, entry->directory.PDPP);
-            kprintf("\t\tPhys addr: 0x%llx\n", entry->directory.PDPP);
+            DBG_DEBUG("\t\t[DIRECTORY ENTRY] PS: %d PDPP: %llx\n", entry->directory.PS, entry->directory.PDPP);
+            DBG_DEBUG("\t\tPhys addr: 0x%llx\n", entry->directory.PDPP);
             break;
     }
 }
@@ -1093,7 +1093,7 @@ void debug_address(struct page_directory * pml4, void * address)
     print_entry(pml4entry, PAGE_SIZE_DIR);
     if (!IS_PRESENT(pml4entry))
     {
-        kprintf("PML4 entry not present\n");
+        DBG_ERROR("PML4 entry not present\n");
         return;
     }
     
@@ -1102,18 +1102,18 @@ void debug_address(struct page_directory * pml4, void * address)
 
     if (!IS_PRESENT(pdptentry))
     {
-        kprintf("PDPT entry not present\n");
+        DBG_ERROR("PDPT entry not present\n");
         print_entry(pdptentry, PAGE_SIZE_DIR);
         return;
     }
 
     if (pdptentry->huge.PS)
     {
-        kprintf("PDPT entry is a 1GiB page\n");
+        DBG_ERROR("PDPT entry is a 1GiB page\n");
         print_entry(pdptentry, PAGE_SIZE_DIR);
         return;
     } else {
-        kprintf("PDPT entry is a directory\n");
+        DBG_ERROR("PDPT entry is a directory\n");
         print_entry(pdptentry, PAGE_SIZE_DIR);
     }
 
@@ -1122,18 +1122,18 @@ void debug_address(struct page_directory * pml4, void * address)
     
     if (!IS_PRESENT(pdentry))
     {
-        kprintf("PD entry not present\n");
+        DBG_ERROR("PD entry not present\n");
         print_entry(pdentry, PAGE_SIZE_DIR);
         return;
     }
 
     if (pdptentry->big.PS)
     {
-        kprintf("PD entry is a 2MiB page\n");
+        DBG_ERROR("PD entry is a 2MiB page\n");
         print_entry(pdentry, PAGE_SIZE_DIR);
         return;
     } else {
-        kprintf("PD entry is a directory\n");
+        DBG_ERROR("PD entry is a directory\n");
         print_entry(pdentry, PAGE_SIZE_DIR);
     }
 
@@ -1142,12 +1142,12 @@ void debug_address(struct page_directory * pml4, void * address)
 
     if (!IS_PRESENT(ptentry))
     {
-        kprintf("PT entry not present\n");
+        DBG_ERROR("PT entry not present\n");
         print_entry(ptentry, PAGE_SIZE_DIR);
         return;
     }
 
-    kprintf("PT entry is a 4KiB page\n");
+    DBG_ERROR("PT entry is a 4KiB page\n");
     print_entry(ptentry, PAGE_SIZE_4KIB);
 }
 
